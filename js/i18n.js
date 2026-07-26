@@ -141,7 +141,7 @@
             var k1 = el.getAttribute('data-i18n');
             if (k1 && t[k1]) el.innerText = t[k1];
             var k2 = el.getAttribute('data-i18n-placeholder');
-            if (k2 && t[k2]) el.placeholder = t[k2];
+            if (k2 && t[k2]) el.setAttribute('placeholder', t[k2]);
             var k3 = el.getAttribute('data-i18n-title');
             if (k3 && t[k3]) el.title = t[k3];
             var k4 = el.getAttribute('data-i18n-only');

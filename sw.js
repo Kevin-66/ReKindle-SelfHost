@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rekindle-cache-v21'; // Bumped version to force update
+const CACHE_NAME = 'rekindle-cache-v22'; // Bumped version to force update
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -12,13 +12,138 @@ const ASSETS_TO_CACHE = [
     './fonts/OpenDyslexic-Bold.woff2'
 ];
 
+// OpenMoji picker icons (POPULAR_EMOJIS in emojis.js -> EMOJI_SVG_MAP files).
+// These are precached at install and served cache-first (filenames are
+// codepoint-addressed, so content never changes). REGENERATE this list when
+// POPULAR_EMOJIS changes, and bump CACHE_NAME if the openmoji/ art is regenerated.
+const EMOJI_ASSETS = [
+    './openmoji/1F602.svg',
+    './openmoji/1F923.svg',
+    './openmoji/1F60A.svg',
+    './openmoji/1F60D.svg',
+    './openmoji/1F970.svg',
+    './openmoji/1F618.svg',
+    './openmoji/1F61C.svg',
+    './openmoji/1F92A.svg',
+    './openmoji/1F60E.svg',
+    './openmoji/1F973.svg',
+    './openmoji/1F929.svg',
+    './openmoji/1F605.svg',
+    './openmoji/1F601.svg',
+    './openmoji/1F604.svg',
+    './openmoji/1F642.svg',
+    './openmoji/1F609.svg',
+    './openmoji/1F607.svg',
+    './openmoji/1F917.svg',
+    './openmoji/1F914.svg',
+    './openmoji/1F928.svg',
+    './openmoji/1F644.svg',
+    './openmoji/1F92B.svg',
+    './openmoji/1F92D.svg',
+    './openmoji/1F62E.svg',
+    './openmoji/1F632.svg',
+    './openmoji/1F633.svg',
+    './openmoji/1F97A.svg',
+    './openmoji/1F622.svg',
+    './openmoji/1F62D.svg',
+    './openmoji/1F631.svg',
+    './openmoji/1F92F.svg',
+    './openmoji/1F634.svg',
+    './openmoji/1F60B.svg',
+    './openmoji/2764.svg',
+    './openmoji/1F494.svg',
+    './openmoji/1F495.svg',
+    './openmoji/1F496.svg',
+    './openmoji/1F498.svg',
+    './openmoji/1F44D.svg',
+    './openmoji/1F44E.svg',
+    './openmoji/1F44F.svg',
+    './openmoji/1F64C.svg',
+    './openmoji/1F64F.svg',
+    './openmoji/1F4AA.svg',
+    './openmoji/1F91D.svg',
+    './openmoji/270C.svg',
+    './openmoji/1F91E.svg',
+    './openmoji/1F44C.svg',
+    './openmoji/1F91F.svg',
+    './openmoji/1F44B.svg',
+    './openmoji/270B.svg',
+    './openmoji/1F44A.svg',
+    './openmoji/1F63A.svg',
+    './openmoji/1F638.svg',
+    './openmoji/1F639.svg',
+    './openmoji/1F63B.svg',
+    './openmoji/1F648.svg',
+    './openmoji/1F649.svg',
+    './openmoji/1F64A.svg',
+    './openmoji/1F47B.svg',
+    './openmoji/1F916.svg',
+    './openmoji/1F383.svg',
+    './openmoji/2728.svg',
+    './openmoji/1F525.svg',
+    './openmoji/1F4AF.svg',
+    './openmoji/2B50.svg',
+    './openmoji/1F31F.svg',
+    './openmoji/26A1.svg',
+    './openmoji/1F308.svg',
+    './openmoji/2600.svg',
+    './openmoji/1F319.svg',
+    './openmoji/2744.svg',
+    './openmoji/26C4.svg',
+    './openmoji/1F340.svg',
+    './openmoji/1F338.svg',
+    './openmoji/1F33B.svg',
+    './openmoji/1F33C.svg',
+    './openmoji/1F355.svg',
+    './openmoji/1F354.svg',
+    './openmoji/1F35F.svg',
+    './openmoji/1F32E.svg',
+    './openmoji/1F37F.svg',
+    './openmoji/1F369.svg',
+    './openmoji/1F36A.svg',
+    './openmoji/1F382.svg',
+    './openmoji/1F370.svg',
+    './openmoji/1F36B.svg',
+    './openmoji/1F36C.svg',
+    './openmoji/2615.svg',
+    './openmoji/1F375.svg',
+    './openmoji/1F381.svg',
+    './openmoji/1F388.svg',
+    './openmoji/1F389.svg',
+    './openmoji/1F38A.svg',
+    './openmoji/1F384.svg',
+    './openmoji/1F3C6.svg',
+    './openmoji/1F947.svg',
+    './openmoji/26BD.svg',
+    './openmoji/1F3C0.svg',
+    './openmoji/1F3C8.svg',
+    './openmoji/26BE.svg',
+    './openmoji/1F3BE.svg',
+    './openmoji/1F3AE.svg',
+    './openmoji/1F3AF.svg',
+    './openmoji/1F3B2.svg',
+    './openmoji/1F3B5.svg',
+    './openmoji/1F3B6.svg',
+    './openmoji/1F3A7.svg',
+    './openmoji/1F3B8.svg',
+    './openmoji/1F4DA.svg',
+    './openmoji/1F4D6.svg',
+    './openmoji/1F4A1.svg',
+    './openmoji/1F680.svg',
+    './openmoji/1F9F8.svg',
+    './openmoji/1F3A8.svg'
+];
+
 // Install Event: Cache core assets
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
                 console.log('Opened cache');
-                return cache.addAll(ASSETS_TO_CACHE);
+                return cache.addAll(ASSETS_TO_CACHE).then(() => {
+                    // Best-effort emoji precache: never fail install over a single flaky icon
+                    return Promise.all(EMOJI_ASSETS.map(asset => cache.add(asset).catch(() => { })));
+                });
             })
     );
     // FORCE UPDATE:
@@ -72,6 +197,26 @@ self.addEventListener('fetch', event => {
                 .catch(() => {
                     return caches.match('./index.html') || caches.match('./');
                 })
+        );
+        return;
+    }
+
+    // 1b. OpenMoji icons -> Cache First (codepoint-addressed filenames are immutable).
+    // Picker icons arrive via precache; any other emoji seen in messages is
+    // runtime-cached on first view and never re-downloaded.
+    if (url.pathname.indexOf('/openmoji/') === 0) {
+        event.respondWith(
+            caches.open(CACHE_NAME).then(cache => {
+                return cache.match(event.request).then(response => {
+                    if (response) return response;
+                    return fetch(event.request).then(networkResponse => {
+                        if (networkResponse && networkResponse.status === 200) {
+                            cache.put(event.request, networkResponse.clone());
+                        }
+                        return networkResponse;
+                    });
+                });
+            })
         );
         return;
     }

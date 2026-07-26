@@ -791,6 +791,8 @@
   "crossy.status.login_required": "Log in to see global scores.",
   "crossy.status.no_scores": "No scores yet!",
   "crossy.title": "Crossy",
+  "neighbourhood.pixel_art.plus_note": "Tranh có chuyển sắc yêu cầu ReKindle+.",
+  "neighbourhood.pixel_art.plus_required": "Pixel art này có chuyển sắc. Ảnh đại diện có chuyển sắc yêu cầu ReKindle+.",
   "surfer.btn.close": "Close",
   "surfer.btn.leaderboard": "Leaderboard",
   "surfer.btn.retry": "Retry",

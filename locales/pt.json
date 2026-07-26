@@ -791,6 +791,8 @@
   "crossy.status.login_required": "Log in to see global scores.",
   "crossy.status.no_scores": "No scores yet!",
   "crossy.title": "Crossy",
+  "neighbourhood.pixel_art.plus_note": "Desenhos com gradientes requerem ReKindle+.",
+  "neighbourhood.pixel_art.plus_required": "Esta pixel art usa gradientes. Avatares com gradientes requerem ReKindle+.",
   "surfer.btn.close": "Close",
   "surfer.btn.leaderboard": "Leaderboard",
   "surfer.btn.retry": "Retry",

@@ -791,6 +791,8 @@
   "crossy.status.login_required": "Log in to see global scores.",
   "crossy.status.no_scores": "No scores yet!",
   "crossy.title": "Crossy",
+  "neighbourhood.pixel_art.plus_note": "Los dibujos con degradados requieren ReKindle+.",
+  "neighbourhood.pixel_art.plus_required": "Este pixel art usa degradados. Los avatares con degradados requieren ReKindle+.",
   "surfer.btn.close": "Close",
   "surfer.btn.leaderboard": "Leaderboard",
   "surfer.btn.retry": "Retry",
