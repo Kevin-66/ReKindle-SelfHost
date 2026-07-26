@@ -449,8 +449,6 @@
         var backButton = document.getElementById('back-btn');
         var resultPhoto = document.getElementById('result-photo');
 
-        var API_BASE = 'https://rekindle-akinator.timjarnott.workers.dev';
-
         var CORS_PROXIES = [
             { base: 'https://test.cors.workers.dev/?', encode: false },
             { base: 'https://corsproxy.io/?url=', encode: true },
@@ -590,50 +588,7 @@
             return data;
         }
 
-        async function startViaWorker() {
-            var res = await fetchWithTimeout(API_BASE + '/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ region: state.region, childMode: state.childMode })
-            }, 15000);
-            var data = await res.json().catch(function () { return null; });
-            if (!data || typeof data !== 'object') {
-                throw new Error(translate('akinator.error.network', 'Network error. Please try again.'));
-            }
-            if (!res.ok || data.error) {
-                throw new Error(data.error || translate('akinator.error.network', 'Network error. Please try again.'));
-            }
-            return data;
-        }
-
-        async function actionViaWorker(path, params) {
-            var body = {
-                region: state.region,
-                childMode: state.childMode,
-                session: state.session,
-                signature: state.signature
-            };
-            for (var key in params) {
-                if (Object.prototype.hasOwnProperty.call(params, key)) body[key] = params[key];
-            }
-            var res = await fetchWithTimeout(API_BASE + path, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            }, 15000);
-            var data = await res.json().catch(function () { return null; });
-            if (!data || typeof data !== 'object') {
-                throw new Error(translate('akinator.error.network', 'Network error. Please try again.'));
-            }
-            if (!res.ok || data.error) {
-                throw new Error(data.error || translate('akinator.error.network', 'Network error. Please try again.'));
-            }
-            return data;
-        }
-
         function sameTransport(a, b) {
-            if (a.type !== b.type) return false;
-            if (a.type === 'worker') return true;
             return a.proxy.base === b.proxy.base;
         }
 
@@ -643,7 +598,6 @@
             for (i = 0; i < CORS_PROXIES.length; i++) {
                 list.push({ type: 'proxy', proxy: CORS_PROXIES[i] });
             }
-            list.push({ type: 'worker' });
             if (activeTransport) {
                 for (i = 0; i < list.length; i++) {
                     if (sameTransport(list[i], activeTransport)) {
@@ -677,7 +631,7 @@
 
         function apiStart() {
             return withTransport(function (t) {
-                var p = t.type === 'worker' ? startViaWorker() : startViaProxy(t.proxy);
+                var p = startViaProxy(t.proxy);
                 return p.then(function (data) {
                     if (!data || !data.session || !data.signature || !data.question) {
                         throw new Error('Invalid start response');
@@ -689,14 +643,6 @@
 
         function apiAnswer(index) {
             return withTransport(function (t) {
-                if (t.type === 'worker') {
-                    return actionViaWorker('/answer', {
-                        step: state.step,
-                        progression: state.progression,
-                        answer: index,
-                        stepLast: state.stepLast
-                    });
-                }
                 var info = regionInfo(state.region);
                 return actionViaProxy(t.proxy, '/answer', {
                     step: state.step,
@@ -713,12 +659,6 @@
 
         function apiBack() {
             return withTransport(function (t) {
-                if (t.type === 'worker') {
-                    return actionViaWorker('/back', {
-                        step: state.step,
-                        progression: state.progression
-                    });
-                }
                 var info = regionInfo(state.region);
                 return actionViaProxy(t.proxy, '/cancel_answer', {
                     step: state.step,
@@ -733,13 +673,6 @@
 
         function apiContinue() {
             return withTransport(function (t) {
-                if (t.type === 'worker') {
-                    return actionViaWorker('/continue', {
-                        step: state.step,
-                        progression: state.progression,
-                        stepLast: state.stepLast
-                    });
-                }
                 var info = regionInfo(state.region);
                 return actionViaProxy(t.proxy, '/exclude', {
                     step: state.step,
