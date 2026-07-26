@@ -295,6 +295,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
     <script src="time.js"></script>
     <script src="theme.js?v=18"></script>
     <script src="js/i18n.js"></script>
@@ -362,12 +363,53 @@
             databaseURL: "https://rekindle-dd1fa-default-rtdb.firebaseio.com"
         };
 
+        const socialConfig = {
+            apiKey: "AIzaSyBy_n32McwWZidFn28-1eHYBTYjvVDH_Wk",
+            authDomain: "rekindle-socials.firebaseapp.com",
+            projectId: "rekindle-socials",
+            storageBucket: "rekindle-socials.firebasestorage.app",
+            messagingSenderId: "1004814440293",
+            appId: "1:1004814440293:web:abc94996445575be9b338c",
+            databaseURL: "https://rekindle-socials-default-rtdb.firebaseio.com"
+        };
+
         firebase.initializeApp(firebaseConfig);
+        const socialApp = firebase.initializeApp(socialConfig, 'social');
         const auth = firebase.auth();
         const db = firebase.database();
+        const socialRtdb = socialApp.database();
+        const socialAuth = socialApp.auth();
 
         let currentUser = null;
         const LIFE_YEARS = 90; // Extended to 90 to be optimistic/standard full grid
+
+        let socialAuthPromise = null;
+        function authenticateSocial() {
+            if (socialAuth.currentUser) return Promise.resolve(socialAuth.currentUser);
+            if (socialAuthPromise) return socialAuthPromise;
+            const getSocialToken = firebase.functions().httpsCallable('getSocialToken');
+            socialAuthPromise = getSocialToken({}).then(function (result) {
+                return socialAuth.signInWithCustomToken(result.data.token);
+            }).catch(function (e) {
+                socialAuthPromise = null;
+                throw e;
+            });
+            return socialAuthPromise;
+        }
+
+        function cacheBirthday(dateStr) {
+            try {
+                localStorage.setItem('rekindle_life_birthday', dateStr);
+            } catch (e) { /* cache full or unavailable */ }
+        }
+
+        function getCachedBirthday() {
+            try {
+                return localStorage.getItem('rekindle_life_birthday');
+            } catch (e) {
+                return null;
+            }
+        }
 
         // Init Standard Features
         if (window.rekindleApplyTheme) window.rekindleApplyTheme();
@@ -385,15 +427,23 @@
         });
 
         function loadUserData() {
-            socialRtdb.ref('users_public/' + currentUser.uid).once('value').then(snapshot => {
+            const cached = getCachedBirthday();
+            authenticateSocial().then(() => {
+                return socialRtdb.ref('users_public/' + currentUser.uid).once('value');
+            }).then(snapshot => {
                 const data = snapshot.val();
                 document.getElementById('loading-overlay').style.display = 'none';
 
                 let validParams = false;
                 if (data && data.birthday) {
+                    cacheBirthday(data.birthday);
                     if (renderLife(data.birthday)) {
                         validParams = true;
                     }
+                }
+
+                if (!validParams && cached) {
+                    validParams = renderLife(cached);
                 }
 
                 if (!validParams) {
@@ -401,7 +451,10 @@
                 }
             }).catch(e => {
                 console.error(e);
-                document.getElementById('loading-overlay').innerHTML = "Error loading profile.";
+                document.getElementById('loading-overlay').style.display = 'none';
+                if (!cached || !renderLife(cached)) {
+                    document.getElementById('birthday-modal').style.display = 'flex';
+                }
             });
         }
 
@@ -421,20 +474,19 @@
             document.getElementById('birthday-modal').style.display = 'none';
             document.getElementById('loading-overlay').style.display = 'flex';
 
-            socialRtdb.ref('users_public/' + currentUser.uid).update({
-                birthday: dateStr
+            cacheBirthday(dateStr);
+
+            authenticateSocial().then(() => {
+                return socialRtdb.ref('users_public/' + currentUser.uid).update({
+                    birthday: dateStr
+                });
             }).then(() => {
                 renderLife(dateStr);
                 document.getElementById('loading-overlay').style.display = 'none';
             }).catch(e => {
-                (function(msg) {
-                    var d = document.createElement('div');
-                    d.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
-                    d.innerHTML = '<div style="background:white;border:2px solid black;box-shadow:4px 4px 0 black;padding:20px;max-width:300px;font-family:sans-serif;"><p>' + msg + '</p><button onclick="this.closest(\'[style*=fixed]\').remove()" style="border:2px solid black;box-shadow:2px 2px 0 black;padding:6px 16px;background:white;font-weight:bold;">OK</button></div>';
-                    document.body.appendChild(d);
-                })("Error saving: " + e.message);
+                console.error(e);
+                renderLife(dateStr);
                 document.getElementById('loading-overlay').style.display = 'none';
-                document.getElementById('birthday-modal').style.display = 'flex';
             });
         }
 

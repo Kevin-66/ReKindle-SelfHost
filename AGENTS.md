@@ -469,6 +469,14 @@ The moderation worker enforces **global, per-user token-bucket rate limits** usi
 #### Firebase RTDB Script Gotcha
 Only include `firebase-database-compat.js` on pages that actually use Realtime Database (presence, matchmaking, chat, sessions, etc.). Pages that only need Auth/Firestore/Functions (such as `login.html`) should omit it. Loading RTDB unnecessarily can trigger `SafariExtensionMessageEvent` duplicate-variable errors in browsers with certain Safari extensions installed, and it causes extra polling connections to `*.firebaseio.com` that may log CORS/network errors even when the user is authenticated.
 
+#### Reading Social RTDB Data from Non-Social Pages
+Any page that reads/writes data owned by the **social** project (e.g. `users_public/{uid}/birthday`, written by `neighbourhood.html`) must do the full social-auth setup — referencing `socialRtdb` without it crashes with `ReferenceError` (this was the `life.html` stuck-loading bug, 2026-07):
+
+1. Include `firebase-functions-compat.js` (needed for the callable).
+2. Init the secondary app: `const socialApp = firebase.initializeApp(socialConfig, 'social'); const socialRtdb = socialApp.database(); const socialAuth = socialApp.auth();` (config in `neighbourhood.html:1151`).
+3. Sign in before any RTDB access: `firebase.functions().httpsCallable('getSocialToken')({})` → `socialAuth.signInWithCustomToken(result.data.token)`. The callable (main project) mints a social custom token carrying `moderator`/`pro`/`ageVerified`/`email` claims; social RTDB rules on `users_public` require `auth.token.ageVerified == true` even for reads.
+4. Non-social pages should NOT force the `ensureAgeVerified()` flow — instead degrade gracefully (e.g. `life.html` falls back to `localStorage` key `rekindle_life_birthday`) so non-age-verified users can still use the app; their data just won't sync.
+
 ### 8. URL / Link Blocking in Social Apps
 All social apps (KindleChat, Neighbourhood, Topics) block users from posting URLs and links. This is enforced **both client-side and server-side** (moderation worker).
 
