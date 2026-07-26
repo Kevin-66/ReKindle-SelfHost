@@ -308,7 +308,7 @@ To handle subpaths under a function route, use a catch-all file inside a folder:
 functions/api/foo/[[path]].js   → handles /api/foo and /api/foo/*
 ```
 
-**Real bug fixed:** `functions/api/akinator.js` was deployed and the root `/api/akinator` worked, but `POST /api/akinator/start` returned 405 because the subpath fell through to the static asset handler. The fix was moving the function to `functions/api/akinator/[[path]].js`.
+**Real bug fixed (historical):** `functions/api/akinator.js` was deployed and the root `/api/akinator` worked, but `POST /api/akinator/start` returned 405 because the subpath fell through to the static asset handler. The fix was moving the function to `functions/api/akinator/[[path]].js`. (That function no longer exists — Akinator was moved to a worker, then the backend was removed entirely in 2026-07; the page now uses CORS proxies only. The routing lesson still applies to any future multi-endpoint function.)
 
 
 ## 🏗 System Architecture
@@ -525,6 +525,36 @@ The OpenAI `omni-moderation-latest` model incorrectly flags innocent ASCII art e
 
 **If you add new emojis to `emojis.js`, you must also add their `art` strings to the `ASCII_EMOJI_ARTS` array in `worker.js`.**
 
+### 10b. Unicode Emoji Picker (`POPULAR_EMOJIS` in emojis.js)
+`emojis.js` also defines `POPULAR_EMOJIS` (~120 curated `{emoji, name}` entries — deliberately trimmed to the most popular/wholesome set for the all-ages community: no edgy/gross, alcohol, anger, or money emojis) used by the KindleChat emoji picker (`initAsciiPicker()` in `kindlechat.html`). It is a **category object** (`{"Smileys": [...], "Hearts": [...], "Hands": [...], "Animals": [...], "Nature": [...], "Food": [...], "Fun": [...]}`), NOT a flat array — category keys become the picker sidebar tab labels. This is a **separate global from `ASCII_EMOJIS`** on purpose: the worker's `ASCII_EMOJI_ARTS` strip-list mirrors `ASCII_EMOJIS` only, so do NOT merge these arrays or the strip-list invariant breaks. Standard Unicode emojis do not trip omni-moderation the way ASCII art does, so they need no stripping.
+
+How the picker works:
+- The emoji categories are prepended to the picker as sidebar tabs (Smileys first = default active), built by merging each `POPULAR_EMOJIS` category into `pickerCategories`; all `ASCII_EMOJIS` categories are then flattened into ONE trailing tab labeled `っ◕‿◕)っ`. Emoji category tabs render an OpenMoji icon (the category's first emoji, `.emoji-tab` class, inverted on hover/active) instead of a text label — the category key is only used for the section id and `title` tooltip.
+- The emoji section uses its own `.emoji-grid` (CSS Grid with `gap`, 48px cells / 32px images) and `.emoji-option` classes — do NOT reuse `.ascii-grid`/`.ascii-option` for emoji sections: `.ascii-grid>*+* { margin-left: 5px }` indents every wrapped row and has no vertical gaps, and the base `.ascii-option` styles (min-width, flex-grow, Courier font) fight the image cells. `.emoji-option img` also needs `image-rendering: auto` to undo the body's `image-rendering: pixelated` for smooth SVG scaling.
+- Each option renders as an `<img src="openmoji/{file}">` looked up via `EMOJI_SVG_MAP` from `js/emoji-render.js` (the Kindle cannot render emoji glyphs). **Do not** call `renderEmojis()` on the picker container — the ASCII art sections contain chars ≥ U+2600 (☁, ♥, ✿) that are also in `EMOJI_SVG_MAP` and would get mangled into images.
+- `insertAscii()` inserts the raw Unicode char for ASCII art, but for Unicode emojis it inserts an `<img class="composer-emoji">` (OpenMoji) — see the composer note below.
+- **Entries must use bare codepoints WITHOUT the `FE0F` variation selector** (e.g. `"❤"` U+2764, not `"❤️"` U+2764 U+FE0F) — the auto-generated `EMOJI_SVG_MAP` keys are FE0F-less for these, so FE0F forms silently miss.
+- After editing `emojis.js`, bump its `?v=` query in `kindlechat.html` (only page that includes it).
+
+### 10d. OpenMoji Caching (sw.js + _headers)
+`/openmoji/*` requests are cached at two layers so Kindles never re-download emoji icons:
+
+1. **Service worker (`sw.js`)** — route `1b` serves `/openmoji/*` **cache-first** (not stale-while-revalidate): OpenMoji filenames are codepoint-addressed so content never changes, and SWR would waste a background revalidation request per icon. The ~115 picker icons (`EMOJI_ASSETS`, ~0.5MB) are precached at install (best-effort per-file so one flaky icon can't fail the whole install); any other emoji first seen in a message is runtime-cached on demand via `cache.put`. Do NOT precache the whole 19MB openmoji/ dir (64MB Kindle global cache limit).
+2. **HTTP headers (`_headers`, Cloudflare Pages)** — `/openmoji/*` gets `Cache-Control: public, max-age=31536000, immutable`, covering first visits before the SW installs (Pages' default is `max-age=0, must-revalidate`, which forces a revalidation round-trip per file per session). The same file also sets: `/sw.js` → `no-cache` (SW updates must never stall), `/fonts/*` → immutable year, `/locales/*` → 1 hour, and global `X-Content-Type-Options: nosniff`. Do NOT long-cache `/js/*` or HTML — most JS has no `?v=` buster, so users would be stranded on stale code.
+
+**Regeneration rules:** when `POPULAR_EMOJIS` changes, regenerate `EMOJI_ASSETS` in `sw.js` (derive filenames from `EMOJI_SVG_MAP`); if the openmoji/ art itself is ever regenerated (library upgrade, same filenames new content), bump `CACHE_NAME` so clients drop the stale icons.
+
+### 10c. KindleChat Composer Is `contenteditable` (Not a `<textarea>`)
+The KindleChat message composer (`#msg-input` in `kindlechat.html`) is a `contenteditable` div, not a textarea, because a textarea can only hold plain text and Unicode emojis render as blank boxes on Kindle. Emojis live in the composer as real `<img class="composer-emoji" src="openmoji/..." alt="{unicode}">` nodes that flow inline with the text.
+
+Invariants to preserve when touching the composer:
+- **Never read/write `.value`** — it does nothing on a div. Read with `getComposerText()` (serializes childNodes: text → nodeValue, `<img>` → `alt`, `<br>`/`<div>` → `\n`), clear with `innerHTML = ''`, set plain text with `textContent = ...`.
+- The `alt` attribute on composer emoji imgs is the source of truth for the sent Unicode char — `serializeComposer()` converts imgs back to `alt` text, so messages still send/render as before (and `renderEmojis()` in bubbles handles display).
+- Paste is force-plain-text via a `paste` listener (`text/plain` only) — do not remove it or rich HTML (incl. foreign images) can enter the composer.
+- Placeholder is CSS `#msg-input:empty:before { content: attr(placeholder) }`; an `input` listener normalizes a fully-empty composer to `innerHTML = ''` so `:empty` matches again. Because of this, `js/i18n.js` sets `data-i18n-placeholder` via `setAttribute('placeholder', ...)` (property assignment does not reflect to `attr()` on a div).
+- Disabled state = `contentEditable="false"` + `.composer-disabled` class (managed by `setChatInputEnabled`), not the `disabled` attribute.
+- `user-select: text` on `#msg-input` overrides the body's `user-select: none`, or the caret/selection breaks.
+
 ### 11. RTDB Turn Timers and `ServerValue.TIMESTAMP` Placeholders
 When building turn-based multiplayer games with RTDB, store `turnStartedAt` using `firebase.database.ServerValue.TIMESTAMP` so all clients share the same clock.
 
@@ -583,23 +613,40 @@ if (!gameState.players[gameState.host]) {
 
 This keeps the game alive if the host leaves or drops, and lets remaining players finish the match. It is implemented in `liveuno.html`.
 
+### 13. Home-Screen Live Games Validation (`index.html`)
+
+The Live Games section and its tab badge must **never trust `presence/{hostUid}` alone** to validate a `matchmaking/{game}/{matchId}` listing. `presence/{uid}` is a **global per-user online flag** (written by `theme.js` `rekindleInitGlobalPresence`), so a stale listing stays visible whenever the user is online *anywhere* in the app. Stale listings happen in practice: `liveuno.html` `leaveMatch()` cancels the matchmaking `onDisconnect` when the host leaves a lobby with players remaining (migration then owns the listing, but migration only runs while a guest client is connected), guests who disconnect abruptly leave ghost player nodes, and crashes/races can skip the `onDisconnect().remove()`.
+
+**Pattern (implemented 2026-07):** `validateLiveMatch(gameType, matchId, match)` in `index.html` validates each waiting listing against its actual game node `games/{gameType}/{matchId}` — a 1:1 swap for the old presence read, so Firebase call count is unchanged (one read per waiting match; badge path adds a 30s per-match cache):
+
+| Game node state | Action |
+| :--- | :--- |
+| Missing (re-checked once after 3s — hosts write the listing a tick before the game node, so never delete on a single miss) | Hide + best-effort `matchmaking` remove |
+| `status !== 'lobby'` (started/finished but listing never removed) | Hide + best-effort remove |
+| Lobby with 0 human players (ghost players; bots excluded via `isBot` flag AND `bot_` uid prefix) | Hide + best-effort remove |
+| Listed `hostUid` not in players (migration missed the listing) | Heal listing: update `hostUid`/`hostName` to `game.host` if present-human, else oldest human by `joinedAt`; show with corrected host |
+| Otherwise | Show as-is |
+
+Cleanup/heal writes are idempotent and guarded by per-session attempted-sets (`mmCleanupAttempted`, `mmHealAttempted`) so badge/listener re-fires don't repeat them. RTDB rules allow any authed user to write `matchmaking`, so client-side cleanup is permitted. Transient read errors hide the entry for that render but **never** trigger cleanup and are not cached.
+
+**Invariants for future live games:** the game node must live at `games/{gameType}/{matchId}` with `status: 'lobby'` while joinable and a `players` map of `{name, joinedAt, isBot?}` — the validator relies on all three. If a game's flow cancels the matchmaking `onDisconnect` before the listing is removed, expect the validator to eventually delete or heal the listing instead.
+
 ### Akinator API (`akinator.html`)
-The Akinator game talks to Akinator.com through a **transport fallback chain** (added 2026-07): third-party CORS proxies first, the Cloudflare Worker as the final fallback.
+The Akinator game talks to Akinator.com through third-party **CORS proxies only** — there is no self-hosted backend (the Cloudflare Worker fallback was removed 2026-07 at user request; the old worker code still exists undeployed at `workers/rekindle-akinator/`).
 
 ### Transport chain (in `akinator.html`)
-1. **CORS proxies** (`CORS_PROXIES` list, tried in order). The page itself does what the worker does: scrapes `/game` for session/signature/question and POSTs form data to `/answer`, `/cancel_answer`, `/exclude`. Per-proxy entry shape: `{ base, encode }` — `encode: true` means append `encodeURIComponent(targetUrl)` (corsproxy.io, codetabs), `false` means append the raw URL (Zibri's `test.cors.workers.dev`).
-2. **Cloudflare Worker** (`API_BASE + '/start'|'/answer'|'/back'|'/continue'`, JSON bodies) — the original backend at `workers/rekindle-akinator/`, deployed at `https://rekindle-akinator.timjarnott.workers.dev`.
+- **CORS proxies** (`CORS_PROXIES` list, tried in order). The page itself scrapes `/game` for session/signature/question and POSTs form data to `/answer`, `/cancel_answer`, `/exclude`. Per-proxy entry shape: `{ base, encode }` — `encode: true` means append `encodeURIComponent(targetUrl)` (corsproxy.io, codetabs), `false` means append the raw URL (Zibri's `test.cors.workers.dev`).
 
 `withTransport(fn)` runs each operation against the chain; the first transport that succeeds becomes `activeTransport` and is tried first next time (reset on failure). **Akinator sessions are param-based** (`session` + `signature` in every POST, no cookies), so transports can switch mid-game without losing state.
 
 ### Proxy gotchas (verified 2026-07)
 - **`X-Requested-With: XMLHttpRequest` is required** on POSTs to Akinator's endpoints — without it Akinator's Cloudflare returns a 403 WAF block page. Browsers can send it (triggers a preflight; working proxies answer OPTIONS correctly).
 - `test.cors.workers.dev` (Zibri's cloudflare-cors-anywhere) is the only public proxy verified to work with Akinator. It **rejects requests without an `Origin` header** ("Error: use fetch()") and without a browser User-Agent — both are automatic from a real browser, but curl/node tests must set them manually.
-- `corsproxy.io` reaches Akinator but gets a Cloudflare challenge page; codetabs/allorigins are frequently down (522); `proxy.corsfix.com` requires per-domain registration; `cors.sh` needs an API key. Public proxies are flaky — that's why the chain and worker fallback exist. Re-test before adding/reordering proxies.
-- The proxy path validates responses exactly like the worker (regex-extracted session/signature/question for start, `JSON.parse` for actions), so a proxy returning a challenge page or HTML just fails through to the next transport.
+- `corsproxy.io` reaches Akinator but gets a Cloudflare challenge page; codetabs/allorigins are frequently down (522); `proxy.corsfix.com` requires per-domain registration; `cors.sh` needs an API key. Public proxies are flaky — with no worker fallback anymore, all proxies failing means the user sees a start/network error. Re-test before adding/reordering proxies.
+- The proxy path validates responses (regex-extracted session/signature/question for start, `JSON.parse` for actions), so a proxy returning a challenge page or HTML just fails through to the next transport.
 
-### Worker details (unchanged)
-- Akinator.com sits behind Cloudflare bot protection; server-side calls can be blocked if the upstream IP/headers are flagged.
+### Akinator.com endpoint details
+- Akinator.com sits behind Cloudflare bot protection; calls can be blocked if the upstream IP/headers are flagged.
 - The start endpoint scrapes the Akinator `/game` page. Reliable patterns are:
   - `session: '...'` (inline JS)
   - `signature: '...'` (inline JS)
@@ -608,11 +655,9 @@ The Akinator game talks to Akinator.com through a **transport fallback chain** (
 - Action endpoints: `/answer` (send 0-4), `/cancel_answer` (back), `/exclude` (continue after wrong guess).
 - Supported regions and theme `sid` values: characters=1, objects=2, animals=14.
 - Sessions are short numeric strings (e.g. `'886'`) and the signature is base64 — both appear multiple times in the `/game` HTML. `extractFirst()` picks the **longest** match across all patterns to avoid short decoys.
-- `/continue` maps to Akinator `/exclude` and **must** send `forward_answer: '1'` (per the site's own `continuePartie()` JS) — **not** `step_last_proposition`. Without it, Akinator returns the HTML game page instead of JSON, and the browser's `res.json()` throws "The string did not match the expected pattern."
-- The worker validates every passthrough response with `JSON.parse` and returns a 502 `{error}` if Akinator sends HTML/empty bodies, so the frontend always gets valid JSON.
+- Continue maps to Akinator `/exclude` and **must** send `forward_answer: '1'` (per the site's own `continuePartie()` JS) — **not** `step_last_proposition`. Without it, Akinator returns the HTML game page instead of JSON, and the browser's `JSON.parse` throws.
 - Canonical endpoint params (scraped from the `/game` page inline JS, 2026-07): `/answer` = step, progression, sid, cm, answer, step_last_proposition, session, signature. `/cancel_answer` = step, progression, sid, cm, session, signature. `/exclude` = step, sid, cm, progression, session, signature, forward_answer ('1' = keep playing, '0' = end game).
-- Never write fetch URLs as `'${API_BASE}/path'` in the page script — `${...}` inside a plain string is not interpolated (that was the original "The string did not match the expected pattern" start error). Use `API_BASE + '/path'`.
-- akinator.com hard-blocks some residential IPs with a Cloudflare 403 even with full browser headers; the worker's Cloudflare egress works. Don't trust local `curl` results for diagnosis — debug through the deployed worker instead.
+- akinator.com hard-blocks some residential IPs with a Cloudflare 403 even with full browser headers. Don't trust local `curl` results for diagnosis.
 
 ## ❓ Game Rules Helper (js/gamerules.js)
 
@@ -649,6 +694,16 @@ External APIs such as Reddit aggressively rate-limit shared cloud egress IPs (e.
 - Use different cache TTLs by content type (e.g., 60 s for RSS feeds, 5 min for images).
 
 Example pattern: `functions/api/reddit.js`.
+
+## 🖼 Grayscale Avatars (`customAvatar` float arrays) & ReKindle+ Gradient Gate
+
+`customAvatar` arrays (stored in RTDB `user_cards/{uid}` and social `users_public/{uid}`) support **float shade values 0..1**, not just 0/1 — 0 = white, 1 = black, mid values = gray (matching `pixel.html` grid values). Gradient pixel-art avatars are a **ReKindle+ feature**.
+
+*   **Gate (neighbourhood.html only):** the pixel-art avatar picker locks any 16x16 drawing whose grid has any value strictly `> 0 && < 1` (`gridHasGradients()`). Non-plus users see the item greyed out (`.pixel-picker-item.locked`, opacity 0.5 + `filter: grayscale(1)`) with a `.pixel-picker-lock-badge` ("PLUS", reuses `neighbourhood.lbl.plus`); clicking it shows `showGradientPaywallAlert()` instead of selecting. `selectPixelArtAsAvatar()` re-checks server-side-of-client (data + `isPlus`) as a guard. `isPlus` comes from `localStorage.rekindle_is_pro`.
+*   **Four `drawAvatar()` copies render grayscale:** `neighbourhood.html`, `kindlechat.html`, `topics.html`, `index.html` all have their own `drawAvatar(canvasId, seed)`; each renders array values `0 < v < 1` as `rgb(s,s,s)` where `s = Math.round((1 - v) * 255)`, then restores `fillStyle = '#000'`. **If you add a new page that draws avatars from `user_cards`, copy the grayscale-aware loop, not the old `seed[i] === 1` check.**
+*   `gridToAvatar()` (neighbourhood.html) clamps grid values to 0..1 instead of binarizing; pure B&W art (already 0/1) is unaffected.
+*   The 1-bit "Draw Icon" editor (`openAvatarModal()`) **binarizes on load** (`v >= 0.5 ? 1 : 0`) so a gradient avatar is WYSIWYG in the editor; saving from that editor replaces the avatar with 1-bit data.
+*   Grayscale avatars are static one-time canvas draws, so they do NOT cause the e-ink full-refresh flashing that animated anti-aliased canvases do (contrast with the Surfer/Cube Dash 1-bit rules).
 
 ## 📋 Reporting System
 

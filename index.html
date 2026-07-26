@@ -1376,6 +1376,94 @@
             appId: "1:748026882518:web:6877dd4329318070c11c77"
         };
 
+        // --- LIVE LOBBY VALIDATION ---
+        // Validates matchmaking entries against the actual game node (games/{gameType}/{matchId}).
+        // presence/{uid} alone cannot detect stale lobbies: a user online anywhere in the app
+        // keeps presence=true even after abandoning a lobby (cancelled onDisconnect, crashes,
+        // host migration that missed the listing update), which left phantom entries in Live Games.
+        // Cost is identical to the old presence check: one read per waiting match.
+        const matchValidationCache = new Map(); // "gameType/matchId" -> { result, ts }
+        const MATCH_VALIDATION_TTL = 30000;
+        const mmCleanupAttempted = new Set();
+        const mmHealAttempted = new Map(); // key -> hostUid last healed to
+
+        function isHumanLobbyPlayer(players, uid) {
+            const p = players[uid];
+            return !!(p && !p.isBot && uid.indexOf('bot_') !== 0);
+        }
+
+        function cleanupMatchmaking(gameType, matchId) {
+            const key = gameType + '/' + matchId;
+            if (mmCleanupAttempted.has(key)) return;
+            mmCleanupAttempted.add(key);
+            rtdb.ref('matchmaking/' + key).remove().catch(() => { });
+        }
+
+        function healMatchmakingHost(gameType, matchId, hostUid, hostName) {
+            const key = gameType + '/' + matchId;
+            if (mmHealAttempted.get(key) === hostUid) return;
+            mmHealAttempted.set(key, hostUid);
+            rtdb.ref('matchmaking/' + key).update({ hostUid: hostUid, hostName: hostName }).catch(() => { });
+        }
+
+        // Returns { valid, hostUid, hostName, error }. hostUid/hostName reflect the true current
+        // host, which may differ from the listing when the lobby healed after a host change.
+        async function validateLiveMatch(gameType, matchId, match) {
+            try {
+                let snap = await rtdb.ref('games/' + gameType + '/' + matchId).once('value');
+                let game = snap.val();
+                if (!game) {
+                    // Hosts write the matchmaking entry a tick before the game node, so
+                    // re-check once before declaring the listing dead.
+                    await new Promise(r => setTimeout(r, 3000));
+                    snap = await rtdb.ref('games/' + gameType + '/' + matchId).once('value');
+                    game = snap.val();
+                    if (!game) {
+                        cleanupMatchmaking(gameType, matchId);
+                        return { valid: false };
+                    }
+                }
+                if (game.status !== 'lobby') {
+                    // Match already started/finished but the listing was never removed.
+                    cleanupMatchmaking(gameType, matchId);
+                    return { valid: false };
+                }
+                const players = game.players || {};
+                const humans = Object.keys(players).filter(uid => isHumanLobbyPlayer(players, uid));
+                if (humans.length === 0) {
+                    // Lobby with nobody in it (ghost players from abrupt disconnects).
+                    cleanupMatchmaking(gameType, matchId);
+                    return { valid: false };
+                }
+                if (!match.hostUid || !isHumanLobbyPlayer(players, match.hostUid)) {
+                    // Listed host is gone and host migration missed the listing update.
+                    let newHost = isHumanLobbyPlayer(players, game.host) ? game.host : null;
+                    if (!newHost) {
+                        humans.sort((a, b) => (players[a].joinedAt || 0) - (players[b].joinedAt || 0));
+                        newHost = humans[0];
+                    }
+                    const newName = players[newHost].name || 'Someone';
+                    healMatchmakingHost(gameType, matchId, newHost, newName);
+                    return { valid: true, hostUid: newHost, hostName: newName };
+                }
+                return { valid: true, hostUid: match.hostUid, hostName: match.hostName };
+            } catch (e) {
+                // Transient read failure: hide (same as old presence behaviour), never clean up.
+                return { valid: false, error: true };
+            }
+        }
+
+        async function cachedMatchValidation(gameType, matchId, match) {
+            const key = gameType + '/' + matchId;
+            const cached = matchValidationCache.get(key);
+            if (cached && (Date.now() - cached.ts) < MATCH_VALIDATION_TTL) return cached.result;
+            const result = await validateLiveMatch(gameType, matchId, match);
+            if (!result.error) {
+                matchValidationCache.set(key, { result: result, ts: Date.now() });
+            }
+            return result;
+        }
+
         window.onload = () => {
             // Safe Check: Wait for deferred Firebase
             try {
@@ -1392,22 +1480,6 @@
                         let badgeListener = null;
                         let badgeListenerRef = null;
                         let badgeDebounceTimer = null;
-                        // Cache presence lookups: uid -> { value: bool, ts: number }
-                        const presenceCache = new Map();
-                        const PRESENCE_TTL = 30000;
-
-                        async function cachedPresence(uid) {
-                            const cached = presenceCache.get(uid);
-                            if (cached && (Date.now() - cached.ts) < PRESENCE_TTL) return cached.value;
-                            try {
-                                const snap = await rtdb.ref('presence/' + uid).once('value');
-                                const val = snap.val() === true;
-                                presenceCache.set(uid, { value: val, ts: Date.now() });
-                                return val;
-                            } catch (e) {
-                                return false;
-                            }
-                        }
 
                         function attachBadgeListener() {
                             if (badgeListener) return;
@@ -1425,14 +1497,12 @@
                                             for (const matchId in games[gameType]) {
                                                 const match = games[gameType][matchId];
                                                 if (match && match.status === 'waiting') {
-                                                    checks.push(match.hostUid
-                                                        ? cachedPresence(match.hostUid)
-                                                        : Promise.resolve(true));
+                                                    checks.push(cachedMatchValidation(gameType, matchId, match));
                                                 }
                                             }
                                         }
                                         const results = await Promise.all(checks);
-                                        count = results.filter(Boolean).length;
+                                        count = results.filter(r => r && r.valid).length;
                                     }
                                     const badge = document.getElementById('live-games-count');
                                     if (badge) {
@@ -1462,7 +1532,7 @@
 
                         window._badgeDetach = detachBadgeListener;
                         window._badgeAttach = attachBadgeListener;
-                        window._presenceCache = presenceCache;
+                        window._matchValidationCache = matchValidationCache;
                     }
                 } else {
                     console.warn("Firebase SDK not loaded. Running in offline mode.");
@@ -2016,16 +2086,10 @@
                 }
 
                 const validatedMatches = await Promise.all(waitingMatches.map(async item => {
-                    if (!item.match.hostUid) {
-                        item.isOnline = true;
-                        return item;
-                    }
-                    try {
-                        const presSnap = await rtdb.ref('presence/' + item.match.hostUid).once('value');
-                        item.isOnline = presSnap.val() === true;
-                    } catch (e) {
-                        item.isOnline = false;
-                    }
+                    const result = await validateLiveMatch(item.gameType, item.matchId, item.match);
+                    item.isOnline = result.valid;
+                    if (result.hostUid) item.match.hostUid = result.hostUid;
+                    if (result.hostName) item.match.hostName = result.hostName;
                     return item;
                 }));
 
@@ -2380,10 +2444,16 @@
                 const gridSize = Math.sqrt(seed.length);
                 const pixelSize = canvas.width / gridSize;
                 for (let i = 0; i < seed.length; i++) {
-                    if (seed[i] === 1) {
+                    const v = seed[i];
+                    if (v > 0) {
                         const x = i % gridSize;
                         const y = Math.floor(i / gridSize);
+                        if (v < 1) {
+                            const s = Math.round((1 - v) * 255);
+                            ctx.fillStyle = 'rgb(' + s + ',' + s + ',' + s + ')';
+                        }
                         ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                        if (v < 1) ctx.fillStyle = '#000';
                     }
                 }
                 return;

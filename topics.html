@@ -3174,10 +3174,16 @@
                 var pixelSize = canvas.width / gridSize;
 
                 for (var i = 0; i < seed.length; i++) {
-                    if (seed[i] === 1) {
+                    var v = seed[i];
+                    if (v > 0) {
                         var x = i % gridSize;
                         var y = Math.floor(i / gridSize);
+                        if (v < 1) {
+                            var s = Math.round((1 - v) * 255);
+                            ctx.fillStyle = 'rgb(' + s + ',' + s + ',' + s + ')';
+                        }
                         ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                        if (v < 1) ctx.fillStyle = '#000';
                     }
                 }
                 return;
