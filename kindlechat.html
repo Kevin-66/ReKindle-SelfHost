@@ -830,6 +830,43 @@
             /* Increased height for multi-line support */
         }
 
+        /* COMPOSER (contenteditable div - holds text + emoji images) */
+        #msg-input {
+            flex-grow: 1;
+            border: 2px solid black;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 1rem;
+            height: 70px;
+            overflow-y: auto;
+            background: white;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            user-select: text;
+            cursor: text;
+            box-sizing: border-box;
+        }
+
+        #msg-input.composer-disabled {
+            background: #eee;
+            color: #888;
+            cursor: default;
+        }
+
+        #msg-input:empty:before {
+            content: attr(placeholder);
+            color: #888;
+            pointer-events: none;
+        }
+
+        #msg-input img.composer-emoji {
+            width: 1.3em;
+            height: 1.3em;
+            vertical-align: text-bottom;
+            image-rendering: auto;
+        }
+
         .sys-btn {
             background: white;
             border: 2px solid black;
@@ -930,6 +967,24 @@
             color: white;
         }
 
+        /* Emoji category icon tabs (OpenMoji) */
+        .ascii-sidebar-item.emoji-tab {
+            padding: 12px 14px;
+        }
+
+        .ascii-sidebar-item.emoji-tab img {
+            width: 24px;
+            height: 24px;
+            display: block;
+            image-rendering: auto;
+        }
+
+        /* OpenMoji line art is black - invert so it stays visible on active/hover */
+        .ascii-sidebar-item.emoji-tab:hover img,
+        .ascii-sidebar-item.emoji-tab.active img {
+            filter: invert(1);
+        }
+
         /* CONTENT (Top) */
         .ascii-content {
             flex-grow: 1;
@@ -950,32 +1005,75 @@
         }
 
 
-        /* GRID for Emojis */
+        /* GRID for ASCII art (content-width boxes, even spacing via margin hack) */
         .ascii-grid {
             display: flex;
             flex-wrap: wrap;
+            margin: -4px;
+            /* Offsets item margins so outer edges align */
         }
 
-        .ascii-grid>*+* {
-            margin-left: 5px;
+        .ascii-grid>* {
+            margin: 4px;
         }
 
         .ascii-option {
             border: 1px solid #ccc;
-            padding: 8px;
+            padding: 8px 10px;
             cursor: pointer;
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
             text-align: center;
             background: #fafafa;
-            min-width: 60px;
-            flex-grow: 1;
+            min-width: 48px;
+            min-height: 40px;
+            box-sizing: border-box;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .ascii-option:hover {
             background: black;
             color: white;
             border-color: black;
+        }
+
+        /* Emoji picker grid (CSS Grid: even rows/cols, real gaps) */
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+            gap: 6px;
+        }
+
+        .emoji-option {
+            border: 1px solid #ccc;
+            background: #fafafa;
+            cursor: pointer;
+            height: 48px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .emoji-option:hover {
+            background: black;
+            border-color: black;
+        }
+
+        .emoji-option img {
+            width: 32px;
+            height: 32px;
+            display: block;
+            /* body sets image-rendering: pixelated - undo it for smooth SVG scaling */
+            image-rendering: auto;
+        }
+
+        /* OpenMoji line art is black - invert on hover so it stays visible */
+        .emoji-option:hover img {
+            filter: invert(1);
         }
 
         /* NEW: REACTION SELECTION MODAL */
@@ -1197,7 +1295,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="emojis.js?v=2"></script>
+    <script src="emojis.js?v=5"></script>
     <script src="js/emoji-render.js"></script>
 
     <script src="bad_words.js?v=4"></script>
@@ -1295,8 +1393,8 @@
                     <button class="sys-btn" onclick="toggleAsciiPicker()" style="font-size:1.2rem; padding: 0 10px;"
                         title="ASCII Art" data-i18n-title="kindlechat.btn.ascii">☺</button>
 
-                    <textarea id="msg-input" placeholder="Connecting..." data-i18n-placeholder="common.loading" rows="3"
-                        disabled=""></textarea>
+                    <div id="msg-input" contenteditable="false" placeholder="Connecting..."
+                        data-i18n-placeholder="common.loading"></div>
                     <button class="sys-btn" id="send-btn" onclick="sendMessage()" style="height: 100%; opacity: 0.5;"
                         disabled="" data-i18n="kindlechat.btn.send">Send</button>
                 </div>
@@ -1827,6 +1925,21 @@
                 }
             });
 
+            // Force plain-text paste into the composer (no rich HTML)
+            var msgInputEl = document.getElementById('msg-input');
+            msgInputEl.addEventListener('paste', function (e) {
+                e.preventDefault();
+                var pastedText = '';
+                if (e.clipboardData && e.clipboardData.getData) pastedText = e.clipboardData.getData('text/plain');
+                if (!pastedText && window.clipboardData && window.clipboardData.getData) pastedText = window.clipboardData.getData('Text');
+                if (pastedText) insertNodeAtCaret(msgInputEl, document.createTextNode(pastedText));
+            });
+
+            // Normalize a fully-empty composer so the :empty placeholder reappears
+            msgInputEl.addEventListener('input', function () {
+                if (!msgInputEl.textContent && !msgInputEl.querySelector('img')) msgInputEl.innerHTML = '';
+            });
+
             // Populate the reaction modal once
             populateReactionModal();
 
@@ -1962,10 +2075,26 @@
                 content.addEventListener('mousedown', enableAutoHighlight);
 
 
+                // Merge picker categories: popular Unicode emojis first (icon tabs),
+                // then ALL ASCII art flattened into a single trailing category.
+                var pickerCategories = {};
+                if (typeof POPULAR_EMOJIS !== 'undefined' && typeof EMOJI_SVG_MAP !== 'undefined') {
+                    for (var emojiCat in POPULAR_EMOJIS) {
+                        if (POPULAR_EMOJIS.hasOwnProperty(emojiCat) && POPULAR_EMOJIS[emojiCat].length) {
+                            pickerCategories[emojiCat] = POPULAR_EMOJIS[emojiCat];
+                        }
+                    }
+                }
+                var allAscii = [];
+                for (var cat in ASCII_EMOJIS) {
+                    if (ASCII_EMOJIS.hasOwnProperty(cat)) allAscii = allAscii.concat(ASCII_EMOJIS[cat]);
+                }
+                if (allAscii.length) pickerCategories['っ◕‿◕)っ'] = allAscii;
+
                 // Iterate Categories
-                for (var category in ASCII_EMOJIS) {
-                    if (!ASCII_EMOJIS.hasOwnProperty(category)) continue;
-                    var items = ASCII_EMOJIS[category];
+                for (var category in pickerCategories) {
+                    if (!pickerCategories.hasOwnProperty(category)) continue;
+                    var items = pickerCategories[category];
 
                     // ID Generation
                     var cleanName = category.replace(/\s+/g, '-').replace(/[&]/g, '').toLowerCase();
@@ -1978,7 +2107,20 @@
                         navItem.classList.add('active'); // Default active
                         isFirst = false;
                     }
-                    navItem.innerText = category;
+                    var tabIsEmoji = items.length && items[0].emoji;
+                    var tabIconFile = tabIsEmoji ? EMOJI_SVG_MAP[items[0].emoji] : null;
+                    if (tabIconFile) {
+                        // Emoji category: OpenMoji icon tab (category's first emoji)
+                        navItem.classList.add('emoji-tab');
+                        navItem.title = category;
+                        var tabImg = document.createElement('img');
+                        tabImg.src = 'openmoji/' + tabIconFile;
+                        tabImg.alt = category;
+                        tabImg.setAttribute('draggable', 'false');
+                        navItem.appendChild(tabImg);
+                    } else {
+                        navItem.innerText = category;
+                    }
                     navItem.dataset.targetId = sectionId; // Store Link
 
                     navItem.onclick = (function (targetId, el) {
@@ -2007,20 +2149,37 @@
                     section.className = 'ascii-category-section';
                     section.id = sectionId;
 
-                    // Grid
+                    // Grid (emoji sections use the CSS Grid layout, ASCII art keeps flex)
+                    var isEmojiCategory = items.length && items[0].emoji;
                     var grid = document.createElement('div');
-                    grid.className = 'ascii-grid';
+                    grid.className = isEmojiCategory ? 'emoji-grid' : 'ascii-grid';
 
                     // Items
                     for (var j = 0; j < items.length; j++) {
                         var item = items[j];
                         var div = document.createElement('div');
-                        div.className = 'ascii-option';
-                        div.innerText = item.art;
-                        if (item.name) div.title = item.name;
-                        div.onclick = (function (art) {
-                            return function () { insertAscii(art); };
-                        })(item.art);
+                        if (item.emoji) {
+                            // Unicode emoji: render as OpenMoji SVG (Kindle cannot render emoji glyphs)
+                            var svgFile = EMOJI_SVG_MAP[item.emoji];
+                            if (!svgFile) continue;
+                            div.className = 'emoji-option';
+                            var emoImg = document.createElement('img');
+                            emoImg.src = 'openmoji/' + svgFile;
+                            emoImg.alt = item.emoji;
+                            emoImg.setAttribute('draggable', 'false');
+                            div.appendChild(emoImg);
+                            if (item.name) div.title = item.name;
+                            div.onclick = (function (emo) {
+                                return function () { insertAscii(emo); };
+                            })(item.emoji);
+                        } else {
+                            div.className = 'ascii-option';
+                            div.innerText = item.art;
+                            if (item.name) div.title = item.name;
+                            div.onclick = (function (art) {
+                                return function () { insertAscii(art); };
+                            })(item.art);
+                        }
                         grid.appendChild(div);
                     }
 
@@ -2084,10 +2243,82 @@
             picker.classList.toggle('open');
         }
 
+        // --- COMPOSER HELPERS (contenteditable: text + emoji <img> nodes) ---
+        function placeCaretAtEnd(el) {
+            el.focus();
+            var range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        function insertNodeAtCaret(container, node) {
+            container.focus();
+            var sel = window.getSelection();
+            var inserted = false;
+            if (sel && sel.rangeCount > 0) {
+                var range = sel.getRangeAt(0);
+                if (container.contains(range.commonAncestorContainer)) {
+                    range.deleteContents();
+                    range.insertNode(node);
+                    range.setStartAfter(node);
+                    range.setEndAfter(node);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    inserted = true;
+                }
+            }
+            if (!inserted) {
+                container.appendChild(node);
+                placeCaretAtEnd(container);
+            }
+        }
+
+        function serializeComposer(node) {
+            var out = '';
+            for (var i = 0; i < node.childNodes.length; i++) {
+                var child = node.childNodes[i];
+                if (child.nodeType === 3) {
+                    out += child.nodeValue;
+                } else if (child.nodeType === 1) {
+                    var tag = child.tagName.toLowerCase();
+                    if (tag === 'img') {
+                        out += child.getAttribute('alt') || '';
+                    } else if (tag === 'br') {
+                        out += '\n';
+                    } else if (tag === 'div' || tag === 'p') {
+                        if (out && out.charAt(out.length - 1) !== '\n') out += '\n';
+                        out += serializeComposer(child);
+                    } else {
+                        out += serializeComposer(child);
+                    }
+                }
+            }
+            return out;
+        }
+
+        function getComposerText() {
+            var input = document.getElementById('msg-input');
+            return input ? serializeComposer(input) : '';
+        }
+
         function insertAscii(text) {
             var input = document.getElementById('msg-input');
-            input.value += text;
-            input.focus();
+            if (!input) return;
+            var node;
+            if (typeof EMOJI_SVG_MAP !== 'undefined' && EMOJI_SVG_MAP[text]) {
+                // Unicode emoji: insert as OpenMoji SVG so it renders on Kindle
+                node = document.createElement('img');
+                node.src = 'openmoji/' + EMOJI_SVG_MAP[text];
+                node.alt = text;
+                node.className = 'composer-emoji';
+                node.setAttribute('draggable', 'false');
+            } else {
+                node = document.createTextNode(text);
+            }
+            insertNodeAtCaret(input, node);
             toggleAsciiPicker(); // Close after selection
         }
 
@@ -2304,16 +2535,20 @@
         function setChatInputEnabled(enabled) {
             var input = document.getElementById('msg-input');
             var btn = document.getElementById('send-btn');
-            if (input) input.disabled = !enabled;
             if (btn) btn.disabled = !enabled;
+            if (input) {
+                input.contentEditable = enabled ? 'true' : 'false';
+                if (enabled) input.classList.remove('composer-disabled');
+                else input.classList.add('composer-disabled');
+            }
 
             // Visual feedback
             if (enabled) {
                 if (btn) btn.style.opacity = '1';
-                if (input) input.placeholder = "Type a message...";
+                if (input) input.setAttribute('placeholder', "Type a message...");
             } else {
                 if (btn) btn.style.opacity = '0.5';
-                if (input) input.placeholder = "Connecting...";
+                if (input) input.setAttribute('placeholder', "Connecting...");
             }
         }
 
@@ -3050,10 +3285,16 @@
                 var gridSize = Math.sqrt(seed.length);
                 var pixelSize = canvas.width / gridSize;
                 for (var i = 0; i < seed.length; i++) {
-                    if (seed[i] === 1) {
+                    var v = seed[i];
+                    if (v > 0) {
                         var x = i % gridSize;
                         var y = Math.floor(i / gridSize);
+                        if (v < 1) {
+                            var s = Math.round((1 - v) * 255);
+                            ctx.fillStyle = 'rgb(' + s + ',' + s + ',' + s + ')';
+                        }
                         ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                        if (v < 1) ctx.fillStyle = '#000';
                     }
                 }
                 return;
@@ -3234,8 +3475,8 @@
 
             var input = document.getElementById('msg-input');
             var prefix = '@' + username + ' ';
-            input.value = prefix;
-            input.focus();
+            input.textContent = prefix;
+            placeCaretAtEnd(input);
         }
 
         function scrollToReplyMessage(msgId) {
@@ -3714,7 +3955,7 @@
             if (!currentUser) return;
 
             var inputEl = document.getElementById('msg-input');
-            var text = inputEl.value.trim();
+            var text = getComposerText().trim();
 
             // Limit max 1 blank line between text (max 2 consecutive newlines)
             if (text) {
@@ -3726,7 +3967,8 @@
                 var prefix = '@' + replyTarget.username + ' ';
                 if (text.indexOf(prefix) !== 0) {
                     text = prefix + text;
-                    inputEl.value = text;
+                    // Show the prefix in the composer without destroying emoji images
+                    inputEl.insertBefore(document.createTextNode(prefix), inputEl.firstChild);
                 }
             }
 
@@ -3793,7 +4035,7 @@
                     showModal(result.error, false);
                     return;
                 }
-                inputEl.value = '';
+                inputEl.innerHTML = '';
                 replyTarget = null;
                 resetSendState();
                 if (TRANSLATION_WORKER_URL) {
