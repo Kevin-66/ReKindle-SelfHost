@@ -100,6 +100,11 @@ export function transformHtml(html, fileName) {
     html = rewriteTrafficCop(html);
     html = fixTranslationFallbacks(html);
 
+    // No tap highlight: the browser paints a translucent box over whatever was tapped,
+    // which e-ink shows as a flash (e.g. the Manga reader's invisible next-page area,
+    // the right 70% of the screen). Buttons keep their own :active styles.
+    html = html.replace(/<\/head>/i, '<style>html{-webkit-tap-highlight-color:rgba(0,0,0,0)}</style>\n</head>');
+
     // Page Up / Page Down buttons on every page that scrolls (selfhost/site/js/rk-pager.js).
     html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-pager.js"></script>\n</body>');
 
