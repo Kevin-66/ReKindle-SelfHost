@@ -9,6 +9,7 @@ import { db } from './db.js';
 import { config, SERVER_DIR } from './config.js';
 import { aiBinding } from './ai.js';
 import { withPublicNetworkOnly } from './netguard.js';
+import { rememberGood, lastGood } from './cache.js';
 
 // Workers that only served features this server does not offer
 // (chat moderation, chat translation, ReKindle+ payments).
@@ -172,10 +173,24 @@ export async function handleWorker(req, res, name, rest, search, origin) {
     return true;
 }
 
+// After an origin rate-limits a function, answer from the last good copy for a
+// while instead of waiting through the function's own retries.
+const COOLDOWN_MS = 2 * 60 * 1000;
+const cooldownUntil = new Map();
+
 // /api/<name>
 export async function handlePagesFunction(req, res, name, url) {
     const mod = pagesFunctions.get(name);
     if (!mod) return false;
+    if (req.method === 'GET' && (cooldownUntil.get(name) || 0) > Date.now()) {
+        const good = lastGood(url);
+        if (good) {
+            const h = new Headers(good.headers);
+            h.set('X-RK-Stale', '1');
+            await sendResponse(res, new Response(good.body, { status: 200, headers: h }));
+            return true;
+        }
+    }
     const method = req.method.charAt(0) + req.method.slice(1).toLowerCase();
     const fn = mod[`onRequest${method}`] || mod.onRequest;
     if (typeof fn !== 'function') {
@@ -184,11 +199,29 @@ export async function handlePagesFunction(req, res, name, url) {
     }
     const request = await toRequest(req, url, true);
     const c = ctx();
-    const response = await withPublicNetworkOnly(() => fn({
+    let response = await withPublicNetworkOnly(() => fn({
         request, env, params: {}, data: {}, functionPath: `/api/${name}`,
         waitUntil: c.waitUntil, passThroughOnException: c.passThroughOnException,
         next: async () => new Response('Not found', { status: 404 })
     }));
+    if (req.method === 'GET') {
+        if (response.status === 200) {
+            // Keep the last good copy (feeds, images) for when the origin rate-limits us.
+            const body = new Uint8Array(await response.arrayBuffer());
+            const headers = [];
+            response.headers.forEach((v, k) => { if (k !== 'set-cookie') headers.push([k, v]); });
+            rememberGood(url, 200, headers, body);
+            response = new Response(body, { status: 200, headers });
+        } else if (response.status === 429 || response.status >= 500) {
+            if (response.status === 429) cooldownUntil.set(name, Date.now() + COOLDOWN_MS);
+            const good = lastGood(url);
+            if (good) {
+                const h = new Headers(good.headers);
+                h.set('X-RK-Stale', '1');
+                response = new Response(good.body, { status: 200, headers: h });
+            }
+        }
+    }
     await sendResponse(res, response);
     return true;
 }

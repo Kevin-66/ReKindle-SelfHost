@@ -1,4 +1,5 @@
 import http from 'node:http';
+import './cache.js'; // Cache API stand-in for the upstream /api functions
 import { config } from './config.js';
 import * as auth from './auth.js';
 import { rtdb } from './rtdb.js';
