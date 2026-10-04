@@ -5,9 +5,65 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
-export const rawFetch = globalThis.fetch.bind(globalThis);
+const directFetch = globalThis.fetch.bind(globalThis);
 const guardScope = new AsyncLocalStorage();
+
+// Sites that refuse this server's address are fetched through PROXY_URL, an HTTP
+// proxy on another machine (http://user:pass@host:port). archive.today blocks many
+// hosting networks (Netcup and Cloudflare WARP included, 2026-10), so its domains
+// are the default list.
+const PROXY_DOMAINS = (process.env.PROXY_DOMAINS || 'archive.today,archive.ph,archive.is,archive.li,archive.md,archive.vn,archive.fo')
+    .split(',').map((d) => d.trim().toLowerCase().replace(/^\.+/, '')).filter(Boolean);
+const proxyAgent = (() => {
+    if (!process.env.PROXY_URL) return null;
+    try {
+        const u = new URL(process.env.PROXY_URL);
+        const opts = { uri: `${u.protocol}//${u.host}` };
+        if (u.username) {
+            opts.token = 'Basic ' + Buffer.from(`${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`).toString('base64');
+        }
+        return new ProxyAgent(opts);
+    } catch (e) {
+        console.warn(`[proxy] PROXY_URL ignored: ${e.message}`);
+        return null;
+    }
+})();
+
+function useProxy(url) {
+    if (!proxyAgent) return false;
+    let host;
+    try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+    return PROXY_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
+}
+
+// archive.today answers an outdated browser (the article reader says Chrome 120)
+// with a CAPTCHA page and HTTP 429, so proxied requests present a current one.
+const PROXY_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+
+async function proxiedFetch(request, redirect) {
+    const headers = new Headers(request.headers);
+    headers.set('User-Agent', PROXY_USER_AGENT);
+    const init = { method: request.method, headers: [...headers], redirect, dispatcher: proxyAgent, signal: request.signal };
+    if (request.method !== 'GET' && request.method !== 'HEAD') init.body = await request.arrayBuffer();
+    return undiciFetch(request.url, init);
+}
+
+function urlOf(input) {
+    return typeof input === 'string' ? input : (input && input.url) || String(input);
+}
+
+// fetch() without the private-address check, still honouring PROXY_URL.
+export function rawFetch(input, init) {
+    if (useProxy(urlOf(input))) {
+        const request = new Request(input, init);
+        return proxiedFetch(request, request.redirect);
+    }
+    return directFetch(input, init);
+}
+
+export const proxyEnabled = !!proxyAgent;
 
 function v4Private(ip) {
     const p = ip.split('.').map(Number);
@@ -49,7 +105,9 @@ async function guardedFetch(input, init) {
     let request = new Request(input, init);
     for (let hop = 0; hop < 6; hop++) {
         await assertPublic(request.url);
-        const res = await rawFetch(request.clone(), { redirect: 'manual' });
+        const res = useProxy(request.url)
+            ? await proxiedFetch(request.clone(), 'manual')
+            : await directFetch(request.clone(), { redirect: 'manual' });
         const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
         if (!location || request.redirect === 'manual') return res;
         const next = new URL(location, request.url);

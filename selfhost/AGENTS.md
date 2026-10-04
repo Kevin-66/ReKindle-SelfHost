@@ -47,6 +47,15 @@ as possible so `git merge upstream/main` stays clean.
 - `netguard.js`: upstream proxies (`/api/proxy`, reader worker, ...) may only reach public
   addresses, redirects included. 198.18.0.0/15 is allowed on purpose (fake-IP DNS from
   sing-box/Clash). Our own modules use `rawFetch`.
+- archive.today (archive.ph/.is/.today/...) silently drops connections from the Netcup
+  server AND from Cloudflare WARP (tested 2026-10; Cloudflare's DNS also gets a dead
+  address for it on purpose), so the article reader could not open archive links.
+  `netguard.js` sends `PROXY_DOMAINS` (default: archive.today's domains) through
+  `PROXY_URL`, an HTTP proxy on another machine (`http://user:pass@host:port`; keep it
+  in the deployment's secret variables, never in the repo). Proxied
+  requests get a current Chrome User-Agent: archive.today answers the reader's
+  Chrome/120 string with a CAPTCHA (HTTP 429). The owner wants the archive link
+  itself, not a Wayback/original-site substitute.
 - `cache.js` provides `caches.default` for upstream functions (Reddit got HTTP 429 without
   it), keeps the last good `/api` response, and serves it for 2 minutes after a 429.
 - Deno (used for local testing) has its own `caches` and `localStorage` globals and does

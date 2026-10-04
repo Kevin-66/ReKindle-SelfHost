@@ -7,6 +7,7 @@ import { ensureProfile } from './firestore.js';
 import { handleApi, publicOrigin } from './api.js';
 import { loadWorkers, handleWorker, handlePagesFunction } from './workers-host.js';
 import { serveStatic, siteMode } from './static.js';
+import { proxyEnabled } from './netguard.js';
 import './functions-host.js';
 
 await loadWorkers();
@@ -64,6 +65,7 @@ server.listen(config.port, config.host, () => {
     console.log(`  admin: ${admin}`);
     console.log(`  ReKindle+ for everyone: ${config.plusForAll ? 'yes' : 'no'}; new accounts: ${config.allowRegistration ? 'open' : 'closed'}`);
     if (!config.geminiApiKey && !config.openaiApiKey) console.log('  handwriting recognition and Oracle AI: off (set GEMINI_API_KEY to turn on)');
+    console.log(`  archive.today: ${proxyEnabled ? 'through PROXY_URL' : 'direct (set PROXY_URL if this server is blocked)'}`);
 });
 
 function shutdown() {
