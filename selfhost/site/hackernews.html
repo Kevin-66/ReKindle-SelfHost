@@ -23,6 +23,11 @@
             animation: none !important;
         }
 
+        /* No tap highlight: e-ink shows it as a flash over whatever was tapped. */
+        html {
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        }
+
         body {
             image-rendering: pixelated;
             font-family: "Geneva", "Verdana", sans-serif;

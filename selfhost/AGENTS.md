@@ -39,6 +39,11 @@ as possible so `git merge upstream/main` stays clean.
   `js/i18n.js` to load real strings (`rekindleTranslations` starts as `{}`), or i18n
   overwrites "Guest Mode"/username labels after the callback.
 - Static ETags are hashes of the served (transformed) content, not file mtimes.
+- Tap highlight: Chromium paints a translucent box over any tapped clickable element,
+  which e-ink shows as a flash (the Manga reader's invisible next-page area is the right
+  70% of the screen, so that whole area flashed on every page turn). `transform.js`
+  adds `html{-webkit-tap-highlight-color:rgba(0,0,0,0)}` to every page; pages in
+  `selfhost/site/` set it themselves.
 - Raw i18n keys on screen ("MANGA.BTN.CONTINUE"): upstream often writes
   `window.t('key') || 'Text'`, but `window.t` returns the key itself until the language
   file has loaded, so the fallback never shows. `fixTranslationFallbacks()` in
