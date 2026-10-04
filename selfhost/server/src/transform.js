@@ -104,7 +104,7 @@ export function transformHtml(html, fileName) {
 const ICONS_FILTER = `
 
 // --- Self-hosted ReKindle: hide apps that need the central chat/multiplayer services,
-// and bring back the Manga app (upstream commented it out) with MangaDex + Manhuagui ---
+// bring back the Manga app (upstream commented it out) and add Hacker News ---
 (function () {
     var off = ${JSON.stringify(DISABLED_APPS)};
     var lists = [];
@@ -123,6 +123,16 @@ const ICONS_FILTER = `
             cat: 'lifestyle',
             desc: 'Read manga from MangaDex and Manhuagui.',
             icon: '<path d="M6 4 h12 v24 h-12 z M18 4 l8 4 v20 l-8 -4 M18 4 v24" fill="none" stroke="black" stroke-width="2"/><line x1="8" y1="8" x2="16" y2="8" stroke="black" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="black" stroke-width="1.5"/><line x1="8" y1="16" x2="14" y2="16" stroke="black" stroke-width="1.5"/>'
+        });
+    }
+    // Hacker News reader added by this server (selfhost/site/hackernews.html).
+    if (typeof APPS !== 'undefined' && !APPS.some(function (a) { return a.id === 'hackernews'; })) {
+        APPS.push({
+            id: 'hackernews',
+            name: 'Hacker News',
+            cat: 'lifestyle',
+            desc: 'Top stories and discussions from Hacker News.',
+            icon: '<rect x="5" y="5" width="22" height="22" fill="none" stroke="black" stroke-width="2"/><path d="M11 10 L16 17 L21 10 M16 17 V23" fill="none" stroke="black" stroke-width="2.5"/>'
         });
     }
 })();

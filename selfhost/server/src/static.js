@@ -58,7 +58,10 @@ function resolveFile(urlPath) {
     if (devMode && parts.length === 1 && parts[0] === 'rk-backend.js') return CLIENT_FILE;
     if (devMode && parts.length) {
         const overlay = path.join(OVERLAY_DIR, ...parts);
-        if (overlay.startsWith(OVERLAY_DIR) && fs.existsSync(overlay) && fs.statSync(overlay).isFile()) return overlay;
+        if (overlay.startsWith(OVERLAY_DIR)) {
+            if (fs.existsSync(overlay) && fs.statSync(overlay).isFile()) return overlay;
+            if (!path.extname(overlay) && fs.existsSync(overlay + '.html')) return overlay + '.html';
+        }
     }
     let file = path.join(root, ...parts);
     if (!file.startsWith(root)) return null;

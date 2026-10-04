@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <meta charset="UTF-8">
+    <title>Hacker News</title>
+    <!--
+        Self-hosted ReKindle: Hacker News reader.
+        Data: the public Hacker News search API (hn.algolia.com), fetched through this
+        server's /api/proxy; articles are simplified with the rekindle-reader service.
+        Kindle rules (AGENTS.md): plain ES5, no flex gap, no emoji, no animations, no alert().
+    -->
+    <style>
+        :root {
+            --shadow: 4px 4px 0px #000000;
+            --stripe-pattern: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+        }
+
+        * {
+            transition: none !important;
+            animation: none !important;
+        }
+
+        body {
+            image-rendering: pixelated;
+            font-family: "Geneva", "Verdana", sans-serif;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        .window {
+            background: white;
+            border: 2px solid black;
+            box-shadow: var(--shadow);
+            width: 100%;
+            max-width: 900px;
+            height: 100%;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .window.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            max-height: none;
+            border: none;
+            box-shadow: none;
+            z-index: 2000;
+        }
+
+        .title-bar {
+            height: 35px;
+            border-bottom: 2px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-shrink: 0;
+            background: white;
+        }
+
+        .title-stripes {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            background-image: var(--stripe-pattern);
+        }
+
+        .title-text {
+            background: white;
+            padding: 0 15px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            z-index: 1;
+        }
+
+        .close-box,
+        #back-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 18px;
+            border: 2px solid black;
+            background: white;
+            z-index: 2;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: sans-serif;
+            box-shadow: 2px 2px 0 black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-box {
+            left: 10px;
+            width: 18px;
+            font-size: 0.9rem;
+        }
+
+        #back-btn {
+            left: 38px;
+            padding: 0 6px;
+            font-size: 0.75rem;
+            display: none;
+        }
+
+        .close-box:active,
+        #back-btn:active,
+        .btn:active,
+        .tab:active {
+            background: black;
+            color: white;
+        }
+
+        .toolbar {
+            border-bottom: 2px solid black;
+            background: #eee;
+            flex-shrink: 0;
+        }
+
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 8px 12px;
+            border-right: 2px solid black;
+            font-weight: bold;
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .tab.active {
+            background: black;
+            color: white;
+        }
+
+        .search-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            padding: 8px;
+            border-top: 2px solid black;
+        }
+
+        .search-row input {
+            border: 2px solid black;
+            padding: 6px 8px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            outline: none;
+            min-width: 0;
+        }
+
+        .btn {
+            background: white;
+            border: 2px solid black;
+            padding: 6px 12px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: inherit;
+            box-shadow: 2px 2px 0 black;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .content {
+            flex-grow: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 16px 16px;
+        }
+
+        .story {
+            display: block;
+            padding: 12px 0;
+            border-bottom: 1px solid #000;
+            cursor: pointer;
+            color: black;
+            text-decoration: none;
+        }
+
+        .story-rank {
+            font-weight: bold;
+            margin-right: 6px;
+        }
+
+        .story-title {
+            font-size: 1.05rem;
+            font-weight: bold;
+            line-height: 1.3;
+        }
+
+        .story-domain {
+            font-size: 0.8rem;
+            font-weight: normal;
+        }
+
+        .meta {
+            font-size: 0.78rem;
+            color: #333;
+            margin-top: 4px;
+        }
+
+        .notice {
+            padding: 30px 10px;
+            text-align: center;
+        }
+
+        .notice.error {
+            font-weight: bold;
+        }
+
+        .more-row {
+            text-align: center;
+            padding: 18px 0;
+        }
+
+        /* Page buttons: move one screen at a time (no page-turn keys on most Kindles) */
+        .pager {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 10px;
+            align-items: center;
+            padding: 8px;
+            border-top: 2px solid black;
+            background: #eee;
+            flex-shrink: 0;
+        }
+
+        .pager .btn {
+            width: 100%;
+            min-height: 48px;
+            font-size: 0.9rem;
+        }
+
+        .pager .btn svg {
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        .pager .btn[disabled] {
+            opacity: 0.35;
+            box-shadow: none;
+            cursor: default;
+        }
+
+        .page-pos {
+            min-width: 64px;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        /* Thread */
+        .thread-head {
+            padding: 14px 0;
+            border-bottom: 2px solid black;
+        }
+
+        .thread-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            line-height: 1.3;
+        }
+
+        .thread-actions {
+            margin-top: 10px;
+        }
+
+        .thread-head .text {
+            margin-top: 10px;
+        }
+
+        .thread-actions .btn {
+            margin-right: 8px;
+            margin-top: 4px;
+        }
+
+        .text {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .text a {
+            color: black;
+        }
+
+        /* "Read" after each outside link: opens it in the simplified article view */
+        .read-link {
+            display: inline-block;
+            margin: 2px 0 2px 8px;
+            padding: 6px 12px;
+            border: 2px solid black;
+            background: white;
+            box-shadow: 2px 2px 0 black;
+            font-family: sans-serif;
+            font-size: 0.75rem;
+            font-weight: bold;
+            line-height: 1.2;
+            text-transform: uppercase;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        .read-link:active {
+            background: black;
+            color: white;
+        }
+
+        .text pre {
+            white-space: pre-wrap;
+            font-size: 0.8rem;
+            border-left: 3px solid black;
+            padding-left: 8px;
+        }
+
+        .text p {
+            margin: 0.6em 0;
+        }
+
+        .comment {
+            margin-top: 12px;
+            padding-left: 10px;
+            border-left: 2px solid black;
+        }
+
+        .comment.depth-0 {
+            border-left: none;
+            padding-left: 0;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+        }
+
+        .comment-head {
+            font-size: 0.78rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .comment.collapsed > .text,
+        .comment.collapsed > .children {
+            display: none;
+        }
+
+        /* Article */
+        .article {
+            padding: 14px 0;
+        }
+
+        .article img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .article h1 {
+            font-size: 1.3rem;
+        }
+    </style>
+    <script src="theme.js?v=18"></script>
+</head>
+
+<body>
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-stripes"></div>
+            <div class="close-box" onclick="location.href='index'">X</div>
+            <div id="back-btn" onclick="goBack()">Back</div>
+            <span class="title-text">Hacker News</span>
+        </div>
+
+        <div class="toolbar" id="toolbar">
+            <div class="tabs" id="tabs"></div>
+            <div class="search-row">
+                <input type="text" id="search" placeholder="Search Hacker News"
+                    onkeydown="if (event.keyCode === 13) doSearch()">
+                <button class="btn" onclick="doSearch()">Search</button>
+            </div>
+        </div>
+
+        <div class="content" id="content"></div>
+
+        <div class="pager">
+            <button class="btn" id="page-up" onclick="pageBy(-1)"><svg width="16" height="12" viewBox="0 0 16 12"><polygon points="8,0 16,12 0,12" fill="currentColor"/></svg>Page Up</button>
+            <span class="page-pos" id="page-pos"></span>
+            <button class="btn" id="page-down" onclick="pageBy(1)"><svg width="16" height="12" viewBox="0 0 16 12"><polygon points="0,0 16,0 8,12" fill="currentColor"/></svg>Page Down</button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            var API = 'https://hn.algolia.com/api/v1/';
+            var PER_PAGE = 30;
+            var FEEDS = [
+                { id: 'top', label: 'Top', path: 'search', tags: 'front_page' },
+                { id: 'new', label: 'New', path: 'search_by_date', tags: 'story' },
+                { id: 'best', label: 'Best', path: 'search', tags: 'story', days: 7 },
+                { id: 'ask', label: 'Ask', path: 'search_by_date', tags: 'ask_hn' },
+                { id: 'show', label: 'Show', path: 'search_by_date', tags: 'show_hn' },
+                { id: 'jobs', label: 'Jobs', path: 'search_by_date', tags: 'job' }
+            ];
+
+            var state = { feed: 'top', query: '', page: 0, view: 'list', listScroll: 0 };
+            // What is on screen ({ view: 'list' | 'thread' | 'article', id, url }) and
+            // the screens the Back button returns to.
+            var current = { view: 'list' };
+            var history = [];
+            var requestSeq = 0;
+
+            function $(id) { return document.getElementById(id); }
+
+            function escapeHtml(s) {
+                return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            function getJson(url) {
+                return fetch('/api/proxy?url=' + encodeURIComponent(url)).then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                });
+            }
+
+            function timeAgo(seconds) {
+                var diff = Math.max(0, Math.floor(Date.now() / 1000) - seconds);
+                if (diff < 3600) return Math.max(1, Math.floor(diff / 60)) + 'm ago';
+                if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                if (diff < 86400 * 30) return Math.floor(diff / 86400) + 'd ago';
+                return Math.floor(diff / (86400 * 30)) + 'mo ago';
+            }
+
+            function domainOf(url) {
+                if (!url) return '';
+                var m = String(url).match(/^https?:\/\/(?:www\.)?([^\/?#]+)/i);
+                return m ? m[1] : '';
+            }
+
+            // HN text is limited HTML; keep only harmless tags and safe links.
+            var ALLOWED = { P: 1, A: 1, I: 1, EM: 1, B: 1, STRONG: 1, PRE: 1, CODE: 1, BR: 1, UL: 1, OL: 1, LI: 1, BLOCKQUOTE: 1,
+                H1: 1, H2: 1, H3: 1, H4: 1, IMG: 1, FIGURE: 1, FIGCAPTION: 1, TABLE: 1, TR: 1, TD: 1, TH: 1, TBODY: 1, THEAD: 1, SPAN: 1, DIV: 1, SUP: 1, SUB: 1, HR: 1 };
+            function sanitize(html) {
+                var box = document.createElement('div');
+                box.innerHTML = html || '';
+                (function walk(node) {
+                    var kids = Array.prototype.slice.call(node.childNodes);
+                    for (var i = 0; i < kids.length; i++) {
+                        var el = kids[i];
+                        if (el.nodeType === 3) continue;
+                        if (el.nodeType !== 1 || !ALLOWED[el.tagName]) {
+                            if (el.nodeType === 1 && !/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|FORM)$/.test(el.tagName)) {
+                                while (el.firstChild) node.insertBefore(el.firstChild, el);
+                            }
+                            node.removeChild(el);
+                            continue;
+                        }
+                        var attrs = Array.prototype.slice.call(el.attributes);
+                        for (var j = 0; j < attrs.length; j++) {
+                            var name = attrs[j].name.toLowerCase();
+                            var keep = (el.tagName === 'A' && name === 'href') || (el.tagName === 'IMG' && (name === 'src' || name === 'alt'));
+                            if (!keep) el.removeAttribute(attrs[j].name);
+                        }
+                        if (el.tagName === 'A') {
+                            var href = el.getAttribute('href') || '';
+                            if (!/^https?:/i.test(href)) el.removeAttribute('href');
+                            else {
+                                el.setAttribute('target', '_blank');
+                                if (!hnItemId(href) && !/\.(png|jpe?g|gif|webp|svg|mp4|mp3)([?#]|$)/i.test(href)) {
+                                    var read = document.createElement('span');
+                                    read.className = 'read-link';
+                                    read.setAttribute('data-url', href);
+                                    read.appendChild(document.createTextNode('Read'));
+                                    node.insertBefore(read, el.nextSibling);
+                                }
+                            }
+                        }
+                        if (el.tagName === 'IMG') {
+                            var src = el.getAttribute('src') || '';
+                            if (!/^https?:/i.test(src)) { node.removeChild(el); continue; }
+                            el.setAttribute('src', '/api/proxy?url=' + encodeURIComponent(src));
+                            el.setAttribute('loading', 'lazy');
+                        }
+                        walk(el);
+                    }
+                })(box);
+                return box.innerHTML;
+            }
+
+            function setNotice(text, isError) {
+                $('content').innerHTML = '<div class="notice' + (isError ? ' error' : '') + '">' + escapeHtml(text) + '</div>';
+            }
+
+            // news.ycombinator.com/item?id=123 -> "123"
+            function hnItemId(href) {
+                var m = String(href || '').match(/^https?:\/\/(?:news\.ycombinator\.com|hn\.algolia\.com)\/item\?(?:[^#]*&)?id=(\d+)/i);
+                return m ? m[1] : null;
+            }
+
+            function showChrome(view) {
+                state.view = view;
+                $('back-btn').style.display = view === 'list' ? 'none' : 'flex';
+                $('toolbar').style.display = view === 'list' ? 'block' : 'none';
+            }
+
+            // ------------------------------------------------ list
+
+            function renderTabs() {
+                var html = '';
+                for (var i = 0; i < FEEDS.length; i++) {
+                    var f = FEEDS[i];
+                    var active = !state.query && state.feed === f.id;
+                    html += '<div class="tab' + (active ? ' active' : '') + '" data-feed="' + f.id + '">' + f.label + '</div>';
+                }
+                $('tabs').innerHTML = html;
+                var tabs = $('tabs').children;
+                for (var t = 0; t < tabs.length; t++) {
+                    tabs[t].onclick = function () { selectFeed(this.getAttribute('data-feed')); };
+                }
+            }
+
+            function listUrl(page) {
+                if (state.query) {
+                    return API + 'search?tags=story&hitsPerPage=' + PER_PAGE + '&page=' + page + '&query=' + encodeURIComponent(state.query);
+                }
+                var f = FEEDS[0];
+                for (var i = 0; i < FEEDS.length; i++) if (FEEDS[i].id === state.feed) f = FEEDS[i];
+                var url = API + f.path + '?tags=' + f.tags + '&hitsPerPage=' + PER_PAGE + '&page=' + page;
+                if (f.days) url += '&numericFilters=' + encodeURIComponent('created_at_i>' + (Math.floor(Date.now() / 1000) - f.days * 86400));
+                return url;
+            }
+
+            function storyHtml(hit, rank) {
+                var domain = domainOf(hit.url);
+                var title = hit.title || hit.story_title || '(untitled)';
+                var meta = [];
+                if (typeof hit.points === 'number') meta.push(hit.points + ' points');
+                if (hit.author) meta.push('by ' + escapeHtml(hit.author));
+                if (hit.created_at_i) meta.push(timeAgo(hit.created_at_i));
+                if (typeof hit.num_comments === 'number') meta.push(hit.num_comments + ' comments');
+                return '<div class="story" data-id="' + escapeHtml(hit.objectID) + '">' +
+                    '<div class="story-title"><span class="story-rank">' + rank + '.</span>' + escapeHtml(title) +
+                    (domain ? ' <span class="story-domain">(' + escapeHtml(domain) + ')</span>' : '') + '</div>' +
+                    '<div class="meta">' + meta.join(' &middot; ') + '</div></div>';
+            }
+
+            function bindStories(root) {
+                var items = root.querySelectorAll('.story');
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].getAttribute('data-bound')) continue;
+                    items[i].setAttribute('data-bound', '1');
+                    items[i].onclick = function () { openThread(this.getAttribute('data-id')); };
+                }
+            }
+
+            function loadList(page) {
+                var seq = ++requestSeq;
+                var content = $('content');
+                if (page === 0) setNotice('Loading...');
+                return getJson(listUrl(page)).then(function (data) {
+                    if (seq !== requestSeq) return;
+                    state.page = page;
+                    if (page === 0) content.innerHTML = '';
+                    var old = $('more-row');
+                    if (old) old.parentNode.removeChild(old);
+                    var hits = data.hits || [];
+                    if (!hits.length && page === 0) {
+                        setNotice(state.query ? 'No stories found.' : 'Nothing here right now.');
+                        return;
+                    }
+                    var html = '';
+                    for (var i = 0; i < hits.length; i++) html += storyHtml(hits[i], page * PER_PAGE + i + 1);
+                    var wrap = document.createElement('div');
+                    wrap.innerHTML = html;
+                    while (wrap.firstChild) content.appendChild(wrap.firstChild);
+                    bindStories(content);
+                    if (page + 1 < (data.nbPages || 0)) {
+                        var more = document.createElement('div');
+                        more.className = 'more-row';
+                        more.id = 'more-row';
+                        more.innerHTML = '<button class="btn">More</button>';
+                        more.firstChild.onclick = function () {
+                            this.disabled = true;
+                            this.innerText = 'Loading...';
+                            loadList(state.page + 1);
+                        };
+                        content.appendChild(more);
+                    }
+                })['catch'](function (e) {
+                    if (seq !== requestSeq) return;
+                    if (page === 0) setNotice('Could not load Hacker News (' + e.message + ').', true);
+                    else {
+                        var btn = document.querySelector('#more-row .btn');
+                        if (btn) { btn.disabled = false; btn.innerText = 'Retry'; }
+                    }
+                });
+            }
+
+            function selectFeed(id) {
+                state.feed = id;
+                state.query = '';
+                $('search').value = '';
+                try { localStorage.setItem('rk_hn_feed', id); } catch (e) { }
+                renderTabs();
+                $('content').scrollTop = 0;
+                loadList(0);
+            }
+
+            window.doSearch = function () {
+                var q = ($('search').value || '').trim();
+                if (!q) { selectFeed(state.feed); return; }
+                state.query = q;
+                renderTabs();
+                $('content').scrollTop = 0;
+                loadList(0);
+            };
+
+            // ------------------------------------------------ thread
+
+            function commentHtml(node, depth) {
+                if (!node || (!node.text && !(node.children && node.children.length))) return '';
+                var head = (node.author ? escapeHtml(node.author) : '[deleted]') + (node.created_at_i ? ' &middot; ' + timeAgo(node.created_at_i) : '');
+                var kids = node.children || [];
+                var childHtml = '';
+                // Deep threads stop indenting so text stays readable on narrow screens.
+                for (var i = 0; i < kids.length; i++) childHtml += commentHtml(kids[i], depth + 1);
+                var count = countComments(node) - 1;
+                return '<div class="comment depth-' + Math.min(depth, 1) + '"' + (depth > 5 ? ' style="padding-left:0; border-left:none;"' : '') + '>' +
+                    '<div class="comment-head">' + head + (count > 0 ? ' <span class="toggle">[&minus;]</span>' : '') + '</div>' +
+                    '<div class="text">' + sanitize(node.text || '<i>[deleted]</i>') + '</div>' +
+                    (childHtml ? '<div class="children">' + childHtml + '</div>' : '') +
+                    '</div>';
+            }
+
+            function countComments(node) {
+                var n = 1;
+                var kids = node.children || [];
+                for (var i = 0; i < kids.length; i++) n += countComments(kids[i]);
+                return n;
+            }
+
+            function bindCollapse(root) {
+                var heads = root.querySelectorAll('.comment-head');
+                for (var i = 0; i < heads.length; i++) {
+                    heads[i].onclick = function () {
+                        var c = this.parentNode;
+                        var collapsed = c.className.indexOf('collapsed') !== -1;
+                        c.className = collapsed ? c.className.replace(' collapsed', '') : c.className + ' collapsed';
+                        var t = this.querySelector('.toggle');
+                        if (t) t.innerHTML = collapsed ? '[&minus;]' : '[+]';
+                    };
+                }
+            }
+
+            function go(next) {
+                if (current.view === 'list') state.listScroll = $('content').scrollTop;
+                history.push(current);
+                show(next);
+            }
+
+            function show(entry) {
+                current = entry;
+                showChrome(entry.view);
+                if (entry.view === 'thread') renderThread(entry.id);
+                else if (entry.view === 'article') renderArticle(entry.url);
+            }
+
+            function openThread(id) {
+                go({ view: 'thread', id: id });
+            }
+
+            function renderThread(id) {
+                var seq = ++requestSeq;
+                setNotice('Loading comments...');
+                $('content').scrollTop = 0;
+                getJson(API + 'items/' + encodeURIComponent(id)).then(function (item) {
+                    if (seq !== requestSeq) return;
+                    var domain = domainOf(item.url);
+                    var meta = [];
+                    if (typeof item.points === 'number') meta.push(item.points + ' points');
+                    if (item.author) meta.push('by ' + escapeHtml(item.author));
+                    if (item.created_at_i) meta.push(timeAgo(item.created_at_i));
+                    var isComment = item.type === 'comment';
+                    var total = countComments(item) - 1;
+                    meta.push(total + (isComment ? (total === 1 ? ' reply' : ' replies') : ' comments'));
+
+                    var html = '<div class="thread-head"><div class="thread-title">' +
+                        escapeHtml(item.title || (isComment ? 'Comment by ' + (item.author || '[deleted]') : '')) + '</div>' +
+                        (domain ? '<div class="meta">' + escapeHtml(domain) + '</div>' : '') +
+                        '<div class="meta">' + meta.join(' &middot; ') + '</div>';
+                    if (isComment && item.story_id && String(item.story_id) !== String(id)) {
+                        html += '<div class="thread-actions"><button class="btn" id="story-btn">Whole discussion</button></div>';
+                    }
+                    if (item.url) {
+                        html += '<div class="thread-actions"><button class="btn" id="read-btn">Read article</button>' +
+                            '<a class="btn" style="text-decoration:none; color:black; display:inline-block;" href="' + escapeHtml(item.url) + '" target="_blank">Open link</a></div>';
+                    }
+                    if (item.text) html += '<div class="text">' + sanitize(item.text) + '</div>';
+                    html += '</div>';
+                    var kids = item.children || [];
+                    if (!kids.length) html += '<div class="notice">' + (isComment ? 'No replies yet.' : 'No comments yet.') + '</div>';
+                    for (var i = 0; i < kids.length; i++) html += commentHtml(kids[i], 0);
+                    $('content').innerHTML = html;
+                    bindCollapse($('content'));
+                    var rb = $('read-btn');
+                    if (rb) rb.onclick = function () { openArticle(item.url, id); };
+                    var sb = $('story-btn');
+                    if (sb) sb.onclick = function () { openThread(String(item.story_id)); };
+                })['catch'](function (e) {
+                    if (seq !== requestSeq) return;
+                    setNotice('Could not load this thread (' + e.message + ').', true);
+                });
+            }
+
+            // ------------------------------------------------ article
+
+            function openArticle(url, threadId) {
+                go({ view: 'article', url: url, id: threadId });
+            }
+
+            function renderArticle(url) {
+                var seq = ++requestSeq;
+                setNotice('Loading article...');
+                $('content').scrollTop = 0;
+                fetch('/__rk/w/rekindle-reader/?url=' + encodeURIComponent(url)).then(function (r) { return r.json(); }).then(function (a) {
+                    if (seq !== requestSeq) return;
+                    if (!a || a.error || !a.content) throw new Error((a && (a.detail || a.error)) || 'No readable text');
+                    $('content').innerHTML = '<div class="article"><h1>' + escapeHtml(a.title || '') + '</h1>' +
+                        '<div class="meta">' + escapeHtml(domainOf(url)) + '</div>' +
+                        '<div class="text">' + sanitize(a.content) + '</div></div>';
+                })['catch'](function (e) {
+                    if (seq !== requestSeq) return;
+                    $('content').innerHTML = '<div class="notice error">This article could not be simplified (' + escapeHtml(e.message) + ').</div>' +
+                        '<div class="more-row"><a class="btn" style="text-decoration:none; color:black;" href="' + escapeHtml(url) + '" target="_blank">Open link</a></div>';
+                });
+            }
+
+            // ------------------------------------------------ navigation
+
+            window.goBack = function () {
+                var prev = history.pop() || { view: 'list' };
+                if (prev.view === 'list') {
+                    current = prev;
+                    showChrome('list');
+                    requestSeq++;
+                    loadList(0).then(function () { $('content').scrollTop = state.listScroll || 0; });
+                    return;
+                }
+                show(prev);
+            };
+
+            // Links to other Hacker News posts open here instead of leaving the app.
+            $('content').addEventListener('click', function (e) {
+                if (e.target && e.target.className === 'read-link') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openArticle(e.target.getAttribute('data-url'), current.id);
+                    return;
+                }
+                var a = e.target;
+                while (a && a !== this && a.tagName !== 'A') a = a.parentNode;
+                if (!a || a === this) return;
+                var id = hnItemId(a.getAttribute('href'));
+                if (!id) return;
+                e.preventDefault();
+                e.stopPropagation();
+                openThread(id);
+            });
+
+            // ------------------------------------------------ page buttons
+
+            function pageStep() {
+                var h = $('content').clientHeight;
+                return Math.max(60, h - Math.max(30, Math.round(h * 0.08)));
+            }
+
+            function atEnd() {
+                var c = $('content');
+                return c.scrollTop + c.clientHeight >= c.scrollHeight - 2;
+            }
+
+            window.pageBy = function (dir) {
+                var c = $('content');
+                if (dir > 0 && atEnd()) {
+                    // End of the story list: load the next batch.
+                    var more = document.querySelector('#more-row .btn');
+                    if (more && !more.disabled) more.onclick.call(more);
+                    return;
+                }
+                c.scrollTop = Math.max(0, c.scrollTop + dir * pageStep());
+                updatePager();
+            };
+
+            function updatePager() {
+                var c = $('content');
+                var step = pageStep();
+                var total = Math.max(1, Math.ceil(Math.max(0, c.scrollHeight - c.clientHeight - 2) / step) + 1);
+                var pos = atEnd() ? total : Math.min(total, Math.floor((c.scrollTop + 2) / step) + 1);
+                var more = document.querySelector('#more-row .btn');
+                var text = pos + ' / ' + total;
+                if ($('page-pos').innerText !== text) $('page-pos').innerText = text;
+                $('page-up').disabled = c.scrollTop <= 0;
+                $('page-down').disabled = atEnd() && !(more && !more.disabled);
+            }
+
+            var pagerTimer = null;
+            function schedulePager() {
+                if (pagerTimer) return;
+                pagerTimer = setTimeout(function () { pagerTimer = null; updatePager(); }, 50);
+            }
+            $('content').addEventListener('scroll', schedulePager);
+            $('content').addEventListener('load', schedulePager, true); // images change the height
+            window.addEventListener('resize', schedulePager);
+            new MutationObserver(schedulePager).observe($('content'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+
+            // Page Up/Down, space and arrow keys (keyboards, page-turn remotes).
+            document.addEventListener('keydown', function (e) {
+                var tag = (e.target && e.target.tagName) || '';
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || e.altKey || e.ctrlKey || e.metaKey) return;
+                var k = e.keyCode;
+                var dir = (k === 34 || k === 40 || k === 39 || (k === 32 && !e.shiftKey)) ? 1
+                    : (k === 33 || k === 38 || k === 37 || (k === 32 && e.shiftKey)) ? -1 : 0;
+                if (!dir) return;
+                e.preventDefault();
+                pageBy(dir);
+            });
+
+            window.onload = function () {
+                if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
+                if (window.rekindleApplyScale) window.rekindleApplyScale();
+                if (window.rekindleAutoDetectScale) window.rekindleAutoDetectScale();
+                if (window.rekindleApplyDefaultFullscreen) window.rekindleApplyDefaultFullscreen();
+                try {
+                    var saved = localStorage.getItem('rk_hn_feed');
+                    for (var i = 0; i < FEEDS.length; i++) if (FEEDS[i].id === saved) state.feed = saved;
+                } catch (e) { }
+                showChrome('list');
+                renderTabs();
+                loadList(0);
+            };
+        })();
+    </script>
+</body>
+
+</html>

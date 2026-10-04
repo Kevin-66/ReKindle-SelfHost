@@ -23,6 +23,9 @@ Manhuagui needs an account on the server; pages are WebP, which the Kindle
 experimental browser shows but very old devices may not. Both sources preload the
 next pages and the next chapter.
 
+A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
+simplified article view), using the public Hacker News search API.
+
 **Reddit** uses Reddit's public feeds through this server (`selfhost/server/src/reddit.js`
 replaces the author's `functions/api/reddit.js`). Pictures are fetched as images and
 scaled down to `REDDIT_IMAGE_MAX_WIDTH` (1080 px JPEG), and a post's picture and text

@@ -12,8 +12,8 @@ as possible so `git merge upstream/main` stays clean.
   files when there is no other way, and list the edit in `selfhost/README.md`.
 - Page edits run on a copy during the Docker build (`selfhost/prepare.js`) and on the
   fly in local dev mode (`selfhost/server/src/static.js`). Both use `transform.js`.
-- `selfhost/site/*` is copied over the site at build time (add-on scripts
-  such as `js/rk-manga-sources.js`). New apps are
+- `selfhost/site/*` is copied over the site at build time (new pages such as
+  `hackernews.html`, add-on scripts such as `js/rk-manga-sources.js`). New apps are
   added to the launcher by the `ICONS_FILTER` snippet in `transform.js`.
 - Commit with explicit paths, never `git add -A`: the repo once lived in iCloud Drive,
   which created "name 2.ext" conflict copies that got committed. The folder is now
