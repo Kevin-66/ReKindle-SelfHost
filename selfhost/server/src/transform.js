@@ -42,6 +42,16 @@ function rewriteTrafficCop(code) {
         .replace(/(['"])https:\/\/lite\.rekindle\.ink\/?\1/g, (m, q) => `${q}/lite/${q} /* lite.rekindle.ink */`);
 }
 
+// `window.t('key') || 'Text'` never reaches 'Text': before the language file has
+// loaded (pages often draw first), window.t returns the key itself, so screens show
+// "manga.btn.continue". window.t takes the fallback as its second argument. Only a
+// lone fallback literal that ends the expression is moved, so `|| 'a' + b` is left alone.
+const T_OR_FALLBACK = /window\.t\((['"])([\w.-]+)\1\)\s*\|\|\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")(?=\s*[),;:}\]\n])/g;
+
+function fixTranslationFallbacks(code) {
+    return code.replace(T_OR_FALLBACK, (m, q, key, fallback) => `window.t(${q}${key}${q}, ${fallback})`);
+}
+
 export function noticePage(title, message) {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -88,6 +98,7 @@ export function transformHtml(html, fileName) {
     html = html.replace(COUNTER_TAG, '');
     html = rewriteWorkerUrls(html);
     html = rewriteTrafficCop(html);
+    html = fixTranslationFallbacks(html);
 
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
@@ -141,6 +152,7 @@ const ICONS_FILTER = `
 export function transformJs(code, fileName) {
     const base = fileName.split('/').pop();
     code = rewriteWorkerUrls(code);
+    code = fixTranslationFallbacks(code);
     if (base === 'icons.js' || base === 'icons-beta.js') code += ICONS_FILTER;
     return code;
 }

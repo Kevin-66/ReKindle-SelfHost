@@ -39,6 +39,11 @@ as possible so `git merge upstream/main` stays clean.
   `js/i18n.js` to load real strings (`rekindleTranslations` starts as `{}`), or i18n
   overwrites "Guest Mode"/username labels after the callback.
 - Static ETags are hashes of the served (transformed) content, not file mtimes.
+- Raw i18n keys on screen ("MANGA.BTN.CONTINUE"): upstream often writes
+  `window.t('key') || 'Text'`, but `window.t` returns the key itself until the language
+  file has loaded, so the fallback never shows. `fixTranslationFallbacks()` in
+  `transform.js` rewrites these to `window.t('key', 'Text')` in every page and script
+  (25 places in 2026-10: Manga, Comics, ...). Write new code the same way.
 - `netguard.js`: upstream proxies (`/api/proxy`, reader worker, ...) may only reach public
   addresses, redirects included. 198.18.0.0/15 is allowed on purpose (fake-IP DNS from
   sing-box/Clash). Our own modules use `rawFetch`.
