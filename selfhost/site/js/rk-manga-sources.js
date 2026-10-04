@@ -1,5 +1,6 @@
 /*
- * Self-hosted ReKindle: adds Manhuagui (漫画柜) as a second source to the Manga app.
+ * Self-hosted ReKindle: adds Manhuagui (漫画柜) as a second source to the Manga app,
+ * and page/chapter preloading for both sources.
  *
  * manga.html itself is unchanged (MangaDex keeps working as before). This script
  * adds a "Source" picker to the Store tab and takes over the store, reader and
@@ -284,53 +285,146 @@
         });
     };
 
+    // ------------------------------------------------------------ preloading
+    //
+    // For both sources: once the visible page has loaded, fetch the next pages in
+    // the background, and near the end of a chapter fetch the next chapter's page
+    // list and first pages, so page turns and chapter changes are instant.
+    // Kept to a small window because e-readers have little memory.
+    // Set localStorage 'rk_manga_preload' to '0' to turn it off.
+
+    var PRELOAD_AHEAD = 2;
+    var PAGE_LIST_TTL = 10 * 60000; // MangaDex@Home links expire after ~15 minutes
+    var pageLists = {};             // source|chapterId -> { pages, t } or { pending }
+    var preloaded = [];             // keep Image objects alive while they load
+
+    function preloadEnabled() {
+        try { return localStorage.getItem('rk_manga_preload') !== '0'; } catch (e) { return true; }
+    }
+
+    function chapterKey(ch) {
+        return (isMhg(currentReading) ? 'mhg|' : 'md|') + ch.id;
+    }
+
+    function cachedPages(ch) {
+        var hit = ch && pageLists[chapterKey(ch)];
+        return hit && hit.pages && (Date.now() - hit.t < PAGE_LIST_TTL) ? hit.pages : null;
+    }
+
+    // Page image URLs for a chapter, built the same way manga.html builds them.
+    function fetchChapterPages(ch) {
+        var key = chapterKey(ch);
+        var fresh = cachedPages(ch);
+        if (fresh) return Promise.resolve(fresh);
+        if (pageLists[key] && pageLists[key].pending) return pageLists[key].pending;
+        var p;
+        if (isMhg(currentReading)) {
+            p = api('pages?chapter=' + encodeURIComponent(ch.id)).then(function (d) { return d.pages; });
+        } else {
+            if (ch.attributes && ch.attributes.pages === 0 && ch.attributes.externalUrl) return Promise.reject(new Error('External chapter'));
+            p = fetchCORS(API_BASE + '/at-home/server/' + ch.id).then(function (r) { return r.json(); }).then(function (data) {
+                return (data.chapter.data || []).map(function (file) {
+                    return '/api/proxy?url=' + encodeURIComponent(data.baseUrl + '/data/' + data.chapter.hash + '/' + file);
+                });
+            });
+        }
+        pageLists[key] = { pending: p };
+        return p.then(function (pages) {
+            pageLists[key] = { pages: pages, t: Date.now() };
+            return pages;
+        }, function (e) {
+            delete pageLists[key];
+            throw e;
+        });
+    }
+
+    function preloadImage(url) {
+        var img = new Image();
+        img.src = url;
+        preloaded.push(img);
+    }
+
+    function preloadAhead() {
+        if (!preloadEnabled() || !currentReading || !currentReading.pages) return;
+        var reading = currentReading;
+        var pages = reading.pages;
+        var page = currentPage;
+        var chapterIndex = currentChapterIndex;
+        preloaded = [];
+        for (var i = 1; i <= PRELOAD_AHEAD; i++) {
+            if (pages[page + i]) preloadImage(pages[page + i]);
+        }
+        var next = currentChapterList[chapterIndex + 1];
+        if (next && page >= pages.length - 1 - PRELOAD_AHEAD) {
+            fetchChapterPages(next).then(function (nextPages) {
+                if (currentReading !== reading || currentChapterIndex !== chapterIndex) return;
+                var room = PRELOAD_AHEAD - (pages.length - 1 - page);
+                for (var j = 0; j < room && j < nextPages.length; j++) preloadImage(nextPages[j]);
+            }, function () { /* the normal chapter load will report problems */ });
+        }
+    }
+
+    // Show a chapter whose page list is already known.
+    function showChapterPages(chapterIndex, pages) {
+        currentReading.pages = pages;
+        var finish = function () {
+            isLoadingNextChapter = false;
+            updateMangaPage();
+        };
+        if (!currentReading.loadedOnce) {
+            return getProgress(currentReading.id).then(function (saved) {
+                currentPage = (saved && saved.page) || 0;
+                if (currentPage >= pages.length) currentPage = 0;
+                currentReading.loadedOnce = true;
+                finish();
+            });
+        }
+        currentPage = 0;
+        finish();
+        return Promise.resolve();
+    }
+
     var originalLoadChapter = loadChapter;
     loadChapter = function (chapterIndex) {
-        if (!isMhg(currentReading)) return originalLoadChapter.apply(this, arguments);
         if (chapterIndex < 0 || chapterIndex >= currentChapterList.length) return Promise.resolve();
+        var ch = currentChapterList[chapterIndex];
+        var ready = cachedPages(ch);
+        if (!isMhg(currentReading) && !ready) {
+            // MangaDex chapter not preloaded yet: manga.html's own loader.
+            return originalLoadChapter.apply(this, arguments);
+        }
         isLoadingNextChapter = true;
         currentChapterIndex = chapterIndex;
         var chapterSelect = document.getElementById('chapter-select');
         if (chapterSelect) chapterSelect.value = chapterIndex;
-        var ch = currentChapterList[chapterIndex];
+        if (ready && ready.length) return showChapterPages(chapterIndex, ready);
+
         var content = document.getElementById('reader-content');
         content.innerHTML = '<div style="padding: 20px;">Fetching ' + escapeHtml(ch.attributes.title) + ' (' + (chapterIndex + 1) + ' of ' + currentChapterList.length + ')...</div>';
-        return api('pages?chapter=' + encodeURIComponent(ch.id)).then(function (data) {
-            if (!data.pages.length) {
+        return fetchChapterPages(ch).then(function (pages) {
+            if (!pages.length) {
                 content.innerHTML = '<div style="padding: 20px;">No pages found in this chapter.</div>';
+                isLoadingNextChapter = false;
                 return;
             }
-            currentReading.pages = data.pages;
-            if (!currentReading.loadedOnce) {
-                return getProgress(currentReading.id).then(function (saved) {
-                    currentPage = (saved && saved.page) || 0;
-                    if (currentPage >= data.pages.length) currentPage = 0;
-                    currentReading.loadedOnce = true;
-                    updateMangaPage();
-                });
-            }
-            currentPage = 0;
-            updateMangaPage();
+            return showChapterPages(chapterIndex, pages);
         })['catch'](function (e) {
             content.innerHTML = '<div style="padding: 20px; color: red;">Error: ' + escapeHtml(e.message) + '</div>';
-        }).then(function () {
             isLoadingNextChapter = false;
-            // Fetch the next page image early; e-ink browsers are slow to decode.
-            if (currentReading && currentReading.pages && currentReading.pages[currentPage + 1]) {
-                var pre = new Image();
-                pre.src = currentReading.pages[currentPage + 1];
-            }
         });
     };
 
-    // Prefetch the following page while reading Manhuagui chapters.
+    // After each page is shown, preload ahead once it has finished loading, so
+    // the visible page gets the bandwidth first.
     var originalUpdateMangaPage = updateMangaPage;
     updateMangaPage = function () {
         originalUpdateMangaPage.apply(this, arguments);
-        if (isMhg(currentReading) && currentReading.pages && currentReading.pages[currentPage + 1]) {
-            var pre = new Image();
-            pre.src = currentReading.pages[currentPage + 1];
-        }
+        var img = document.querySelector('#reader-content img.reader-page');
+        if (!img || img.complete) { preloadAhead(); return; }
+        var done = false;
+        var go = function () { if (!done) { done = true; preloadAhead(); } };
+        img.addEventListener('load', go);
+        img.addEventListener('error', go);
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildControls);
