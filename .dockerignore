@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+_deploy
+selfhost/data
+selfhost/.build
+.env
+selfhost/server/node_modules
+selfhost/server/.runtime
+selfhost/server/deno.lock
+**/.DS_Store

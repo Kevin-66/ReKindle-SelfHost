@@ -1,0 +1,6 @@
+# Local data and build output for the self-hosted server
+data/
+.build/
+server/node_modules/
+server/.runtime/
+server/deno.lock

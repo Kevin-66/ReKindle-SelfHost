@@ -1,0 +1,22 @@
+{
+    "name": "rekindle-selfhost-server",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Self-hosted backend for ReKindle: replaces Firebase and the Cloudflare workers with one Node server.",
+    "type": "module",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node --disable-warning=ExperimentalWarning src/index.js"
+    },
+    "engines": {
+        "node": ">=24"
+    },
+    "dependencies": {
+        "@mozilla/readability": "^0.6.0",
+        "imapflow": "^2.2.5",
+        "linkedom": "^0.18.13",
+        "lz-string": "^1.5.0",
+        "mailparser": "^3.9.35",
+        "nodemailer": "^10.0.14"
+    }
+}

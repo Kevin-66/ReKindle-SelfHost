@@ -185,6 +185,63 @@
         }
     }
 
+    // --- TIMEZONE AUTO-DETECTION ---
+    // True when the browser reports a real time zone that agrees with its own clock.
+    // Kindle browsers report UTC whatever the device is set to (see AGENTS.md), so
+    // UTC-like zones are not trusted.
+    function browserTimeZoneLooksReal() {
+        try {
+            if (typeof Intl === 'undefined' || !Intl.DateTimeFormat) return false;
+            const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (!zone || /^(UTC|GMT|Etc\/|Universal|Zulu)/i.test(zone)) return false;
+            const now = new Date();
+            const opts = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: false };
+            const inZone = now.toLocaleString('en-US', Object.assign({ timeZone: zone }, opts));
+            return inZone === now.toLocaleString('en-US', opts);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Use the browser's time zone when it can be trusted; otherwise look it up from
+    // the connection's IP address. Calls onFail() if neither works.
+    function autoDetectTimezone(onFail) {
+        if (browserTimeZoneLooksReal()) return; // getDateInZone() falls back to the browser zone
+        if (typeof fetch === 'undefined') { onFail(); return; }
+
+        fetch('https://get.geojs.io/v1/ip/geo.json')
+            .then(function (res) { return res.json(); })
+            .then(function (geo) {
+                const lat = parseFloat(geo.latitude);
+                const lon = parseFloat(geo.longitude);
+                if (isNaN(lat) || isNaN(lon)) throw new Error('No location for this connection');
+                // Same offset lookup as the manual city picker below.
+                return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current_weather=true&timezone=auto')
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (typeof data.utc_offset_seconds !== 'number') throw new Error('No UTC offset returned');
+                        const offsetHours = data.utc_offset_seconds / 3600;
+                        const locData = {
+                            name: geo.city || 'Auto-detected',
+                            lat: lat,
+                            lon: lon,
+                            zone: data.timezone || geo.timezone || null,
+                            country_code: null, // left out on purpose: i18n.js would switch the app language from it
+                            utc_offset: offsetHours,
+                            auto: true
+                        };
+                        localStorage.setItem('rekindle_timezone_offset', offsetHours);
+                        localStorage.setItem('rekindle_location_manual', JSON.stringify(locData));
+                        // Reload so times already on screen use the new zone (only if the save stuck).
+                        if (localStorage.getItem('rekindle_location_manual')) window.location.reload();
+                    });
+            })
+            .catch(function (e) {
+                console.warn('Timezone auto-detection failed:', e);
+                onFail();
+            });
+    }
+
     // --- TIMEZONE OFFSET WARNING ---
     // Displays a modal if the user has not configured their timezone offset.
     function checkTimezoneOffset() {
@@ -203,6 +260,13 @@
         const offsetStr = localStorage.getItem('rekindle_timezone_offset');
         if (offsetStr !== null && offsetStr !== '') {
             return; // Legacy offset is set, no action needed.
+        }
+
+        // Try to work the time zone out automatically before asking.
+        if (!window._rekindleTzAutoTried) {
+            window._rekindleTzAutoTried = true;
+            autoDetectTimezone(checkTimezoneOffset);
+            return;
         }
 
         // Check if modal already exists (prevent duplicates)

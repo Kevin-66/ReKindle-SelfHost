@@ -1,0 +1,17 @@
+services:
+  rekindle:
+    build: .
+    image: rekindle-selfhost
+    container_name: rekindle
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Server time zone (used for logs; pages detect each device's own zone).
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Accounts, app data and uploaded files. Back this folder up.
+      - ./selfhost/data:/data

@@ -20,7 +20,7 @@
                 var plCountries = ['PL'];
                 var deCountries = ['DE', 'AT', 'CH', 'LI'];
                 var itCountries = ['IT', 'SM', 'VA'];
-                var frCountries = ['FR', 'BE', 'CA', 'CH', 'LU', 'MC', 'SN'];
+                var frCountries = ['FR', 'BE', 'CH', 'LU', 'MC', 'SN'];
                 var ruCountries = ['RU', 'BY', 'KZ', 'KG'];
                 var zhCountries = ['CN', 'TW', 'HK', 'SG'];
                 var viCountries = ['VN'];

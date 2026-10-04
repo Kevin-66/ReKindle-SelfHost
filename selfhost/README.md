@@ -1,0 +1,151 @@
+# Self-hosted ReKindle
+
+Runs ReKindle on your own server with Docker. A single container serves the site
+and replaces everything the public rekindle.ink depends on:
+
+| rekindle.ink uses | This server uses |
+|---|---|
+| Firebase Auth | Local accounts (username + password) |
+| Firestore | SQLite document store with the same rules |
+| Realtime Database | In-memory tree saved to SQLite, live updates by long-polling |
+| Cloud Storage | Files on disk |
+| Cloud Functions | The repo's `firebase-functions/index.js`, run unchanged |
+| Cloudflare Workers / Pages Functions | The repo's `workers/` and `functions/api/`, run unchanged |
+| Workers AI (handwriting) | Gemini, or any OpenAI-compatible vision model |
+
+ReKindle+ apps (Mail, Quick ToDo, AirType, Files, Photo Frame, ...) are on for every
+account by default.
+
+The **Manga** app, which upstream switched off, is back: MangaDex works as it did, and
+Manhuagui (漫画柜) is added as a second source (a port of the
+[keiyoushi](https://github.com/keiyoushi/extensions-source) Mihon extension).
+Manhuagui needs an account on the server; pages are WebP, which the Kindle
+experimental browser shows but very old devices may not.
+
+**Not included:** KindleChat, Topics, Neighbourhood, Suggestions, online multiplayer
+games, Words Online, moderation tools and payments. They depend on ReKindle's central
+community, so they are hidden from the launcher. Pass-and-play games on one device
+still work.
+
+## Quick start
+
+```bash
+git clone https://github.com/Kevin-66/ReKindle.git
+cd ReKindle
+cp .env.example .env        # optional: edit settings
+docker compose up -d --build
+```
+
+Open `http://<server>:8080` and create an account. **The first account becomes the
+admin** (or set `ADMIN_USERNAME`).
+
+On a Kindle or Kobo, open the same address in the browser and bookmark it. Older
+devices are sent to the `/lite/` or `/legacy/` versions automatically.
+
+Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder up.
+
+## Settings (`.env`)
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PORT` | `8080` | Port on the host |
+| `ADMIN_USERNAME` | first account | Admin account |
+| `ALLOW_REGISTRATION` | `true` | Let new people sign up (first account always allowed) |
+| `PLUS_FOR_ALL` | `true` | ReKindle+ apps for everyone |
+| `TRUST_PROXY` | `true` | Read client IPs from `X-Forwarded-For` (behind a reverse proxy) |
+| `MAX_UPLOAD_MB` | `100` | Largest upload |
+| `GEMINI_API_KEY` | – | Oracle AI and handwriting recognition |
+| `OCR_MODEL` | `gemini-flash-latest` | Model for handwriting recognition |
+| `OPENAI_BASE_URL`, `OPENAI_API_KEY` | – | Use an OpenAI-compatible API for handwriting instead |
+| `GOOGLE_CLIENT_ID` | – | Your own Google sign-in for Tasks / Calendar / Contacts |
+| `MANHUAGUI_URL` | `https://www.manhuagui.com` | Manhuagui mirror (`https://tw.manhuagui.com` for Traditional Chinese) |
+| `MANHUAGUI_SHOW_R18` | `false` | Show Manhuagui titles marked R18 |
+| `TMDB_API_KEY` | – | Watchlist |
+| `PINTEREST_CLIENT_ID`, `PINTEREST_CLIENT_SECRET` | – | Pinterest |
+
+After changing `.env`: `docker compose up -d`.
+
+### Google Tasks / Calendar / Contacts
+
+Google only accepts ReKindle's own sign-in on rekindle.ink, so these need your own
+OAuth client and an HTTPS address:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), enable the Google Tasks,
+   Google Calendar and People APIs.
+2. Create an OAuth client ID of type **Web application**.
+3. Add your site (e.g. `https://rekindle.example.com`) under *Authorized JavaScript origins*.
+4. Under *Authorized redirect URIs* add, for each of `tasks`, `calendar`, `contacts` and
+   `quicktodo`: `https://rekindle.example.com/<name>` and `https://rekindle.example.com/<name>.html`.
+5. Put the client ID in `GOOGLE_CLIENT_ID`.
+
+## HTTPS
+
+Put a reverse proxy in front for HTTPS, for example Caddy:
+
+```
+rekindle.example.com {
+    reverse_proxy localhost:8080
+}
+```
+
+Long-polling requests stay open for up to 25 seconds; make sure the proxy timeout is
+longer (nginx: `proxy_read_timeout 60s;`).
+
+## Updating from the original ReKindle
+
+The repo's own files are left alone; the self-hosting changes live in `selfhost/`,
+`Dockerfile`, `docker-compose.yml`, `.env.example` and `.dockerignore`. Page edits
+(swapping the Firebase SDK for `rk-backend.js`, hiding chat apps, pointing worker URLs
+at this server) are applied to a copy while the image builds. To pull in new
+upstream work:
+
+```bash
+git fetch upstream
+git merge upstream/main
+docker compose up -d --build
+```
+
+The only upstream files changed here are `time.js` (automatic time-zone detection),
+and `js/i18n.js` plus `settings.html` (Canada no longer defaults to French).
+The Manga app is re-enabled at build time and gets its Manhuagui source from
+`site/js/rk-manga-sources.js`; `manga.html` itself is untouched.
+
+## Security notes
+
+- Services that fetch arbitrary web addresses for the pages (`/api/proxy`, the article
+  reader, ...) cannot reach private or internal addresses, including through
+  redirects, and never receive the browser's cookies.
+- Mail, Manhuagui and server functions require a signed-in account.
+- With a public address, set `ADMIN_USERNAME` (or create your account first) and
+  consider `ALLOW_REGISTRATION=false` once everyone who needs an account has one.
+
+## Development without Docker
+
+Needs Node.js 24 or newer.
+
+```bash
+cd selfhost/server
+npm install
+npm start          # serves the repo directly on http://localhost:8080
+```
+
+In this mode the page edits are applied on the fly and the lite/legacy versions are
+not built.
+
+## How it fits together
+
+- `client/rk-backend.js` – drop-in replacement for the Firebase compat SDK. Same
+  `firebase` global; talks to `/__rk/*` on this server. Plain ES5 for old e-readers.
+- `server/src/` – the Node server:
+  - `auth.js`, `jwt.js` – accounts, sessions, ID tokens
+  - `firestore.js`, `firestore-rules.js`, `fsvalues.js` – document store and its rules
+  - `rtdb.js`, `rtdb-rules.js` – realtime database; evaluates `rtdb-rules.json` as-is
+  - `storage.js` – file storage
+  - `events.js` – change feed behind live listeners (long-polling)
+  - `functions-host.js`, `admin-shim.js` – run `firebase-functions/index.js` with a
+    local stand-in for `firebase-admin`
+  - `workers-host.js`, `ai.js`, `netguard.js` – run the Cloudflare workers and `/api`
+    functions, with outgoing requests limited to public addresses
+  - `manhuagui.js` – Manhuagui source for the Manga app
+  - `transform.js` – the page edits; `static.js` – serves the site
+- `prepare.js` – applies the page edits to a copy of the repo before the build.
