@@ -28,7 +28,7 @@ simplified article view), using the public Hacker News search API.
 
 **Reddit** uses Reddit's public feeds through this server (`selfhost/server/src/reddit.js`
 replaces the author's `functions/api/reddit.js`). Pictures are fetched as images and
-scaled down to `REDDIT_IMAGE_MAX_WIDTH` (1080 px JPEG), and a post's picture and text
+scaled down to `IMAGE_MAX_WIDTH` (1080 px JPEG), and a post's picture and text
 show at the top of the thread. Reddit allows logged-out visitors about one feed request
 a minute per address, so feeds are cached for 10 minutes and the app shows a short
 "retrying" countdown when it has to wait. Reddit ends RSS on 2026-11-13 (the app then
@@ -75,7 +75,7 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `OCR_MODEL` | `gemini-flash-latest` | Model for handwriting recognition |
 | `OPENAI_BASE_URL`, `OPENAI_API_KEY` | – | Use an OpenAI-compatible API for handwriting instead |
 | `GOOGLE_CLIENT_ID` | – | Your own Google sign-in for Tasks / Calendar / Contacts |
-| `REDDIT_IMAGE_MAX_WIDTH` | `1080` | Width Reddit pictures are scaled down to |
+| `IMAGE_MAX_WIDTH` | `1080` | Width Reddit and Hacker News pictures are scaled down to (`REDDIT_IMAGE_MAX_WIDTH` also works) |
 | `PROXY_URL` | – | HTTP proxy (`http://user:pass@host:port`) for sites that block this server |
 | `PROXY_DOMAINS` | archive.today domains | Sites fetched through `PROXY_URL` (comma-separated) |
 | `MANHUAGUI_URL` | `https://www.manhuagui.com` | Manhuagui mirror (`https://tw.manhuagui.com` for Traditional Chinese) |
@@ -173,6 +173,7 @@ not built.
     sent through `PROXY_URL`)
   - `manhuagui.js` – Manhuagui source for the Manga app
   - `reddit.js` – `/api/reddit` for the Reddit app (feeds, resized pictures)
+  - `images.js` – picture shrinking for e-readers; `/__rk/img?url=` (Hacker News)
   - `cache.js` – Cache API stand-in for the upstream `/api` functions
   - `transform.js` – the page edits; `static.js` – serves the site
 - `prepare.js` – applies the page edits to a copy of the repo before the build.

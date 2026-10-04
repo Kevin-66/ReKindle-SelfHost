@@ -295,6 +295,11 @@
             color: white;
         }
 
+        .text img {
+            max-width: 100%;
+            height: auto;
+        }
+
         .text pre {
             white-space: pre-wrap;
             font-size: 0.8rem;
@@ -384,12 +389,11 @@
                 { id: 'jobs', label: 'Jobs', path: 'search_by_date', tags: 'job' }
             ];
 
-            var state = { feed: 'top', query: '', page: 0, view: 'list', listScroll: 0 };
+            var state = { feed: 'top', query: '', page: 0, view: 'list' };
             // What is on screen ({ view: 'list' | 'thread' | 'article', id, url }) and
             // the screens the Back button returns to.
             var current = { view: 'list' };
             var history = [];
-            var requestSeq = 0;
 
             function $(id) { return document.getElementById(id); }
 
@@ -422,55 +426,91 @@
             // HN text is limited HTML; keep only harmless tags and safe links.
             var ALLOWED = { P: 1, A: 1, I: 1, EM: 1, B: 1, STRONG: 1, PRE: 1, CODE: 1, BR: 1, UL: 1, OL: 1, LI: 1, BLOCKQUOTE: 1,
                 H1: 1, H2: 1, H3: 1, H4: 1, IMG: 1, FIGURE: 1, FIGCAPTION: 1, TABLE: 1, TR: 1, TD: 1, TH: 1, TBODY: 1, THEAD: 1, SPAN: 1, DIV: 1, SUP: 1, SUB: 1, HR: 1 };
-            function sanitize(html) {
-                var box = document.createElement('div');
+            function absUrl(u, base) {
+                if (!u) return '';
+                try { return (base ? new URL(u, base) : new URL(u)).href; } catch (e) { return ''; }
+            }
+
+            // base: the article's address, for relative links and images. Parsed in an
+            // inert document so the Kindle doesn't download every original image first.
+            function sanitize(html, base) {
+                var doc = document.implementation.createHTMLDocument('');
+                var box = doc.createElement('div');
                 box.innerHTML = html || '';
+                var page = base ? base.split('#')[0] : '';
                 (function walk(node) {
-                    var kids = Array.prototype.slice.call(node.childNodes);
-                    for (var i = 0; i < kids.length; i++) {
-                        var el = kids[i];
-                        if (el.nodeType === 3) continue;
+                    // Walk the live child list: children of an unwrapped tag are moved up
+                    // and then cleaned like everything else (a snapshot would skip them,
+                    // keeping their raw attributes - onerror=, javascript: links, ...).
+                    var el = node.firstChild;
+                    while (el) {
+                        var next = el.nextSibling;
+                        if (el.nodeType === 3) { el = next; continue; }
                         if (el.nodeType !== 1 || !ALLOWED[el.tagName]) {
-                            if (el.nodeType === 1 && !/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|FORM)$/.test(el.tagName)) {
+                            var first = null;
+                            if (el.nodeType === 1 && !/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|FORM|TEMPLATE|NOSCRIPT|SVG|MATH)$/i.test(el.tagName)) {
+                                first = el.firstChild;
                                 while (el.firstChild) node.insertBefore(el.firstChild, el);
                             }
                             node.removeChild(el);
+                            el = first || next;
                             continue;
                         }
+                        // Lazy-loading pages keep the real picture in data-src.
+                        var imgSrc = el.tagName === 'IMG' ? (el.getAttribute('data-src') || el.getAttribute('src') || '') : '';
                         var attrs = Array.prototype.slice.call(el.attributes);
                         for (var j = 0; j < attrs.length; j++) {
                             var name = attrs[j].name.toLowerCase();
-                            var keep = (el.tagName === 'A' && name === 'href') || (el.tagName === 'IMG' && (name === 'src' || name === 'alt'));
+                            var keep = (el.tagName === 'A' && name === 'href') || (el.tagName === 'IMG' && name === 'alt');
                             if (!keep) el.removeAttribute(attrs[j].name);
                         }
                         if (el.tagName === 'A') {
-                            var href = el.getAttribute('href') || '';
-                            if (!/^https?:/i.test(href)) el.removeAttribute('href');
+                            var href = absUrl(el.getAttribute('href'), base);
+                            if (!/^https?:/i.test(href) || (page && href.split('#')[0] === page)) el.removeAttribute('href');
                             else {
+                                el.setAttribute('href', href);
                                 el.setAttribute('target', '_blank');
                                 if (!hnItemId(href) && !/\.(png|jpe?g|gif|webp|svg|mp4|mp3)([?#]|$)/i.test(href)) {
-                                    var read = document.createElement('span');
+                                    var read = doc.createElement('span');
                                     read.className = 'read-link';
                                     read.setAttribute('data-url', href);
-                                    read.appendChild(document.createTextNode('Read'));
+                                    read.appendChild(doc.createTextNode('Read'));
                                     node.insertBefore(read, el.nextSibling);
                                 }
                             }
                         }
                         if (el.tagName === 'IMG') {
-                            var src = el.getAttribute('src') || '';
-                            if (!/^https?:/i.test(src)) { node.removeChild(el); continue; }
-                            el.setAttribute('src', '/api/proxy?url=' + encodeURIComponent(src));
+                            var src = /^data:image\//i.test(imgSrc) ? imgSrc : absUrl(imgSrc, base);
+                            if (/^https?:/i.test(src)) src = '/__rk/img?url=' + encodeURIComponent(src); // scaled down for e-ink
+                            else if (!/^data:image\//i.test(src)) { node.removeChild(el); el = next; continue; }
+                            el.setAttribute('src', src);
                             el.setAttribute('loading', 'lazy');
                         }
                         walk(el);
+                        el = next;
                     }
                 })(box);
                 return box.innerHTML;
             }
 
-            function setNotice(text, isError) {
-                $('content').innerHTML = '<div class="notice' + (isError ? ' error' : '') + '">' + escapeHtml(text) + '</div>';
+            // Each screen (list, thread, article) has its own container inside #content.
+            // Going forward hides the current one; Back shows it again as it was, at the
+            // same scroll position, without reloading.
+            var panes = [];
+
+            function pane() { return panes[panes.length - 1]; }
+
+            function pushPane() {
+                var p = document.createElement('div');
+                p.className = 'pane';
+                p.seq = 0;
+                $('content').appendChild(p);
+                panes.push(p);
+                return p;
+            }
+
+            function setNotice(text, isError, p) {
+                (p || pane()).innerHTML = '<div class="notice' + (isError ? ' error' : '') + '">' + escapeHtml(text) + '</div>';
             }
 
             // news.ycombinator.com/item?id=123 -> "123"
@@ -536,18 +576,18 @@
             }
 
             function loadList(page) {
-                var seq = ++requestSeq;
-                var content = $('content');
-                if (page === 0) setNotice('Loading...');
+                var content = panes[0];
+                var seq = ++content.seq;
+                if (page === 0) setNotice('Loading...', false, content);
                 return getJson(listUrl(page)).then(function (data) {
-                    if (seq !== requestSeq) return;
+                    if (seq !== content.seq) return;
                     state.page = page;
                     if (page === 0) content.innerHTML = '';
-                    var old = $('more-row');
+                    var old = content.querySelector('#more-row');
                     if (old) old.parentNode.removeChild(old);
                     var hits = data.hits || [];
                     if (!hits.length && page === 0) {
-                        setNotice(state.query ? 'No stories found.' : 'Nothing here right now.');
+                        setNotice(state.query ? 'No stories found.' : 'Nothing here right now.', false, content);
                         return;
                     }
                     var html = '';
@@ -569,10 +609,10 @@
                         content.appendChild(more);
                     }
                 })['catch'](function (e) {
-                    if (seq !== requestSeq) return;
-                    if (page === 0) setNotice('Could not load Hacker News (' + e.message + ').', true);
+                    if (seq !== content.seq) return;
+                    if (page === 0) setNotice('Could not load Hacker News (' + e.message + ').', true, content);
                     else {
-                        var btn = document.querySelector('#more-row .btn');
+                        var btn = content.querySelector('#more-row .btn');
                         if (btn) { btn.disabled = false; btn.innerText = 'Retry'; }
                     }
                 });
@@ -635,16 +675,15 @@
             }
 
             function go(next) {
-                if (current.view === 'list') state.listScroll = $('content').scrollTop;
+                current.scroll = $('content').scrollTop;
+                pane().style.display = 'none';
                 history.push(current);
-                show(next);
-            }
-
-            function show(entry) {
-                current = entry;
-                showChrome(entry.view);
-                if (entry.view === 'thread') renderThread(entry.id);
-                else if (entry.view === 'article') renderArticle(entry.url);
+                pushPane();
+                current = next;
+                showChrome(next.view);
+                $('content').scrollTop = 0;
+                if (next.view === 'thread') renderThread(next.id);
+                else if (next.view === 'article') renderArticle(next.url);
             }
 
             function openThread(id) {
@@ -652,11 +691,11 @@
             }
 
             function renderThread(id) {
-                var seq = ++requestSeq;
-                setNotice('Loading comments...');
-                $('content').scrollTop = 0;
+                var p = pane();
+                var seq = ++p.seq;
+                setNotice('Loading comments...', false, p);
                 getJson(API + 'items/' + encodeURIComponent(id)).then(function (item) {
-                    if (seq !== requestSeq) return;
+                    if (seq !== p.seq) return;
                     var domain = domainOf(item.url);
                     var meta = [];
                     if (typeof item.points === 'number') meta.push(item.points + ' points');
@@ -682,15 +721,15 @@
                     var kids = item.children || [];
                     if (!kids.length) html += '<div class="notice">' + (isComment ? 'No replies yet.' : 'No comments yet.') + '</div>';
                     for (var i = 0; i < kids.length; i++) html += commentHtml(kids[i], 0);
-                    $('content').innerHTML = html;
-                    bindCollapse($('content'));
-                    var rb = $('read-btn');
+                    p.innerHTML = html;
+                    bindCollapse(p);
+                    var rb = p.querySelector('#read-btn');
                     if (rb) rb.onclick = function () { openArticle(item.url, id); };
-                    var sb = $('story-btn');
+                    var sb = p.querySelector('#story-btn');
                     if (sb) sb.onclick = function () { openThread(String(item.story_id)); };
                 })['catch'](function (e) {
-                    if (seq !== requestSeq) return;
-                    setNotice('Could not load this thread (' + e.message + ').', true);
+                    if (seq !== p.seq) return;
+                    setNotice('Could not load this thread (' + e.message + ').', true, p);
                 });
             }
 
@@ -701,18 +740,18 @@
             }
 
             function renderArticle(url) {
-                var seq = ++requestSeq;
-                setNotice('Loading article...');
-                $('content').scrollTop = 0;
+                var p = pane();
+                var seq = ++p.seq;
+                setNotice('Loading article...', false, p);
                 fetch('/__rk/w/rekindle-reader/?url=' + encodeURIComponent(url)).then(function (r) { return r.json(); }).then(function (a) {
-                    if (seq !== requestSeq) return;
+                    if (seq !== p.seq) return;
                     if (!a || a.error || !a.content) throw new Error((a && (a.detail || a.error)) || 'No readable text');
-                    $('content').innerHTML = '<div class="article"><h1>' + escapeHtml(a.title || '') + '</h1>' +
+                    p.innerHTML = '<div class="article"><h1>' + escapeHtml(a.title || '') + '</h1>' +
                         '<div class="meta">' + escapeHtml(domainOf(url)) + '</div>' +
-                        '<div class="text">' + sanitize(a.content) + '</div></div>';
+                        '<div class="text">' + sanitize(a.content, url) + '</div></div>';
                 })['catch'](function (e) {
-                    if (seq !== requestSeq) return;
-                    $('content').innerHTML = '<div class="notice error">This article could not be simplified (' + escapeHtml(e.message) + ').</div>' +
+                    if (seq !== p.seq) return;
+                    p.innerHTML = '<div class="notice error">This article could not be simplified (' + escapeHtml(e.message) + ').</div>' +
                         '<div class="more-row"><a class="btn" style="text-decoration:none; color:black;" href="' + escapeHtml(url) + '" target="_blank">Open link</a></div>';
                 });
             }
@@ -720,15 +759,13 @@
             // ------------------------------------------------ navigation
 
             window.goBack = function () {
-                var prev = history.pop() || { view: 'list' };
-                if (prev.view === 'list') {
-                    current = prev;
-                    showChrome('list');
-                    requestSeq++;
-                    loadList(0).then(function () { $('content').scrollTop = state.listScroll || 0; });
-                    return;
-                }
-                show(prev);
+                if (!history.length || panes.length < 2) return;
+                var gone = panes.pop();
+                gone.parentNode.removeChild(gone);
+                current = history.pop();
+                pane().style.display = 'block';
+                showChrome(current.view);
+                $('content').scrollTop = current.scroll || 0;
             };
 
             // Links to other Hacker News posts open here instead of leaving the app.
@@ -758,6 +795,7 @@
                     var saved = localStorage.getItem('rk_hn_feed');
                     for (var i = 0; i < FEEDS.length; i++) if (FEEDS[i].id === saved) state.feed = saved;
                 } catch (e) { }
+                pushPane();
                 showChrome('list');
                 renderTabs();
                 loadList(0);

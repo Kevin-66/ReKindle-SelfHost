@@ -10,6 +10,7 @@ import { currentSeq, waitForChanges } from './events.js';
 import { invokeCallable, errorStatus } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
+import { handleImage } from './images.js';
 import { Readable } from 'node:stream';
 
 const MAX_JSON = 16 * 1024 * 1024;
@@ -287,6 +288,7 @@ export async function handleApi(req, res, url) {
         }
         if (section === 'st') return await handleStorage(req, res, parts[2], parts.slice(3).join('/'), url);
         if (section === 'manga') return await handleManga(req, res, url, parts);
+        if (section === 'img') return await handleImage(req, res, url);
         if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
         switch (section) {
             case 'auth': return await handleAuth(req, res, parts[2]);
