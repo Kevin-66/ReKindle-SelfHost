@@ -237,42 +237,6 @@
             padding: 18px 0;
         }
 
-        /* Page buttons: move one screen at a time (no page-turn keys on most Kindles) */
-        .pager {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 10px;
-            align-items: center;
-            padding: 8px;
-            border-top: 2px solid black;
-            background: #eee;
-            flex-shrink: 0;
-        }
-
-        .pager .btn {
-            width: 100%;
-            min-height: 48px;
-            font-size: 0.9rem;
-        }
-
-        .pager .btn svg {
-            vertical-align: middle;
-            margin-right: 8px;
-        }
-
-        .pager .btn[disabled] {
-            opacity: 0.35;
-            box-shadow: none;
-            cursor: default;
-        }
-
-        .page-pos {
-            min-width: 64px;
-            text-align: center;
-            font-size: 0.85rem;
-            font-weight: bold;
-        }
-
         /* Thread */
         .thread-head {
             padding: 14px 0;
@@ -403,11 +367,6 @@
 
         <div class="content" id="content"></div>
 
-        <div class="pager">
-            <button class="btn" id="page-up" onclick="pageBy(-1)"><svg width="16" height="12" viewBox="0 0 16 12"><polygon points="8,0 16,12 0,12" fill="currentColor"/></svg>Page Up</button>
-            <span class="page-pos" id="page-pos"></span>
-            <button class="btn" id="page-down" onclick="pageBy(1)"><svg width="16" height="12" viewBox="0 0 16 12"><polygon points="0,0 16,0 8,12" fill="currentColor"/></svg>Page Down</button>
-        </div>
     </div>
 
     <script>
@@ -790,64 +749,6 @@
                 openThread(id);
             });
 
-            // ------------------------------------------------ page buttons
-
-            function pageStep() {
-                var h = $('content').clientHeight;
-                return Math.max(60, h - Math.max(30, Math.round(h * 0.08)));
-            }
-
-            function atEnd() {
-                var c = $('content');
-                return c.scrollTop + c.clientHeight >= c.scrollHeight - 2;
-            }
-
-            window.pageBy = function (dir) {
-                var c = $('content');
-                if (dir > 0 && atEnd()) {
-                    // End of the story list: load the next batch.
-                    var more = document.querySelector('#more-row .btn');
-                    if (more && !more.disabled) more.onclick.call(more);
-                    return;
-                }
-                c.scrollTop = Math.max(0, c.scrollTop + dir * pageStep());
-                updatePager();
-            };
-
-            function updatePager() {
-                var c = $('content');
-                var step = pageStep();
-                var total = Math.max(1, Math.ceil(Math.max(0, c.scrollHeight - c.clientHeight - 2) / step) + 1);
-                var pos = atEnd() ? total : Math.min(total, Math.floor((c.scrollTop + 2) / step) + 1);
-                var more = document.querySelector('#more-row .btn');
-                var text = pos + ' / ' + total;
-                if ($('page-pos').innerText !== text) $('page-pos').innerText = text;
-                $('page-up').disabled = c.scrollTop <= 0;
-                $('page-down').disabled = atEnd() && !(more && !more.disabled);
-            }
-
-            var pagerTimer = null;
-            function schedulePager() {
-                if (pagerTimer) return;
-                pagerTimer = setTimeout(function () { pagerTimer = null; updatePager(); }, 50);
-            }
-            $('content').addEventListener('scroll', schedulePager);
-            $('content').addEventListener('load', schedulePager, true); // images change the height
-            window.addEventListener('resize', schedulePager);
-            new MutationObserver(schedulePager).observe($('content'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-
-            // Page Up/Down, space and arrow keys (keyboards, page-turn remotes).
-            document.addEventListener('keydown', function (e) {
-                var tag = (e.target && e.target.tagName) || '';
-                if (tag === 'INPUT' || tag === 'TEXTAREA' || e.altKey || e.ctrlKey || e.metaKey) return;
-                var k = e.keyCode;
-                var dir = (k === 34 || k === 40 || k === 39 || (k === 32 && !e.shiftKey)) ? 1
-                    : (k === 33 || k === 38 || k === 37 || (k === 32 && e.shiftKey)) ? -1 : 0;
-                if (!dir) return;
-                e.preventDefault();
-                pageBy(dir);
-            });
-
             window.onload = function () {
                 if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
                 if (window.rekindleApplyScale) window.rekindleApplyScale();
@@ -863,6 +764,9 @@
             };
         })();
     </script>
+    <!-- Page Up / Page Down buttons (Settings > Accessibility > Page Buttons). Pages in
+         selfhost/site are not run through transform.js, so it is included here. -->
+    <script src="js/rk-pager.js"></script>
 </body>
 
 </html>

@@ -86,6 +86,22 @@ skipped (`SKIPPED_FUNCTIONS` in `workers-host.js`). Why, found 2026-10:
 
 Redlib was tried and dropped (too slow, and it got 429s from Reddit too).
 
+## Page buttons (`selfhost/site/js/rk-pager.js`)
+
+`transform.js` adds the script before the last `</body>` of every upstream page. Pages in
+`selfhost/site/` are copied after the transforms (prepare.js) and served untransformed in
+dev, so they include `<script src="js/rk-pager.js"></script>` themselves (hackernews.html). It finds the
+largest visible element with `overflow-y: auto|scroll` that really scrolls (or the
+document itself) and puts two 52 px buttons (Page Up / Page Down) in that element's
+bottom-right corner, positioned with `offsetTop/Left` (safe under theme.js zoom).
+A page step is the visible height minus an overlap larger than the buttons, so nothing
+stays hidden under them. It shows nothing when nothing scrolls (games), re-checks
+after DOM changes (throttled to 1.5 s) and clicks, and does no work at all when
+switched off. The switch is injected into Settings > Accessibility ("Page Buttons",
+`localStorage.rk_page_buttons = '0'` means off). Pages should not add page bars of
+their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
+opaque (grey arrow), or the page shows through them.
+
 ## Manga
 
 `manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Manhuagui
