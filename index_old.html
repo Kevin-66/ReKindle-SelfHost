@@ -1126,12 +1126,7 @@
                     const data = doc.data();
                     if (data.manualLocation) localStorage.setItem('rekindle_location_manual', JSON.stringify(data.manualLocation));
                     if (data.unitSystem) localStorage.setItem('rekindle_unit_system', data.unitSystem);
-                    if (data.themeMode) {
-                        // Dark mode is temporarily disabled.
-                        var syncedTheme = data.themeMode === 'light' ? 'light' : 'light';
-                        localStorage.setItem('rekindle_theme_mode', syncedTheme);
-                        if (window.rekindleApplyTheme) window.rekindleApplyTheme();
-                    }
+                    if (data.themeMode) { localStorage.setItem('rekindle_theme_mode', data.themeMode); if (window.rekindleApplyTheme) window.rekindleApplyTheme(); }
                     if (data.disableGames !== undefined) localStorage.setItem('rekindle_disable_games', data.disableGames);
 
                     if (data.defaultFullscreen !== undefined) localStorage.setItem('rekindle_default_fullscreen', data.defaultFullscreen);

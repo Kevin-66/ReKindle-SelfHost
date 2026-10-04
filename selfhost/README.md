@@ -105,8 +105,12 @@ git merge upstream/main
 docker compose up -d --build
 ```
 
-The only upstream files changed here are `time.js` (automatic time-zone detection),
-and `js/i18n.js` plus `settings.html` (Canada no longer defaults to French).
+The only upstream files changed here are:
+
+- `time.js` – automatic time-zone detection
+- `js/i18n.js`, `settings.html` – Canada no longer defaults to French
+- `theme.js`, `settings.html`, `index.html`, `index_old.html` – dark mode re-enabled
+  and fixed (upstream switched it off as buggy on 2026-07-08)
 The Manga app is re-enabled at build time and gets its Manhuagui source from
 `site/js/rk-manga-sources.js`; `manga.html` itself is untouched.
 
