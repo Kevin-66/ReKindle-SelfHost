@@ -111,6 +111,23 @@ switched off. The switch is injected into Settings > Accessibility ("Page Button
 their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
 opaque (grey arrow), or the page shows through them.
 
+## Hacker News (`selfhost/site/hackernews.html`)
+
+- Screens are stacked `.pane` divs inside the one scroller `#content`: going forward
+  hides the current pane and stores `scrollTop` in the history entry; Back removes the
+  top pane and restores the scroll position without reloading. Each pane has its own
+  request counter (`pane.seq`), and lookups inside a screen use `p.querySelector`
+  (several panes can contain the same ids, e.g. two threads' `#read-btn`).
+- `sanitize(html, base)` parses in `document.implementation.createHTMLDocument` (an
+  inert document, so images are not downloaded while cleaning), resolves relative links
+  and images against `base` (the article URL), uses `data-src` for lazy images, and
+  sends pictures through `/__rk/img?url=` (`server/src/images.js`: 1080 px JPEG, first
+  frame of animations, SVG passed through, non-images refused, public addresses only).
+- The cleanup walk must follow the LIVE child list: unwrapping an unknown tag moves its
+  children up, and a snapshot of the child list skipped them, leaving `onerror=` and
+  `javascript:` links from article HTML in place (fixed 2026-10). SVG/MathML/noscript/
+  template are dropped with their contents.
+
 ## Manga
 
 `manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Manhuagui

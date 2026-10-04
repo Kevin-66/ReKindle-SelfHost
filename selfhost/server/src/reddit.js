@@ -11,14 +11,11 @@
 // view. Reddit ends RSS on 2026-11-13: from then on a failed .rss request answers
 // with an empty feed, which makes the app switch to .json (public until 2027-03).
 
-import sharp from 'sharp';
+import { serveImage } from './images.js';
 
 const REDDIT = 'https://www.reddit.com';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 const FEED_TTL = 10 * 60 * 1000;
-// Images are scaled down to this width (e-reader screens are ~1072-1448 px wide).
-const IMAGE_MAX_WIDTH = Math.max(320, parseInt(process.env.REDDIT_IMAGE_MAX_WIDTH || '1080', 10) || 1080);
-const IMAGE_MAX_BYTES = 40 * 1024 * 1024;
 
 const REDDIT_HOSTS = new Set(['reddit.com', 'www.reddit.com', 'old.reddit.com', 'np.reddit.com', 'new.reddit.com', 'api.reddit.com']);
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif)$/i;
@@ -59,72 +56,6 @@ function imageSources(url) {
     if (host === 'i.imgur.com') return [url.href];
     if (host === 'imgur.com' || host === 'www.imgur.com') return file ? [`https://i.imgur.com/${file[1]}`] : null;
     return null;
-}
-
-const imageCache = new Map(); // requested url -> { body, type }
-let imageCacheBytes = 0;
-const IMAGE_CACHE_MAX = 64 * 1024 * 1024;
-
-// Scale to IMAGE_MAX_WIDTH and re-encode as JPEG (first frame for GIFs; e-ink
-// can't animate). Keeps the original when it is already smaller.
-async function shrinkImage(buf, type) {
-    try {
-        const out = await sharp(buf, { failOn: 'none', pages: 1, limitInputPixels: 2e8 })
-            .rotate()
-            .resize({ width: IMAGE_MAX_WIDTH, withoutEnlargement: true })
-            .flatten({ background: '#ffffff' })
-            .jpeg({ quality: 72, mozjpeg: true })
-            .toBuffer();
-        return out.length < buf.length ? { body: out, type: 'image/jpeg' } : { body: buf, type };
-    } catch {
-        return { body: buf, type };
-    }
-}
-
-async function fetchImage(sources) {
-    let status = 404;
-    for (const src of sources) {
-        let res;
-        try {
-            res = await fetch(src, {
-                headers: { 'User-Agent': UA, Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' },
-                signal: AbortSignal.timeout(30000)
-            });
-        } catch {
-            status = 502;
-            continue;
-        }
-        const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-        // i.redd.it answers a missing file with a 404 placeholder PNG; status matters, not type.
-        if (!res.ok || !type.startsWith('image/') || Number(res.headers.get('content-length')) > IMAGE_MAX_BYTES) {
-            if (res.body) res.body.cancel().catch(() => { });
-            status = res.status === 429 ? 429 : (res.ok ? 502 : res.status);
-            continue;
-        }
-        return shrinkImage(Buffer.from(await res.arrayBuffer()), type);
-    }
-    throw httpError(status === 404 || status === 403 || status === 410 ? 404 : status, `Image not available (HTTP ${status})`);
-}
-
-async function serveImage(url, sources) {
-    let hit = imageCache.get(url.href);
-    if (hit) {
-        imageCache.delete(url.href);
-        imageCache.set(url.href, hit);
-    } else {
-        hit = await fetchImage(sources);
-        imageCache.set(url.href, hit);
-        imageCacheBytes += hit.body.length;
-        for (const [k, v] of imageCache) {
-            if (imageCacheBytes <= IMAGE_CACHE_MAX) break;
-            imageCacheBytes -= v.body.length;
-            imageCache.delete(k);
-        }
-    }
-    return new Response(hit.body, {
-        status: 200,
-        headers: { 'Content-Type': hit.type, 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*' }
-    });
 }
 
 // ------------------------------------------------------------ feeds
@@ -271,7 +202,7 @@ export async function handleReddit(targetUrl) {
     if (url.protocol !== 'https:' && url.protocol !== 'http:') throw httpError(400, 'Invalid URL');
 
     const sources = imageSources(url);
-    if (sources) return serveImage(url, sources);
+    if (sources) return serveImage(url.href, sources);
     if (!REDDIT_HOSTS.has(url.hostname)) throw httpError(403, 'Forbidden: Domain not allowed');
 
     const isRss = /\.rss$/.test(url.pathname);
