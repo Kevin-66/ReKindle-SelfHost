@@ -76,6 +76,8 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `OPENAI_BASE_URL`, `OPENAI_API_KEY` | – | Use an OpenAI-compatible API for handwriting instead |
 | `GOOGLE_CLIENT_ID` | – | Your own Google sign-in for Tasks / Calendar / Contacts |
 | `REDDIT_IMAGE_MAX_WIDTH` | `1080` | Width Reddit pictures are scaled down to |
+| `PROXY_URL` | – | HTTP proxy (`http://user:pass@host:port`) for sites that block this server |
+| `PROXY_DOMAINS` | archive.today domains | Sites fetched through `PROXY_URL` (comma-separated) |
 | `MANHUAGUI_URL` | `https://www.manhuagui.com` | Manhuagui mirror (`https://tw.manhuagui.com` for Traditional Chinese) |
 | `MANHUAGUI_SHOW_R18` | `false` | Show Manhuagui titles marked R18 |
 | `TMDB_API_KEY` | – | Watchlist |
@@ -167,7 +169,8 @@ not built.
   - `functions-host.js`, `admin-shim.js` – run `firebase-functions/index.js` with a
     local stand-in for `firebase-admin`
   - `workers-host.js`, `ai.js`, `netguard.js` – run the Cloudflare workers and `/api`
-    functions, with outgoing requests limited to public addresses
+    functions, with outgoing requests limited to public addresses (and `PROXY_DOMAINS`
+    sent through `PROXY_URL`)
   - `manhuagui.js` – Manhuagui source for the Manga app
   - `reddit.js` – `/api/reddit` for the Reddit app (feeds, resized pictures)
   - `cache.js` – Cache API stand-in for the upstream `/api` functions
