@@ -20,7 +20,17 @@ The **Manga** app, which upstream switched off, is back: MangaDex works as it di
 Manhuagui (漫画柜) is added as a second source (a port of the
 [keiyoushi](https://github.com/keiyoushi/extensions-source) Mihon extension).
 Manhuagui needs an account on the server; pages are WebP, which the Kindle
-experimental browser shows but very old devices may not.
+experimental browser shows but very old devices may not. Both sources preload the
+next pages and the next chapter.
+
+**Reddit** uses Reddit's public feeds through this server (`selfhost/server/src/reddit.js`
+replaces the author's `functions/api/reddit.js`). Pictures are fetched as images and
+scaled down to `REDDIT_IMAGE_MAX_WIDTH` (1080 px JPEG), and a post's picture and text
+show at the top of the thread. Reddit allows logged-out visitors about one feed request
+a minute per address, so feeds are cached for 10 minutes and the app shows a short
+"retrying" countdown when it has to wait. Reddit ends RSS on 2026-11-13 (the app then
+switches to Reddit's JSON automatically) and its public API in March 2027; new API apps
+need Reddit's approval and old.reddit.com now asks for a login.
 
 **Not included:** KindleChat, Topics, Neighbourhood, Suggestions, online multiplayer
 games, Words Online, moderation tools and payments. They depend on ReKindle's central
@@ -58,6 +68,7 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `OCR_MODEL` | `gemini-flash-latest` | Model for handwriting recognition |
 | `OPENAI_BASE_URL`, `OPENAI_API_KEY` | – | Use an OpenAI-compatible API for handwriting instead |
 | `GOOGLE_CLIENT_ID` | – | Your own Google sign-in for Tasks / Calendar / Contacts |
+| `REDDIT_IMAGE_MAX_WIDTH` | `1080` | Width Reddit pictures are scaled down to |
 | `MANHUAGUI_URL` | `https://www.manhuagui.com` | Manhuagui mirror (`https://tw.manhuagui.com` for Traditional Chinese) |
 | `MANHUAGUI_SHOW_R18` | `false` | Show Manhuagui titles marked R18 |
 | `TMDB_API_KEY` | – | Watchlist |
@@ -151,5 +162,7 @@ not built.
   - `workers-host.js`, `ai.js`, `netguard.js` – run the Cloudflare workers and `/api`
     functions, with outgoing requests limited to public addresses
   - `manhuagui.js` – Manhuagui source for the Manga app
+  - `reddit.js` – `/api/reddit` for the Reddit app (feeds, resized pictures)
+  - `cache.js` – Cache API stand-in for the upstream `/api` functions
   - `transform.js` – the page edits; `static.js` – serves the site
 - `prepare.js` – applies the page edits to a copy of the repo before the build.

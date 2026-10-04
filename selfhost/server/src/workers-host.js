@@ -10,10 +10,15 @@ import { config, SERVER_DIR } from './config.js';
 import { aiBinding } from './ai.js';
 import { withPublicNetworkOnly } from './netguard.js';
 import { rememberGood, lastGood } from './cache.js';
+import { handleReddit, redditNotice } from './reddit.js';
 
 // Workers that only served features this server does not offer
 // (chat moderation, chat translation, ReKindle+ payments).
 const SKIPPED_WORKERS = new Set(['rekindle-moderate', 'rekindle-translate', 'rekindle-stripe']);
+
+// /api functions replaced by this server's own version (src/reddit.js: upstream's
+// asks old.reddit.com, which now wants a login, and gets HTML instead of images).
+const SKIPPED_FUNCTIONS = new Set(['reddit']);
 
 // Workers check the Origin header against rekindle.ink; requests arrive here
 // same-origin, so present them as coming from the original site.
@@ -101,7 +106,7 @@ export async function loadWorkers() {
     const fdir = path.join(config.upstreamDir, 'functions', 'api');
     if (fs.existsSync(fdir)) {
         for (const file of fs.readdirSync(fdir)) {
-            if (!file.endsWith('.js')) continue;
+            if (!file.endsWith('.js') || SKIPPED_FUNCTIONS.has(file.replace(/\.js$/, ''))) continue;
             try {
                 const staged = stage(path.join(fdir, file), path.join('functions', 'api', file.replace(/\.js$/, '.mjs')));
                 const mod = await import(pathToFileURL(staged).href);
@@ -180,8 +185,9 @@ const cooldownUntil = new Map();
 
 // /api/<name>
 export async function handlePagesFunction(req, res, name, url) {
+    const isReddit = name === 'reddit';
     const mod = pagesFunctions.get(name);
-    if (!mod) return false;
+    if (!mod && !isReddit) return false;
     if (req.method === 'GET' && (cooldownUntil.get(name) || 0) > Date.now()) {
         const good = lastGood(url);
         if (good) {
@@ -191,21 +197,37 @@ export async function handlePagesFunction(req, res, name, url) {
             return true;
         }
     }
-    const method = req.method.charAt(0) + req.method.slice(1).toLowerCase();
-    const fn = mod[`onRequest${method}`] || mod.onRequest;
-    if (typeof fn !== 'function') {
-        res.writeHead(405).end();
-        return true;
+    let response;
+    if (isReddit) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            res.writeHead(405).end();
+            return true;
+        }
+        try {
+            response = await withPublicNetworkOnly(() => handleReddit(new URL(url).searchParams.get('url')));
+        } catch (e) {
+            if (!e.status || e.status >= 500 || e.status === 429) console.warn('[reddit]', e.message);
+            const headers = { 'Content-Type': 'text/plain; charset=utf-8' };
+            if (e.retryAfter) headers['Retry-After'] = String(e.retryAfter);
+            response = new Response(e.message, { status: e.status || 502, headers });
+        }
+    } else {
+        const method = req.method.charAt(0) + req.method.slice(1).toLowerCase();
+        const fn = mod[`onRequest${method}`] || mod.onRequest;
+        if (typeof fn !== 'function') {
+            res.writeHead(405).end();
+            return true;
+        }
+        const request = await toRequest(req, url, true);
+        const c = ctx();
+        response = await withPublicNetworkOnly(() => fn({
+            request, env, params: {}, data: {}, functionPath: `/api/${name}`,
+            waitUntil: c.waitUntil, passThroughOnException: c.passThroughOnException,
+            next: async () => new Response('Not found', { status: 404 })
+        }));
     }
-    const request = await toRequest(req, url, true);
-    const c = ctx();
-    let response = await withPublicNetworkOnly(() => fn({
-        request, env, params: {}, data: {}, functionPath: `/api/${name}`,
-        waitUntil: c.waitUntil, passThroughOnException: c.passThroughOnException,
-        next: async () => new Response('Not found', { status: 404 })
-    }));
     if (req.method === 'GET') {
-        if (response.status === 200) {
+        if (response.status === 200 && !/no-store/i.test(response.headers.get('cache-control') || '')) {
             // Keep the last good copy (feeds, images) for when the origin rate-limits us.
             const body = new Uint8Array(await response.arrayBuffer());
             const headers = [];
@@ -219,6 +241,10 @@ export async function handlePagesFunction(req, res, name, url) {
                 const h = new Headers(good.headers);
                 h.set('X-RK-Stale', '1');
                 response = new Response(good.body, { status: 200, headers: h });
+            } else if (isReddit && response.status >= 500) {
+                // Nothing cached: explain in the app instead of letting it retry.
+                // (A 429 goes through: the app waits for Retry-After and shows a countdown.)
+                response = redditNotice(new URL(url).searchParams.get('url'), 'Reddit could not be reached from this server. Try again in a few minutes.') || response;
             }
         }
     }
