@@ -253,15 +253,30 @@ the display scale.
   10-minute HMAC-signed `/__rk/zlibrary/download?t=` link (a plain link cannot carry
   the ReKindle sign-in). The browser service's POST `/download` (`downloadBook`): a
   fresh context with the cookie on `.z-lib.sk` opens the book page in headed Chromium,
-  picks a `/dl/` link whose own text says MOBI, else the first, DOM-clicks it (other
-  formats sit in a hidden menu), saves the download (300 MB cap, one at a time) and
-  streams it back with `X-File-Name`.
-- MOBI only (owner, 2026-10-05: the Kindle browser opens no other e-book format).
-  Anything else goes to the browser service's POST `/convert` (body = file, name in
+  saves the download (300 MB cap, one at a time) and streams it back with `X-File-Name`.
+  Subresources stay limited to Z-Library; page navigations may go to any https host
+  (download links redirect to hosts we can't list in advance).
+- MOBI only (owner, 2026-10-05: the Kindle browser opens no other e-book format), in
+  this order (book-details.min.js, read on a signed-out book page 2026-10-05):
+  1. A MOBI file of the same book: clicking `#btnCheckOtherFormats` makes the page
+     fetch `/papi/book/<id>/formats` and add the book's other files to the menu; take
+     a `/dl/` link whose own text says MOBI (DOM click, the menu is hidden).
+  2. Z-Library's converter (owner's suggestion): the menu's "Convert to" list has
+     `a.converterLink[data-convert_to="mobi"]` (button `data-convertation-available="1"`).
+     Clicking it signed in makes the page POST `/papi/book/<id>/file-conversion/mobi`
+     (answer `{error}` | `{jobId}` | `{response: {statusOkContent, downloadUrl}}`), poll
+     `/papi/book/<id>/file-conversion/jobs` every 10 s and open the job's `downloadUrl`
+     when it is "ok"; we catch that download (5 min limit). `answer.error` (e.g. daily
+     limit) is reported as is; a failed job (`#converterCurrentStatusesBox
+     .status-error`) or a timeout falls through to 3. Signed out it only shows a login
+     popup. Not yet seen working: needs the owner's account.
+  3. The original file (first `/dl/` link), converted by the browser service's POST
+     `/convert` (body = file, name in
   `X-File-Name`): Calibre's `ebook-convert` (Debian `calibre` package in
   `Dockerfile.zlibrary-browser`) with `--output-profile kindle_pw3 --mobi-file-type
   both` (old MOBI + KF8 in one file), `QT_QPA_PLATFORM=offscreen`, one at a time, 5 min
-  limit; formats Calibre can't read get 415 with a message.
+  limit; formats Calibre can't read get 415 with a message. (Calibre is the fallback
+  for when Z-Library's converter fails.)
 - Download + conversion can take minutes, longer than a page request should hang
   behind Zeabur's proxy, so it is a job (`zlibrary-account.js`): POST
   `/__rk/zlibrary/jobs` {url} -> {id} (same book again returns the running job; another

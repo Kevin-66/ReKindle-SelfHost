@@ -121,7 +121,7 @@ h1{font-size:calc(1.25rem * var(--rk-text,1));margin:0 0 12px}p{line-height:1.6}
   b.onclick = function() {
    var msg = document.getElementById('download-msg');
    if (!connected) { msg.textContent = tr('connect_first','Connect your Z-Library account first: Account, then paste your cookie.'); return; }
-   b.disabled = true; msg.textContent = tr('downloading','Getting the book from Z-Library...');
+   b.disabled = true; msg.textContent = tr('downloading','Getting the book from Z-Library as MOBI... this can take a few minutes.');
    api('POST', 'jobs', { url: book.url }).then(function(d) { followJob(d.id, msg, b, ''); }, function(e) { msg.textContent = e.message; b.disabled = false; });
   };
   return b;
@@ -134,7 +134,7 @@ h1{font-size:calc(1.25rem * var(--rk-text,1));margin:0 0 12px}p{line-height:1.6}
    var text;
    if (j.status === 'ready') { msg.textContent = tr('download_ready','Ready: ') + j.name; b.disabled = false; window.location.href = j.href; return; }
    if (j.status === 'failed') { msg.textContent = j.message; b.disabled = false; return; }
-   text = j.step === 'convert' ? tr('converting','Converting to MOBI for the Kindle... this can take a few minutes.') : tr('downloading','Getting the book from Z-Library...');
+   text = j.step === 'convert' ? tr('converting','Z-Library could not convert it; converting to MOBI here... this can take a few minutes.') : tr('downloading','Getting the book from Z-Library as MOBI... this can take a few minutes.');
    if (text !== shown) msg.textContent = text;
    setTimeout(function() { followJob(id, msg, b, text); }, 3000);
   }, function(e) { msg.textContent = e.message; b.disabled = false; });
@@ -146,7 +146,7 @@ h1{font-size:calc(1.25rem * var(--rk-text,1));margin:0 0 12px}p{line-height:1.6}
   detail.appendChild(el('h1',book.title)); detail.appendChild(el('p',book.author || '', 'author'));
   var dl = el('dl'); [['year','Year'],['language','Language'],['extension','Format'],['filesize','File size'],['publisher','Publisher'],['isbn','ISBN']].forEach(function(pair) { if(book[pair[0]]) { dl.appendChild(el('dt',tr(pair[0],pair[1]))); dl.appendChild(el('dd',book[pair[0]])); } }); detail.appendChild(dl);
   var actions = el('div','','actions'); actions.appendChild(downloadButton(book)); actions.appendChild(sourceLink(book)); actions.appendChild(saveButton(book)); detail.appendChild(actions);
-  var note = el('p',tr('download_hint','Download uses your Z-Library account (Account) and gets the book as MOBI, the format the Kindle opens (other formats are converted). It can take a few minutes; the Kindle then asks where to save the file.'),'hint'); note.id = 'download-msg'; detail.appendChild(note);
+  var note = el('p',tr('download_hint','Download uses your Z-Library account (Account) and gets the book as MOBI, the format the Kindle opens (Z-Library converts other formats). It can take a few minutes; the Kindle then asks where to save the file.'),'hint'); note.id = 'download-msg'; detail.appendChild(note);
   back.focus();
  }
  var currentBooks = [];

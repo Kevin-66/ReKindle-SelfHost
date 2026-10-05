@@ -3,7 +3,8 @@
 // browser where they are signed in); it is kept here and only ever sent to the
 // Z-Library browser service, whose Chromium downloads the book (downloadBook in
 // zlibrary-browser.js) so Z-Library's verification still passes, and converts it to
-// MOBI (the Kindle browser opens no other e-book format; POST /convert, Calibre).
+// MOBI (the Kindle browser opens no other e-book format): Z-Library's own converter
+// first, Calibre (POST /convert) when that fails (see downloadBook).
 // That can take minutes, longer than a page request should wait behind a proxy, so it
 // runs as a job: the page starts it (startJob), asks how it is going (jobStatus) and,
 // when the file is ready here, opens a short-lived signed link to it (sendDownload),
@@ -104,7 +105,7 @@ async function runJob(job, cookie) {
         try {
             res = await browserFetch('/download', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: job.book, cookie }), signal: AbortSignal.timeout(240000)
+                body: JSON.stringify({ url: job.book, cookie }), signal: AbortSignal.timeout(600000)
             });
         } catch { throw userError('The Z-Library browser could not be reached. Try again in a moment.', 502); }
         if (!res.ok) throw await browserError(res, 'Z-Library did not start the download.');
