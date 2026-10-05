@@ -299,8 +299,17 @@ resume (stopwatch icon). It listens to `touchstart` and
 `mousedown` with `preventDefault`, like the page's B/I/U buttons, so the caret and Kindle
 keyboard stay in the note; keyboard activation comes through `click` with `detail === 0`.
 Elapsed time is `Date.now()`-based (banked + since resume), redrawn by a `setTimeout`
-aligned to the next whole second; only the label text changes, so a tick is a small
-e-ink update. Format `m:ss`, then `h:mm:ss`. Not saved anywhere, works for guests too.
+aligned to the next whole second. Format `m:ss`, then `h:mm:ss`. Not saved anywhere,
+works for guests too.
+
+The first version showed the time as text, and the Kindle flashed the WHOLE screen every
+second (owner, 2026-10-05): anti-aliased text is grey, and a grey update gets a full
+grayscale refresh, as with canvas games (root AGENTS.md, Surfer). The time and the
+state icon are now 1-bit glyphs (5x7 digits, `GLYPHS`) drawn with integer `fillRect`
+on a canvas one buffer pixel per glyph pixel, shown at 2 CSS px per pixel with
+`image-rendering: pixelated`. The canvas keeps the width of "00:00" (text right-aligned),
+so ticks don't move the toolbar until hours appear. Any live-updating readout on the
+Kindle should be drawn this way, not as changing text.
 
 ## Minesweeper long press (`selfhost/site/js/rk-minesweeper.js`)
 
