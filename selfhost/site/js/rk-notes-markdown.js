@@ -8,8 +8,9 @@
 //   bullets, "1. " numbers, "> " quote, "---" rule at the start of a line;
 //   **bold**, *italic* / _italic_, ~~strike~~ and `code` when the closing mark is typed.
 // - The download button saves the note as Markdown (.md) instead of plain text.
-// - "Agent" (list view) shows the account's upload link: an AI agent or script can
-//   POST Markdown to it to add notes (server: selfhost/server/src/notes-inbox.js).
+// - "Agent" (list view) shows the account's agent link: an AI agent or script can
+//   list, read, add, edit and delete notes through it as Markdown, with no sign-in
+//   (server: selfhost/server/src/notes-agent.js).
 // Plain ES5 for the Kindle browser.
 (function () {
     'use strict';
@@ -323,7 +324,7 @@
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     };
 
-    // ------------------------------------------------------------------ agent upload link
+    // ------------------------------------------------------------------ agent link
 
     var controls = document.getElementById('list-controls');
     if (!controls) return;
@@ -331,14 +332,14 @@
     var agentBtn = document.createElement('button');
     agentBtn.className = 'sys-btn';
     agentBtn.textContent = 'Agent';
-    agentBtn.title = 'Upload link for AI agents';
+    agentBtn.title = 'Link for AI agents to read and write your notes';
     controls.insertBefore(agentBtn, controls.lastElementChild);
 
     var overlay = document.createElement('div');
     overlay.id = 'rk-agent-overlay';
     overlay.innerHTML =
         '<div id="rk-agent-box">' +
-        '<h3>Agent upload link</h3>' +
+        '<h3>Agent link</h3>' +
         '<div id="rk-agent-body"></div>' +
         '<div id="rk-agent-buttons">' +
         '<button class="sys-btn" id="rk-agent-reset">New link</button>' +
@@ -355,7 +356,7 @@
 
     function call(method) {
         return currentUser.getIdToken().then(function (token) {
-            return fetch('/__rk/notes/inbox-link', { method: method, headers: { Authorization: 'Bearer ' + token } });
+            return fetch('/__rk/notes/agent-link', { method: method, headers: { Authorization: 'Bearer ' + token } });
         }).then(function (r) {
             return r.json().then(function (data) {
                 if (!r.ok || !data.url) throw new Error((data.error && data.error.message) || 'Could not get the link.');
@@ -373,7 +374,7 @@
 
     function showLink(url) {
         body.innerHTML =
-            '<p>An AI agent or script can add notes by sending Markdown to this link. It can only add notes: it cannot read, change or delete them. Keep it private; "New link" replaces it.</p>' +
+            '<p>With this link an AI agent or script can read, add, change and delete your notes (as Markdown), with no sign-in. Keep it private. "New link" replaces it, and the old one stops working.</p>' +
             '<input id="rk-agent-url" type="text" readonly>' +
             '<p>Tell your agent, for example:</p>' +
             '<pre id="rk-agent-example"></pre>';
@@ -382,9 +383,9 @@
         input.addEventListener('focus', function () { input.select(); });
         input.addEventListener('click', function () { input.select(); });
         document.getElementById('rk-agent-example').textContent =
-            'Save notes to my ReKindle by POSTing Markdown to ' + url + '\n\n' +
-            "curl -X POST '" + url + "' -H 'Content-Type: text/markdown' --data-binary @note.md\n\n" +
-            'A leading "# Heading" becomes the title (or add ?title=...). Opening the link in a browser shows the full instructions.';
+            'My ReKindle notes are at ' + url + ' - GET it for the API (list, read, add, edit, delete notes as Markdown).\n\n' +
+            "curl '" + url + "/notes'\n" +
+            "curl -X POST '" + url + "/notes' -H 'Content-Type: text/markdown' --data-binary @note.md";
     }
 
     function open() {
@@ -393,7 +394,7 @@
         overlay.style.display = 'flex';
         if (!signedIn()) {
             resetBtn.style.display = 'none';
-            message('Sign in to get an upload link. Notes saved in guest mode stay on this device, so agents cannot reach them.');
+            message('Sign in to get an agent link. Notes saved in guest mode stay on this device, so agents cannot reach them.');
             return;
         }
         resetBtn.style.display = '';

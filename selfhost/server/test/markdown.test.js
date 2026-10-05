@@ -1,7 +1,7 @@
 // node --test test/markdown.test.js   (or: deno test -A --unstable-detect-cjs --no-check test/markdown.test.js)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { markdownToHtml } from '../src/markdown.js';
+import { markdownToHtml, htmlToMarkdown } from '../src/markdown.js';
 
 const md = markdownToHtml;
 
@@ -51,4 +51,12 @@ test('pathological input stays fast', () => {
     md('`a '.repeat(60000));
     md('<http://'.repeat(30000));
     assert.ok(Date.now() - t < 3000);
+});
+
+test('HTML back to Markdown (agents reading notes)', () => {
+    const src = '# T\n\npara **b** *i* `c` [l](https://e.com)\nline2\n\n- a\n- b\n  - c\n\n1. x\n2. y\n\n> q\n\n```\ncode\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n---\n\nend\n';
+    assert.equal(htmlToMarkdown(markdownToHtml(src)), src);
+    // What the editor saves: first line bare, then <div> lines, <br> placeholders.
+    assert.equal(htmlToMarkdown('Heading<div>Some <b>bold</b> text</div><div><br></div><div>after<br></div><div><ul><li>item</li></ul></div>'),
+        'Heading\nSome **bold** text\n\nafter\n\n- item\n');
 });

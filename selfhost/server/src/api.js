@@ -14,7 +14,7 @@ import * as mangaState from './manga-state.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { listBooks } from './zlibrary.js';
 import * as zlibAccount from './zlibrary-account.js';
-import * as notesInbox from './notes-inbox.js';
+import * as notesAgent from './notes-agent.js';
 import { Readable } from 'node:stream';
 
 const MAX_JSON = 16 * 1024 * 1024;
@@ -302,31 +302,43 @@ async function readBody(req, max) {
     return Buffer.concat(chunks);
 }
 
-// Notes upload link (notes-inbox.js). The link itself is the permission: no sign-in,
-// open to any origin, so agents and scripts anywhere can post to it.
+// Notes agent link (notes-agent.js). The link itself is the permission: no sign-in,
+// open to any origin, so agents and scripts anywhere can use it.
 async function handleNotes(req, res, url, parts) {
-    if (parts[2] === 'inbox' && parts[3]) {
+    if (parts[2] === 'agent' && parts[3]) {
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }
-        rateLimit(req, 'notes-inbox', 30, 60000);
-        const uid = notesInbox.ownerOf(parts[3]);
-        if (!uid) return send(res, 404, { error: { code: 'not-found', message: 'This upload link does not exist or was replaced.' } });
-        if (req.method === 'GET') {
+        rateLimit(req, 'notes-agent', 120, 60000);
+        const uid = notesAgent.ownerOf(parts[3]);
+        if (!uid) return send(res, 404, { error: { code: 'not-found', message: 'This agent link does not exist or was replaced.' } });
+        const rest = parts.slice(4);
+        const body = async () => notesAgent.parseBody(await readBody(req, notesAgent.MAX_BYTES), req.headers['content-type'], url.searchParams);
+        if (!rest.length && req.method === 'GET') {
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
-            res.end(notesInbox.usage(publicOrigin(req), parts[3]));
+            res.end(notesAgent.usage(publicOrigin(req), parts[3]));
             return;
         }
-        if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
-        const note = notesInbox.parseUpload(await readBody(req, notesInbox.MAX_BYTES), req.headers['content-type'], url.searchParams);
-        return send(res, 201, notesInbox.addNote(uid, note));
+        if (!rest.length || (rest.length === 1 && rest[0] === 'notes')) {
+            if (req.method === 'GET') return send(res, 200, notesAgent.listNotes(uid, url.searchParams.get('q')));
+            if (req.method === 'POST') return send(res, 201, notesAgent.addNote(uid, await body()));
+            return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET to list notes or POST to add one.' } });
+        }
+        if (rest.length === 2 && rest[0] === 'notes') {
+            const id = decodeURIComponent(rest[1]);
+            if (req.method === 'GET') return send(res, 200, notesAgent.readNote(uid, id));
+            if (req.method === 'PATCH' || req.method === 'PUT' || req.method === 'POST') return send(res, 200, notesAgent.editNote(uid, id, await body()));
+            if (req.method === 'DELETE') return send(res, 200, notesAgent.deleteNote(uid, id));
+            return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET, PATCH, PUT or DELETE.' } });
+        }
+        return send(res, 404, { error: { code: 'not-found', message: 'Not found. Open the agent link itself for instructions.' } });
     }
-    if (parts[2] === 'inbox-link') {
+    if (parts[2] === 'agent-link') {
         const me = bearer(req);
         if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle first.' } });
-        if (req.method === 'GET') return send(res, 200, notesInbox.inboxLink(me.uid, publicOrigin(req)));
-        if (req.method === 'POST') return send(res, 200, { url: notesInbox.resetInbox(me.uid, publicOrigin(req)).url });
+        if (req.method === 'GET') return send(res, 200, notesAgent.agentLink(me.uid, publicOrigin(req)));
+        if (req.method === 'POST') return send(res, 200, { url: notesAgent.resetLink(me.uid, publicOrigin(req)).url });
         return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET or POST' } });
     }
     return send(res, 404, { error: { code: 'not-found', message: 'Not found' } });
