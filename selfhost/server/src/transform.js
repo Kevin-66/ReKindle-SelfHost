@@ -133,6 +133,9 @@ export function transformHtml(html, fileName) {
         // on and add the Manhuagui source (selfhost/site/js/rk-manga-sources.js).
         html = html.replace(/<script>\s*window\.location\.replace\(['"]index['"]\);?\s*<\/script>/, '');
         html = html.replace(/<\/body>/i, '<script src="js/rk-manga-sources.js"></script>\n</body>');
+        // Its title key (manga.title) now says "Comics" for upstream's separate Comics
+        // app, so both apps looked the same; keep this one's title "Manga".
+        html = html.replace(/(<span[^>]*id="app-title")\s+data-i18n="manga\.title"/, '$1');
     }
     return html;
 }

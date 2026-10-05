@@ -149,7 +149,10 @@ the display scale.
 
 ## Manga
 
-`manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Manhuagui
+`manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Its title uses the
+i18n key `manga.title`, which upstream now translates as "Comics" (for its separate
+Internet Archive app, `comics.html`); `transform.js` drops that `data-i18n` so the title
+stays "Manga" and the two apps can be told apart. Manhuagui
 (port of the keiyoushi extension) and preloading live in `selfhost/site/js/rk-manga-sources.js`,
 which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
 
