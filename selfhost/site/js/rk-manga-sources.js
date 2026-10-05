@@ -1,6 +1,7 @@
 /*
  * Self-hosted ReKindle: adds Manhuagui (漫画柜) as a second source to the Manga app,
- * and page/chapter preloading for both sources.
+ * and for both sources page/chapter preloading, a chapter picker and pages
+ * prepared for e-ink (see "page display").
  *
  * manga.html itself is unchanged (MangaDex keeps working as before). This script
  * adds a "Source" picker to the Store tab and takes over the store, reader and
@@ -104,7 +105,9 @@
             '.rk-ch-col-title{padding:6px 10px;border-bottom:1px solid #000;font-weight:bold;background:#eee;flex-shrink:0;}' +
             '.rk-ch-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}' +
             '.rk-ch-item{padding:12px 10px;border-bottom:1px solid #000;cursor:pointer;font-size:0.95rem;line-height:1.3;}' +
-            '.rk-ch-item.current{background:#000;color:#fff;font-weight:bold;}';
+            '.rk-ch-item.current{background:#000;color:#fff;font-weight:bold;}' +
+            // Pure white behind pages, like their whitened background.
+            '#reader-content{background:#fff;}';
         var style = el('style', { id: 'rk-manga-style' });
         style.appendChild(document.createTextNode(css));
         document.head.appendChild(style);
@@ -405,6 +408,7 @@
         head.appendChild(close);
         panel.appendChild(head);
 
+
         var cols = el('div', { id: 'rk-ch-cols', style: 'grid-template-columns: repeat(' + columns.length + ', minmax(0, 1fr));' });
         var currentItems = [];
         columns.forEach(function (c) {
@@ -496,10 +500,21 @@
         });
     }
 
+    // Pages are served with Cache-Control: no-store (see "page display" below), so
+    // the preloaded <img> elements themselves are what the reader shows.
     function preloadImage(url) {
+        for (var i = 0; i < preloaded.length; i++) if (preloaded[i].src === absolute(url)) return preloaded[i];
         var img = new Image();
         img.src = url;
         preloaded.push(img);
+        return img;
+    }
+
+    function takePreloaded(url) {
+        for (var i = 0; i < preloaded.length; i++) {
+            if (preloaded[i].src === absolute(url)) return preloaded.splice(i, 1)[0];
+        }
+        return null;
     }
 
     function preloadAhead() {
@@ -508,16 +523,18 @@
         var pages = reading.pages;
         var page = currentPage;
         var chapterIndex = currentChapterIndex;
-        preloaded = [];
+        // Keep only this window: earlier pages are not needed again.
+        var keep = [];
         for (var i = 1; i <= PRELOAD_AHEAD; i++) {
-            if (pages[page + i]) preloadImage(pages[page + i]);
+            if (pages[page + i]) keep.push(preloadImage(pageSrc(pages[page + i])));
         }
+        preloaded = keep;
         var next = currentChapterList[chapterIndex + 1];
         if (next && page >= pages.length - 1 - PRELOAD_AHEAD) {
             fetchChapterPages(next).then(function (nextPages) {
-                if (currentReading !== reading || currentChapterIndex !== chapterIndex) return;
+                if (currentReading !== reading || currentChapterIndex !== chapterIndex || currentPage !== page) return;
                 var room = PRELOAD_AHEAD - (pages.length - 1 - page);
-                for (var j = 0; j < room && j < nextPages.length; j++) preloadImage(nextPages[j]);
+                for (var j = 0; j < room && j < nextPages.length; j++) preloadImage(pageSrc(nextPages[j]));
             }, function () { /* the normal chapter load will report problems */ });
         }
     }
@@ -574,18 +591,166 @@
         });
     };
 
-    // After each page is shown, preload ahead once it has finished loading, so
-    // the visible page gets the bandwidth first.
-    var originalUpdateMangaPage = updateMangaPage;
-    updateMangaPage = function () {
-        originalUpdateMangaPage.apply(this, arguments);
-        var img = document.querySelector('#reader-content img.reader-page');
-        if (!img || img.complete) { preloadAhead(); return; }
-        var done = false;
-        var go = function () { if (!done) { done = true; preloadAhead(); } };
-        img.addEventListener('load', go);
-        img.addEventListener('error', go);
-    };
+    // ------------------------------------------------------------ page display
+    //
+    // manga.html emptied the reader before each page (an e-ink redraw to blank, then
+    // one for the page) and changed the status line twice. Here the old page stays
+    // until the new one has loaded, then the two swap in one redraw.
+    //
+    // Pages come from this server (server/src/images.js) fitted to the reader in
+    // device pixels, shown 1:1, with their near-white background made pure white;
+    // the artwork itself is not changed.
+    //
+    // They are sent with Cache-Control: no-store. The Kindle deletes the browser's
+    // whole data folder (sign-in, the Manga library and progress) when it passes
+    // 64 MB, and cached manga pages (up to 2 MB each) used to fill it.
+
+    var showSeq = 0;
+    var box = null; // the reader's size in device pixels, measured once per layout
+
+    function absolute(url) {
+        var a = document.createElement('a');
+        a.href = url;
+        return a.href;
+    }
+
+    // Device pixels per CSS pixel inside the window (theme.js may zoom .window).
+    function pixelScale() {
+        var zoom = 1;
+        var win = document.querySelector('.window');
+        if (win && window.getComputedStyle) zoom = parseFloat(getComputedStyle(win).zoom) || 1;
+        return (window.devicePixelRatio || 1) * zoom;
+    }
+
+    function measureBox() {
+        var content = document.getElementById('reader-content');
+        var w = content ? content.clientWidth : 0;
+        var h = content ? content.clientHeight : 0;
+        if (!w || !h) return null;
+        var s = pixelScale();
+        return { w: Math.min(4096, Math.round(w * s)), h: Math.min(4096, Math.round(h * s)), s: s };
+    }
+
+    function readerBox() {
+        if (!box) box = measureBox();
+        return box || { w: Math.round(window.innerWidth * pixelScale()), h: Math.round(window.innerHeight * pixelScale()), s: pixelScale() };
+    }
+
+    // The URL of a page fitted to the reader: MangaDex pages come as /api/proxy links
+    // (manga.html), Manhuagui ones as this server's signed /__rk/manga/img links.
+    function pageSrc(url) {
+        if (!url) return url;
+        var b = readerBox();
+        var q = 'page=' + b.w + 'x' + b.h;
+        var m = /^\/api\/proxy\?url=([^&]+)$/.exec(url);
+        if (m) return '/__rk/img?url=' + m[1] + '&' + q;
+        if (url.indexOf('/__rk/manga/img?') === 0) return url + '&' + q;
+        return url;
+    }
+
+    // 1:1 in device pixels when the page was made for this reader size, otherwise fitted.
+    function fitPage(img, content) {
+        var s = pixelScale();
+        var nw = img.naturalWidth / s, nh = img.naturalHeight / s;
+        if (!nw || !nh) return;
+        var k = Math.min(content.clientWidth / nw, content.clientHeight / nh);
+        if (Math.abs(k - 1) < 0.02) k = 1;
+        img.style.width = (nw * k) + 'px';
+        img.style.height = (nh * k) + 'px';
+    }
+
+    function relayout() {
+        var b = measureBox();
+        if (!b || (box && b.w === box.w && b.h === box.h && b.s === box.s)) return;
+        box = b;
+        if (isReaderOpen && currentReading && currentReading.pages) updateMangaPage();
+    }
+
+    if (typeof updateMangaPage === 'function' && typeof saveProgress === 'function') {
+        updateMangaPage = function () {
+            if (!currentReading || !currentReading.pages) return;
+            var reading = currentReading;
+            var pages = reading.pages;
+            var page = currentPage;
+            var chapterIndex = currentChapterIndex;
+            var content = document.getElementById('reader-content');
+            var seq = ++showSeq;
+            var label = (page + 1) + ' / ' + pages.length;
+            var src = pageSrc(pages[page]);
+            var img = takePreloaded(src) || new Image();
+            var slow = setTimeout(function () {
+                if (seq === showSeq) showStatus('Loading ' + label + '...');
+            }, 400);
+            var current = function () {
+                return seq === showSeq && currentReading === reading && isReaderOpen;
+            };
+            var shown = function () {
+                clearTimeout(slow);
+                if (!current()) return;
+                img.className = 'reader-page';
+                fitPage(img, content);
+                var old = content.querySelector('img.reader-page');
+                if (old) content.replaceChild(img, old);
+                else {
+                    content.innerHTML = '';
+                    content.appendChild(img);
+                }
+                content.scrollTop = 0;
+                showStatus(label);
+                preloadAhead();
+            };
+            var retried = false;
+            var failed = function () {
+                if (!current()) { clearTimeout(slow); return; }
+                // MangaDex@Home nodes sometimes miss a page once; try again a
+                // moment later (the server only remembers good copies).
+                if (!retried) {
+                    retried = true;
+                    setTimeout(function () {
+                        if (!current()) return;
+                        img = new Image();
+                        img.onload = shown;
+                        img.onerror = failed;
+                        img.src = src + '&retry=1';
+                    }, 1500);
+                    return;
+                }
+                clearTimeout(slow);
+                content.innerHTML = '<div style="padding: 20px;">Could not load page ' + label + '.</div>';
+                showStatus('Error loading page ' + (page + 1));
+                preloadAhead();
+            };
+            if (img.src && img.complete) {
+                if (img.naturalWidth) setTimeout(shown, 0);
+                else setTimeout(failed, 0);
+            } else {
+                img.onload = shown;
+                img.onerror = failed;
+                if (!img.src) img.src = src;
+            }
+
+            // Progress, saved as manga.html saves it.
+            var chapterNum = '';
+            if (currentChapterList && currentChapterList[chapterIndex]) {
+                chapterNum = currentChapterList[chapterIndex].attributes.chapter || '';
+            }
+            saveProgress(reading.id, chapterIndex, page, chapterNum);
+        };
+    }
+
+    if (typeof toggleFullScreen === 'function') {
+        var originalToggleFullScreen = toggleFullScreen;
+        toggleFullScreen = function () {
+            var r = originalToggleFullScreen.apply(this, arguments);
+            relayout();
+            return r;
+        };
+    }
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(relayout, 300);
+    });
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildControls);
     else buildControls();
