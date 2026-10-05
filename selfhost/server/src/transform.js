@@ -180,8 +180,9 @@ export function transformHtml(html, fileName) {
             "                    if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());");
     }
     if (base === 'notes.html') {
-        // Live sync and merging when a note is open in two browsers (selfhost/site/js/rk-notes-sync.js).
-        html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-notes-sync.js"></script>\n</body>');
+        // Live sync and merging when a note is open in two browsers (selfhost/site/js/rk-notes-sync.js),
+        // and a stopwatch in the editor toolbar (selfhost/site/js/rk-notes-stopwatch.js).
+        html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-notes-sync.js"></script>\n<script src="js/rk-notes-stopwatch.js"></script>\n</body>');
     }
     if (base === 'minesweeper.html') {
         // Long press to flag (selfhost/site/js/rk-minesweeper.js).
