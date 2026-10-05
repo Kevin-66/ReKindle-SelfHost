@@ -602,12 +602,9 @@
 
     // ------------------------------------------------------------ page display
     //
-    // The old page stays up while the next one loads. Once it is ready, the reader
-    // goes blank (white) and draws the page in the very next frame: the owner found
-    // a blank before each page cleaner on e-ink than swapping straight from page to
-    // page, and wanted the blank and the page together rather than a white screen
-    // first and the page a moment later (2026-10-05). Back-to-back frames let the
-    // Kindle merge them into one refresh.
+    // Page turns work as in manga.html: the reader goes blank (white) at once and
+    // the page appears when it has loaded. The owner tried a straight page-to-page
+    // swap and a blank drawn together with the page (2026-10-05) and preferred this.
     //
     // Pages come from this server (server/src/images.js) fitted to the reader in
     // device pixels, shown 1:1, with their near-white background made pure white;
@@ -695,59 +692,54 @@
             var label = (page + 1) + ' / ' + pages.length;
             var src = pageSrc(pages[page]);
             var img = takePreloaded(src) || new Image();
-            var slow = setTimeout(function () {
-                if (seq === showSeq) showStatus('Loading ' + label + '...');
-            }, 400);
             var current = function () {
                 return seq === showSeq && currentReading === reading && isReaderOpen;
             };
+
+            // As manga.html does it: the reader goes blank at once, the status line
+            // says "Loading", and the page appears when it has loaded.
+            content.innerHTML = '';
+            content.scrollTop = 0;
+            showStatus('Loading ' + label + '...');
+
             var shown = function () {
-                clearTimeout(slow);
                 if (!current()) return;
-                img.className = 'reader-page';
                 fitPage(img, content);
-                content.innerHTML = '';
-                // Two frames: the first paints the blank, the second the page.
-                nextFrame(function () {
-                    nextFrame(function () {
-                        if (!current()) return;
-                        content.innerHTML = '';
-                        content.appendChild(img);
-                        content.scrollTop = 0;
-                        showStatus(label);
-                        preloadAhead();
-                    });
-                });
+                showStatus(label);
+                preloadAhead();
             };
             var retried = false;
             var failed = function () {
-                if (!current()) { clearTimeout(slow); return; }
+                if (!current()) return;
                 // MangaDex@Home nodes sometimes miss a page once; try again a
                 // moment later (the server only remembers good copies).
                 if (!retried) {
                     retried = true;
                     setTimeout(function () {
-                        if (!current()) return;
-                        img = new Image();
-                        img.onload = shown;
-                        img.onerror = failed;
-                        img.src = src + '&retry=1';
+                        if (current()) img.src = src + '&retry=1';
                     }, 1500);
                     return;
                 }
-                clearTimeout(slow);
                 content.innerHTML = '<div style="padding: 20px;">Could not load page ' + label + '.</div>';
                 showStatus('Error loading page ' + (page + 1));
                 preloadAhead();
             };
-            if (img.src && img.complete) {
-                if (img.naturalWidth) setTimeout(shown, 0);
-                else setTimeout(failed, 0);
-            } else {
-                img.onload = shown;
-                img.onerror = failed;
-                if (!img.src) img.src = src;
-            }
+            img.className = 'reader-page';
+            // A preloaded page is ready at once; two frames let the blank reach the
+            // screen first, as it did when manga.html loaded pages from the cache.
+            nextFrame(function () {
+                nextFrame(function () {
+                    if (!current()) return;
+                    content.appendChild(img);
+                    if (img.src && img.complete) {
+                        if (img.naturalWidth) shown();
+                        else failed();
+                    }
+                    img.onload = shown;
+                    img.onerror = failed;
+                    if (!img.src) img.src = src;
+                });
+            });
 
             // Progress, saved as manga.html saves it.
             var chapterNum = '';
