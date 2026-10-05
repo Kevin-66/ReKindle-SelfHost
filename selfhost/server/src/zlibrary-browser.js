@@ -116,14 +116,25 @@ export function loadBrowserCatalogue(url) {
 }
 
 
-// Optional loopback sidecar for deployments whose current image has no browser.
-// This endpoint is administrator-controlled, never supplied by a client.
+// The catalogue browser as a separate service (Dockerfile.zlibrary-browser): its own
+// Zeabur service (<name>.zeabur.internal), a Docker Compose service (single-label
+// name) or a loopback sidecar. The endpoint is administrator-controlled, never
+// supplied by a client, and must be on the private network.
+function privateEndpoint(endpoint) {
+    const host = endpoint.hostname;
+    return ['127.0.0.1', '[::1]', 'localhost'].includes(host) || host.endsWith('.zeabur.internal') || /^[a-z0-9-]+$/i.test(host);
+}
+
 async function loadFromBrowserService(url) {
     try {
         const endpoint = new URL(process.env.ZLIBRARY_BROWSER_ENDPOINT);
-        if (endpoint.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(endpoint.hostname)) throw unavailable();
-        const response = await fetch(new URL('/catalogue', endpoint), {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+        if (endpoint.protocol !== 'http:' || !privateEndpoint(endpoint)) throw unavailable();
+        // rawFetch: the server's public-address guard would refuse this private address.
+        const { rawFetch } = await import('./netguard.js');
+        const headers = { 'Content-Type': 'application/json' };
+        if (process.env.ZLIBRARY_BROWSER_TOKEN) headers.Authorization = 'Bearer ' + process.env.ZLIBRARY_BROWSER_TOKEN;
+        const response = await rawFetch(new URL('/catalogue', endpoint), {
+            method: 'POST', headers,
             body: JSON.stringify({ url }), signal: AbortSignal.timeout(65000)
         });
         if (!response.ok) throw Object.assign(unavailable(), { status: response.status === 429 ? 429 : 502 });

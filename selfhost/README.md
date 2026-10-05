@@ -56,19 +56,13 @@ Z-Library runs a sandboxed Chromium browser with a private virtual display to le
 its JavaScript verification complete. It connects directly (verified on Netcup)
 and keeps a public browsing session warm for five minutes. The archive.today
 `PROXY_URL` is separate; `ZLIBRARY_PROXY_URL` optionally sets a browser proxy.
-No account cookies are copied into this session. The Docker image includes
-Chromium and Xvfb; local
-non-Docker runs need a display and Playwright's Chromium installed. Set
+No account cookies are copied into this session. Chromium runs in its own small
+service, built from `Dockerfile.zlibrary-browser`, so the main image stays light:
+Docker Compose starts it next to ReKindle, and on Zeabur it is a second service in
+the same project (private network only, no domain). The server reaches it at
+`ZLIBRARY_BROWSER_ENDPOINT` and both share `ZLIBRARY_BROWSER_TOKEN`. Set
 `ZLIBRARY_BROWSER=false` to opt into the older HTTP-only loader (which Z-Library
 currently challenges). Browser traffic is restricted to Z-Library and its assets.
-
-For an existing Netcup image without Chromium, `selfhost/browser/deploy-netcup.py`
-installs a private, loopback-only browser sidecar and a versioned source overlay.
-The overlay preserves the live API and launcher changes, and a private deployment
-snapshot is kept on the host at `/var/lib/rekindle-zlibrary/` for rollback. It survives
-pod restarts; reapply it after a Zeabur redeploy, or remove the sidecar/overlay once
-the updated Docker image is deployed. `ZLIBRARY_BROWSER_ENDPOINT` is reserved for
-this loopback sidecar.
 
 **Reddit** is turned off for now and hidden from the launcher. Reddit no longer serves
 servers: its feeds allow about one request a minute (and end on 2026-11-13), its JSON
@@ -132,7 +126,9 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `IMAGE_MAX_WIDTH` | `1080` | Width Hacker News pictures are scaled down to |
 | `PROXY_URL` | – | HTTP proxy (`http://user:pass@host:port`) for sites that block this server |
 | `PROXY_DOMAINS` | archive.today domains | Sites fetched through `PROXY_URL` (comma-separated) |
-| `ZLIBRARY_PROXY_URL` | – | Optional HTTP proxy for the Z-Library browser; direct by default |
+| `ZLIBRARY_BROWSER_ENDPOINT` | – | The Z-Library browser service, e.g. `http://zlibrary-browser:8091` (Compose) or `http://<service>.zeabur.internal:8091` (Zeabur) |
+| `ZLIBRARY_BROWSER_TOKEN` | – | Shared secret between the server and the browser service (set the same value on both) |
+| `ZLIBRARY_PROXY_URL` | – | Optional HTTP proxy for the Z-Library browser (set on the browser service); direct by default |
 | `MANHUAGUI_URL` | `https://www.manhuagui.com` | Manhuagui mirror (`https://tw.manhuagui.com` for Traditional Chinese) |
 | `MANHUAGUI_SHOW_R18` | `false` | Show Manhuagui titles marked R18 |
 | `TMDB_API_KEY` | – | Watchlist |

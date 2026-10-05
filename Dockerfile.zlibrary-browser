@@ -1,0 +1,24 @@
+# Self-hosted ReKindle: the Z-Library catalogue browser, run as its own service.
+# Z-Library verifies visitors with its own JavaScript and refuses headless browsers,
+# so a normal (headed) Chromium with its sandbox on, under a private Xvfb display,
+# loads the public catalogue. The ReKindle server asks it over the private network:
+# ZLIBRARY_BROWSER_ENDPOINT=http://<this service>:8091 (and ZLIBRARY_BROWSER_TOKEN on
+# both). Built from the repository root so it shares selfhost/server/src/zlibrary-browser.js.
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/rekindle-browsers \
+    ZLIBRARY_BROWSER_HOST=0.0.0.0 \
+    ZLIBRARY_BROWSER_PORT=8091
+WORKDIR /app
+RUN npm install --no-audit --no-fund --omit=dev playwright-core@1.63.0 \
+    && apt-get update && apt-get install -y --no-install-recommends xvfb xauth tini \
+    && node node_modules/playwright-core/cli.js install --with-deps --no-shell chromium \
+    && chmod -R a+rX /opt/rekindle-browsers \
+    && rm -rf /var/lib/apt/lists/*
+COPY selfhost/server/src/zlibrary-browser.js ./zlibrary-browser.mjs
+COPY selfhost/browser/service.mjs selfhost/browser/start.sh ./
+EXPOSE 8091
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.ZLIBRARY_BROWSER_PORT||8091)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# tini is PID 1: xvfb-run must not be (it stalls waiting for Xvfb's startup signal).
+CMD ["tini", "--", "sh", "/app/start.sh"]

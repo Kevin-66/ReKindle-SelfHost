@@ -206,19 +206,25 @@ the display scale.
   shutdown limit CPU/memory. Only HTTPS z-lib.sk, cdn-zlib.sk and diamwall.com
   subresources are allowed; downloads, service workers and WebSockets are blocked.
   Never log Playwright launch errors (proxy credentials can appear in them).
-- Dockerfile includes Playwright's matching browser, its dependencies and Xvfb.
-  `xvfb-run` must not be PID 1: it stalls awaiting Xvfb startup signals. Use
-  `tini -- xvfb-run` in Docker, or a waiting parent shell in the sidecar. The
-  sidecar has a liveness check only; its startup must not gate the whole app.
-  ConfigMaps contain three launcher variants and exceed the client-side apply
-  annotation limit, so deployment uses versioned `kubectl create` objects.
-  The server runs under xvfb-run; never change this to headless or disable Chromium's
-  sandbox to fix launch errors. `ZLIBRARY_BROWSER=false` selects HTTP-only mode.
-- An existing image can use `ZLIBRARY_BROWSER_ENDPOINT=http://127.0.0.1:8091`.
-  `selfhost/browser/deploy-netcup.py` installs a private sidecar and a ConfigMap
-  overlay, preserving live API/launcher changes. This avoids deploying unrelated
-  local edits. Reapply after platform redeploys, or retire the overlay when the
-  new image contains the feature. Rollback snapshots stay private on the host.
+- Chromium runs in its own service (2026-10-05, owner's request), not in the main
+  image: `Dockerfile.zlibrary-browser` (repository root, so it can copy
+  `selfhost/server/src/zlibrary-browser.js` as `zlibrary-browser.mjs`) runs
+  `selfhost/browser/service.mjs` (POST `/catalogue` {url} -> HTML, GET `/health`).
+  The server uses it when `ZLIBRARY_BROWSER_ENDPOINT` is set (only private hosts:
+  loopback, `*.zeabur.internal`, or a single-label Compose name), sending
+  `Authorization: Bearer $ZLIBRARY_BROWSER_TOKEN` through `rawFetch` (the public-address
+  guard would refuse the private address). Docker Compose starts it as
+  `zlibrary-browser`; on Zeabur it is a second service from the same repository.
+- Zeabur starts containers as root even with `USER node`, and Chromium refuses its
+  sandbox as root ("Chromium sandboxing failed!"): every request failed at once with
+  `zlibrary/browser-unavailable` after the image first shipped Chromium. As `node`
+  under `xvfb-run` it launches in ~0.5 s. `selfhost/browser/start.sh` therefore drops
+  to `node` with `setpriv` before `xvfb-run`. Never fix this by disabling the sandbox
+  or going headless (Z-Library refuses headless Chromium with 517). `tini` is PID 1:
+  `xvfb-run` must not be (it stalls waiting for Xvfb's startup signal).
+- The earlier hand-applied Kubernetes overlay (`selfhost/browser/deploy-netcup.py`,
+  a loopback sidecar in the ReKindle pod) was removed when the separate service
+  replaced it; it is in git history.
 - `rk_zlibrary_saved_v1` stores up to 200 local bookmarks, not downloads. The page
   includes text-size setup and `rk-pager.js`; client timeout allows cold verification.
 - Focused checks: `node --test selfhost/server/test/zlibrary.test.js`.
