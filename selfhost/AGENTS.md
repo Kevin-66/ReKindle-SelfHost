@@ -133,6 +133,28 @@ opaque (grey arrow), or the page shows through them.
   `javascript:` links from article HTML in place (fixed 2026-10). SVG/MathML/noscript/
   template are dropped with their contents.
 
+## Text Size (`selfhost/site/js/rk-textsize.js`, `selfhost/site/css/rk-text.css`)
+
+Settings > Accessibility > Text Size (Small 0.9 / Normal 1 / Large 1.2 / Larger 1.45 /
+Largest 1.75, `localStorage.rk_text_size`). It changes FONT SIZES only. Do not use CSS
+`zoom` for this: the Kindle browser mishandles zoom (taps land in the wrong place, page
+buttons and other controls break), which is why the user asked for text size instead of
+the display scale.
+
+- `transform.js` adds `TEXT_SIZE_HEAD` to every page's `<head>`: the stylesheet, plus a
+  snippet that (only when the size is not Normal) sets `--rk-text`, `data-rk-text` and
+  `data-rk-page` (the file name) on `<html>` before the page draws.
+- `rk-text.css` multiplies each reading app's own size, e.g.
+  `html[data-rk-text][data-rk-page="reddit"] .thread-body { font-size: calc(1.1rem * var(--rk-text)) }`.
+  Scoping by page keeps generic class names (`.text`, `.post-content`) from leaking
+  between apps, and Normal leaves the author's pages untouched. When adding an app, use
+  its own base size and its narrowest reading container (children sized in `rem` do not
+  follow a container's font-size).
+- Not covered: RSS Reader and Newspaper articles (own A-/A+, key `rss_reader_font_size`),
+  Bible (own size menu, `rekindle_scriptures_state.fz`), the book reader (epub.js iframe).
+- `hackernews.html` uses `calc(<size> * var(--rk-text, 1))` in its own CSS and sets the
+  variable itself (pages in `selfhost/site` are not transformed).
+
 ## Manga
 
 `manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Manhuagui

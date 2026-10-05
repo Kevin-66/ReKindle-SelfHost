@@ -1,0 +1,60 @@
+/*
+ * Self-hosted ReKindle: Text Size (Settings > Accessibility, js/rk-textsize.js).
+ *
+ * Each rule multiplies an app's own reading-text size by --rk-text. Rules only apply
+ * while a size other than Normal is chosen: the <head> snippet from transform.js then
+ * sets data-rk-text and data-rk-page (the page's file name) on <html>, so every rule
+ * is scoped to its own app and Normal leaves pages exactly as the author made them.
+ * The base sizes below are the apps' own (see the file:line notes in selfhost/AGENTS.md).
+ *
+ * Not covered on purpose: RSS Reader, Newspaper articles and Bible have their own size
+ * buttons; the book reader renders inside epub.js. Buttons and layout never scale.
+ */
+
+/* Reddit */
+html[data-rk-text][data-rk-page="reddit"] .post-title { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="reddit"] .thread-title { font-size: calc(1.4rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="reddit"] .thread-body { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="reddit"] .comment-body { font-size: calc(1rem * var(--rk-text)); }
+
+/* Wikipedia */
+html[data-rk-text][data-rk-page="wikipedia"] #article-body { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="wikipedia"] #article-body th,
+html[data-rk-text][data-rk-page="wikipedia"] #article-body td { font-size: calc(0.9rem * var(--rk-text)); }
+
+/* Substack and Readwise articles */
+html[data-rk-text][data-rk-page="substack"] #reader-content,
+html[data-rk-text][data-rk-page="readwise"] #reader-content { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="readwise"] .highlight-item { font-size: calc(0.9rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="readwise"] .review-text { font-size: calc(1.05rem * var(--rk-text)); }
+
+/* Browser reading view (also used by Read Later and links opened from Reddit) */
+html[data-rk-text][data-rk-page="browser"] .tab-content { font-size: calc(1rem * var(--rk-text)); }
+
+/* Mail: the message body sits in a shadow root and inherits this size */
+html[data-rk-text][data-rk-page="mail"] .email-body { font-size: calc(1rem * var(--rk-text)); }
+
+/* Bluesky and Mastodon posts */
+html[data-rk-text][data-rk-page="bluesky"] .post-content,
+html[data-rk-text][data-rk-page="mastodon"] .toot-content { font-size: calc(1rem * var(--rk-text)); }
+
+/* Dictionary */
+html[data-rk-text][data-rk-page="dictionary"] ol.definitions,
+html[data-rk-text][data-rk-page="dictionary"] .wiki-content { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="dictionary"] .example { font-size: calc(0.95rem * var(--rk-text)); }
+
+/* Cookbook */
+html[data-rk-text][data-rk-page="cookbook"] .instruction-text { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="cookbook"] .ingredients-list { font-size: calc(1rem * var(--rk-text)); }
+
+/* On This Day */
+html[data-rk-text][data-rk-page="history"] .entry-text { font-size: calc(1rem * var(--rk-text)); }
+
+/* Translate */
+html[data-rk-text][data-rk-page="translate"] textarea { font-size: calc(1.2rem * var(--rk-text)); }
+
+/* Newspaper front page and Read Later lists */
+html[data-rk-text][data-rk-page="newspaper"] .headline { font-size: calc(1.6rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="newspaper"] .summary { font-size: calc(1.1rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="readlater"] .card-title { font-size: calc(0.95rem * var(--rk-text)); }
+html[data-rk-text][data-rk-page="readlater"] .card-excerpt { font-size: calc(0.8rem * var(--rk-text)); }

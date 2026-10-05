@@ -52,6 +52,11 @@ function fixTranslationFallbacks(code) {
     return code.replace(T_OR_FALLBACK, (m, q, key, fallback) => `window.t(${q}${key}${q}, ${fallback})`);
 }
 
+export const TEXT_SIZE_HEAD = '<link rel="stylesheet" href="css/rk-text.css">' +
+    '<script>try{var rkT=localStorage.getItem("rk_text_size"),rkD=document.documentElement;if(rkT&&rkT!=="1"){' +
+    'rkD.style.setProperty("--rk-text",rkT);rkD.setAttribute("data-rk-text",rkT);' +
+    'rkD.setAttribute("data-rk-page",(location.pathname.split("/").pop()||"index").replace(/\\.html$/,""))}}catch(e){}</script>';
+
 export function noticePage(title, message) {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -104,6 +109,11 @@ export function transformHtml(html, fileName) {
     // which e-ink shows as a flash (e.g. the Manga reader's invisible next-page area,
     // the right 70% of the screen). Buttons keep their own :active styles.
     html = html.replace(/<\/head>/i, '<style>html{-webkit-tap-highlight-color:rgba(0,0,0,0)}</style>\n</head>');
+
+    // Text Size (Settings > Accessibility): set --rk-text before the page draws, and
+    // css/rk-text.css multiplies it into each app's reading text. Font sizes only, no zoom.
+    html = html.replace(/<\/head>/i, `${TEXT_SIZE_HEAD}\n</head>`);
+    if (base === 'settings.html') html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-textsize.js"></script>\n</body>');
 
     // Page Up / Page Down buttons on every page that scrolls (selfhost/site/js/rk-pager.js).
     html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-pager.js"></script>\n</body>');
