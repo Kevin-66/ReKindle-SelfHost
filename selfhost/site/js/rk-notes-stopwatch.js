@@ -1,9 +1,9 @@
 // Self-hosted ReKindle: a stopwatch in the Notes editor (notes.html, added by
 // selfhost/server/src/transform.js; the page itself is unchanged).
 //
-// The editor toolbar shows how long the open note has been open, counting up from 0:00
-// each time a note is opened; going back to the list stops it. Tapping it pauses and
-// resumes (pause bars while paused). Like the B/I/U buttons, the tap keeps the caret and
+// The editor toolbar shows a stopwatch that waits, paused at 0:00, each time a note is
+// opened; tapping it starts it, and further taps pause and resume (pause bars while
+// paused). Going back to the list stops it. Like the B/I/U buttons, the tap keeps the caret and
 // keyboard in the note. Time comes from the clock, not from counting ticks, so a slow
 // or sleeping Kindle doesn't lose seconds. Plain ES5 for the Kindle browser.
 (function () {
@@ -71,13 +71,12 @@
         tick = setTimeout(function () { render(); schedule(); }, 1000 - (elapsed() % 1000) + 20);
     }
 
-    function start(id) {
+    function reset(id) {
         noteId = id;
         banked = 0;
-        startedAt = Date.now();
-        running = true;
+        running = false;
+        clearTimeout(tick);
         render();
-        schedule();
     }
 
     function stop() {
@@ -108,7 +107,7 @@
     var originalOpenNote = openNote;
     openNote = function (id) {
         var r = originalOpenNote.apply(this, arguments);
-        if (editor.style.display === 'flex' && currentNoteId === id && noteId !== id) start(id);
+        if (editor.style.display === 'flex' && currentNoteId === id && noteId !== id) reset(id);
         return r;
     };
 

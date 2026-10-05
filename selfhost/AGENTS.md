@@ -292,9 +292,10 @@ Tested with two tabs: live update, simultaneous edits on different lines, caret 
 ## Notes stopwatch (`selfhost/site/js/rk-notes-stopwatch.js`)
 
 `transform.js` adds it to `notes.html` after `rk-notes-sync.js`. A `.sys-btn` inserted after
-`#note-title-input` counts up from 0:00 each time a note is opened (wraps `openNote`; only
-when the editor actually shows) and stops in `showList` (Back, Delete). Tapping toggles
-pause (pause-bars icon) / resume (stopwatch icon). It listens to `touchstart` and
+`#note-title-input` is reset to 0:00, paused (the user asked for paused by default), each
+time a note is opened (wraps `openNote`; only when the editor actually shows) and stops in
+`showList` (Back, Delete). Tapping starts it, then toggles pause (pause-bars icon) /
+resume (stopwatch icon). It listens to `touchstart` and
 `mousedown` with `preventDefault`, like the page's B/I/U buttons, so the caret and Kindle
 keyboard stay in the note; keyboard activation comes through `click` with `detail === 0`.
 Elapsed time is `Date.now()`-based (banked + since resume), redrawn by a `setTimeout`
