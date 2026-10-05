@@ -212,7 +212,7 @@
         }
 
         .story-title {
-            font-size: 1.05rem;
+            font-size: calc(1.05rem * var(--rk-text, 1));
             font-weight: bold;
             line-height: 1.3;
         }
@@ -249,7 +249,7 @@
         }
 
         .thread-title {
-            font-size: 1.2rem;
+            font-size: calc(1.2rem * var(--rk-text, 1));
             font-weight: bold;
             line-height: 1.3;
         }
@@ -268,7 +268,7 @@
         }
 
         .text {
-            font-size: 0.95rem;
+            font-size: calc(0.95rem * var(--rk-text, 1));
             line-height: 1.5;
             word-wrap: break-word;
             overflow-wrap: break-word;
@@ -307,7 +307,7 @@
 
         .text pre {
             white-space: pre-wrap;
-            font-size: 0.8rem;
+            font-size: calc(0.8rem * var(--rk-text, 1));
             border-left: 3px solid black;
             padding-left: 8px;
         }
@@ -351,10 +351,12 @@
         }
 
         .article h1 {
-            font-size: 1.3rem;
+            font-size: calc(1.3rem * var(--rk-text, 1));
         }
     </style>
     <script src="theme.js?v=18"></script>
+    <!-- Text Size (Settings > Accessibility): see js/rk-textsize.js -->
+    <script>try{var rkT=localStorage.getItem("rk_text_size");if(rkT&&rkT!=="1")document.documentElement.style.setProperty("--rk-text",rkT)}catch(e){}</script>
 </head>
 
 <body>

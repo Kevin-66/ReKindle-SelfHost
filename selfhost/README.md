@@ -37,6 +37,11 @@ a minute per address, so feeds are cached for 10 minutes and the app shows a sho
 switches to Reddit's JSON automatically) and its public API in March 2027; new API apps
 need Reddit's approval and old.reddit.com now asks for a login.
 
+**Text size:** Settings > Accessibility > Text Size enlarges reading text (articles,
+posts, comments, messages) in Hacker News, Reddit, Wikipedia, Mail, Substack, Readwise,
+Bluesky, Mastodon, Dictionary, Cookbook and more, without changing buttons or layout.
+It is safer on Kindles than the display scale, which uses zoom.
+
 **Page buttons:** every page that scrolls gets Page Up / Page Down buttons in the
 corner of its scrolling area (most Kindles, including the Scribe, have no page-turn
 keys). Turn them off in Settings > Accessibility > Page Buttons.
