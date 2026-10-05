@@ -2,7 +2,7 @@
 // re-encode it as JPEG (first frame of animations; e-ink can't animate). Served at
 // /__rk/img?url=..., which the Hacker News app uses for article and comment images
 // (a 9.6 MB animated WebP on a GitHub page would not load on a Kindle otherwise).
-// The Manga app gets its pages prepared for e-ink here too (pageOptions below).
+// The Manga app's pages pass through here unchanged (pageOptions below).
 
 import sharp from 'sharp';
 import { withPublicNetworkOnly } from './netguard.js';
@@ -38,54 +38,17 @@ async function shrinkImage(buf, type) {
 
 // ---------------------------------------------------------------- manga pages
 //
-// The Manga app asks for its pages with ?page=WxH, the reader's size in device
-// pixels. The page is fitted to that size (the reader shows it 1:1) and its
-// near-white background is made pure white. Nothing else changes: pixels darker
-// than near-white, and every colour, are left exactly as drawn.
-
-const WHITE_FROM = 225; // a pixel whose darkest channel is above this fades to white
-const WHITE_AT = 240;   // ... and is pure white from here
+// The Manga app asks for its pages with ?page=1. They are sent exactly as the
+// source serves them (no resizing or re-encoding: the owner wants the originals),
+// kept in this server's memory cache and marked no-store (see serveImage).
 
 export function pageOptions(params) {
-    const m = /^(\d{2,4})x(\d{2,4})$/.exec(params.get('page') || '');
-    if (!m) return null;
-    const w = Number(m[1]), h = Number(m[2]);
-    if (!(w >= 64 && w <= 4096 && h >= 64 && h <= 4096)) return null;
-    return { w, h, key: `page:${w}x${h}` };
-}
-
-function whitenBackground(px, channels) {
-    for (let i = 0; i < px.length; i += channels) {
-        let low = px[i];
-        for (let c = 1; c < channels; c++) if (px[i + c] < low) low = px[i + c];
-        if (low <= WHITE_FROM) continue;
-        const t = low >= WHITE_AT ? 1 : (low - WHITE_FROM) / (WHITE_AT - WHITE_FROM);
-        for (let c = 0; c < channels; c++) px[i + c] = Math.round(px[i + c] + (255 - px[i + c]) * t);
-    }
-    return px;
-}
-
-const INPUT = { failOn: 'none', pages: 1, limitInputPixels: 2e8 };
-
-async function pageImage(buf, opts) {
-    const { data, info } = await sharp(buf, INPUT)
-        .rotate()
-        .flatten({ background: '#ffffff' })
-        // Enlarged here too when smaller: the reader shows pages 1:1, and the
-        // browser would enlarge them with blocky nearest-neighbour scaling.
-        .resize({ width: opts.w, height: opts.h, fit: 'inside' })
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-    const body = await sharp(whitenBackground(data, info.channels), { raw: { width: info.width, height: info.height, channels: info.channels } })
-        .jpeg({ quality: 85, mozjpeg: true })
-        .toBuffer();
-    return { body, type: 'image/jpeg' };
+    return params.get('page') ? { key: 'page' } : null;
 }
 
 // Tries each source in turn (best first): a URL, or a function returning the
 // fetch Response (for sites that need their own headers). Only image responses
 // count: some image hosts answer a missing file with a 404 placeholder picture.
-// Manga pages (opts) are always re-encoded, so their type is left to sharp.
 async function fetchImage(sources, opts) {
     let status = 404;
     for (const src of sources) {
@@ -100,20 +63,14 @@ async function fetchImage(sources, opts) {
             continue;
         }
         const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-        const isImage = type.startsWith('image/') || (opts && (type === '' || type === 'application/octet-stream'));
-        if (!res.ok || !isImage || Number(res.headers.get('content-length')) > IMAGE_MAX_BYTES) {
+        if (!res.ok || !type.startsWith('image/') || Number(res.headers.get('content-length')) > IMAGE_MAX_BYTES) {
             if (res.body) res.body.cancel().catch(() => { });
             status = res.status === 429 ? 429 : (res.ok ? 415 : res.status);
             continue;
         }
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf.length > IMAGE_MAX_BYTES) throw httpError(413, 'Image too large');
-        if (!opts) return shrinkImage(buf, type);
-        try {
-            return await pageImage(buf, opts);
-        } catch {
-            throw httpError(415, 'Not a picture this server can read');
-        }
+        return opts ? { body: buf, type } : shrinkImage(buf, type);
     }
     throw httpError(status === 404 || status === 403 || status === 410 ? 404 : status, `Image not available (HTTP ${status})`);
 }
@@ -121,8 +78,8 @@ async function fetchImage(sources, opts) {
 const imageCache = new Map(); // key -> { body, type }
 let imageCacheBytes = 0;
 
-// A Response with the shrunk image (or the manga page made from it, with opts
-// from pageOptions), cached under `key`.
+// A Response with the shrunk image (or, with opts from pageOptions, the original
+// manga page), cached under `key`.
 export async function serveImage(key, sources, opts) {
     if (opts) key = `${key}|${opts.key}`;
     let hit = imageCache.get(key);
@@ -149,7 +106,7 @@ export async function serveImage(key, sources, opts) {
     });
 }
 
-// GET /__rk/img?url=https://...[&page=WxH]  (public addresses only)
+// GET /__rk/img?url=https://...[&page=1]  (public addresses only)
 export async function handleImage(req, res, url) {
     let target;
     try { target = new URL(url.searchParams.get('url') || ''); } catch { target = null; }
