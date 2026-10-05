@@ -138,13 +138,22 @@
 
         // Manhuagui filters, shown instead of the MangaDex category/language/sort row.
         var mhgRow = el('div', { id: 'rk-mhg-filters', style: 'display: none; grid-template-columns: 1fr 1fr; gap: 8px;' });
-        var sortSel = el('select', { id: 'rk-mhg-sort', 'class': 'no-custom-select', style: SELECT_STYLE });
-        var genreSel = el('select', { id: 'rk-mhg-genre', 'class': 'no-custom-select', style: SELECT_STYLE });
+        var sortSel = el('select', { id: 'rk-mhg-sort', style: SELECT_STYLE });
+        var genreSel = el('select', { id: 'rk-mhg-genre', style: SELECT_STYLE });
         mhgRow.appendChild(genreSel);
         mhgRow.appendChild(sortSel);
         controls.appendChild(mhgRow);
         sortSel.onchange = function () { doStoreSearch(); };
         genreSel.onchange = function () { doStoreSearch(); };
+        // The same System 7 drop-downs as the MangaDex row (js/custom-select.js). They
+        // watch the <select> and show its options once loadFilters() fills them.
+        [genreSel, sortSel].forEach(function (s) {
+            if (typeof CustomSelect !== 'function') return;
+            try {
+                new CustomSelect(s);
+                s.dataset.customSelectInitialized = 'true';
+            } catch (e) { s.style.display = ''; }
+        });
 
         var saved = null;
         try { saved = localStorage.getItem(SOURCE_KEY); } catch (e) { saved = null; }
