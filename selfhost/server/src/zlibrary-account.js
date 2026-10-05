@@ -2,9 +2,9 @@
 // Like the Substack app, the reader pastes their own Z-Library cookie (from a desktop
 // browser where they are signed in); it is kept here and only ever sent to the
 // Z-Library browser service, whose Chromium downloads the book (downloadBook in
-// zlibrary-browser.js) so Z-Library's verification still passes, and converts it to
-// MOBI (the Kindle browser opens no other e-book format): Z-Library's own converter
-// first, Calibre (POST /convert) when that fails (see downloadBook).
+// zlibrary-browser.js) so Z-Library's verification still passes. EPUB books, which
+// the Kindle can't open, become MOBI: Z-Library's own converter first, Calibre (POST
+// /convert) when that fails (see downloadBook); other formats are passed on as they are.
 // That can take minutes, longer than a page request should wait behind a proxy, so it
 // runs as a job: the page starts it (startJob), asks how it is going (jobStatus) and,
 // when the file is ready here, opens a short-lived signed link to it (sendDownload),
@@ -112,7 +112,7 @@ async function runJob(job, cookie) {
         let name = fileName(res, 'book');
         let file = path.join(dir, 'original');
         await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(file));
-        if (extOf(name) !== 'mobi') {
+        if (extOf(name) === 'epub') {   // the Kindle opens other formats (MOBI, PDF, TXT, ...) as they are
             job.step = 'convert';
             job.from = extOf(name);
             try {

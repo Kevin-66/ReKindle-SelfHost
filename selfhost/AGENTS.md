@@ -256,7 +256,9 @@ the display scale.
   saves the download (300 MB cap, one at a time) and streams it back with `X-File-Name`.
   Subresources stay limited to Z-Library; page navigations may go to any https host
   (download links redirect to hosts we can't list in advance).
-- MOBI only (owner, 2026-10-05: the Kindle browser opens no other e-book format), in
+- Only EPUB is handled (owner, 2026-10-05: the Kindle opens MOBI, PDF, TXT and more,
+  but not EPUB; do NOT convert or refuse other formats, they download as they are). For
+  a book whose own file (the first `/dl/` link, text like "epub, 649 KB") is EPUB, in
   this order (book-details.min.js, read on a signed-out book page 2026-10-05):
   1. A MOBI file of the same book: clicking `#btnCheckOtherFormats` makes the page
      fetch `/papi/book/<id>/formats` and add the book's other files to the menu; take
@@ -270,13 +272,13 @@ the display scale.
      limit) is reported as is; a failed job (`#converterCurrentStatusesBox
      .status-error`) or a timeout falls through to 3. Signed out it only shows a login
      popup. Not yet seen working: needs the owner's account.
-  3. The original file (first `/dl/` link), converted by the browser service's POST
-     `/convert` (body = file, name in
+  3. The EPUB itself, converted by the browser service's POST `/convert` (body = file,
+     name in
   `X-File-Name`): Calibre's `ebook-convert` (Debian `calibre` package in
   `Dockerfile.zlibrary-browser`) with `--output-profile kindle_pw3 --mobi-file-type
   both` (old MOBI + KF8 in one file), `QT_QPA_PLATFORM=offscreen`, one at a time, 5 min
-  limit; formats Calibre can't read get 415 with a message. (Calibre is the fallback
-  for when Z-Library's converter fails.)
+  limit; EPUB only (anything else gets 415). Calibre is the fallback for when
+  Z-Library's converter fails.
 - Download + conversion can take minutes, longer than a page request should hang
   behind Zeabur's proxy, so it is a job (`zlibrary-account.js`): POST
   `/__rk/zlibrary/jobs` {url} -> {id} (same book again returns the running job; another
@@ -288,9 +290,9 @@ the display scale.
   changes (a ticking counter would redraw the whole e-ink screen each time).
 - Tested locally with a stand-in `/download` and a fake `ebook-convert` on PATH (no
   Calibre or Docker on the Mac); check real conversion in the deployed service with
-  `ebook-convert` on a small EPUB. The real
-  Z-Library step was not testable without the owner's account: if downloads fail,
-  check the download link selector and the allowed download hosts (`DOWNLOAD_HOST`).
+  `ebook-convert` on a small EPUB. The real Z-Library steps were not testable without
+  the owner's account: if downloads fail, check the `/dl/` link and converter
+  selectors above.
 - `rk_zlibrary_saved_v1` stores up to 200 local bookmarks, not downloads. The page
   includes text-size setup and `rk-pager.js`; client timeout allows cold verification.
 - Focused checks: `node --test selfhost/server/test/zlibrary.test.js`.

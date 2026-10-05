@@ -3,8 +3,8 @@
 // copy of selfhost/server/src/zlibrary-browser.js) and returns the page HTML.
 // POST /download {url, cookie} downloads one book with the reader's Z-Library cookie
 // and streams the file back (name in X-File-Name). POST /convert takes a book file
-// (body, name in X-File-Name) and returns it as MOBI, the one e-book format the Kindle
-// browser opens, made by Calibre's ebook-convert.
+// (body, name in X-File-Name; EPUB only, the one common e-book format the Kindle can't
+// open) and returns it as MOBI, made by Calibre's ebook-convert.
 // It listens on ZLIBRARY_BROWSER_HOST:ZLIBRARY_BROWSER_PORT (loopback by default;
 // 0.0.0.0 in its own container, reachable only on the private network). When
 // ZLIBRARY_BROWSER_TOKEN is set, requests must carry "Authorization: Bearer <token>".
@@ -31,9 +31,8 @@ function authorized(req) {
     return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }
 
-// Calibre's input formats; DJVU and PDF convert only as well as their text allows.
-const CONVERTIBLE = new Set(['epub', 'azw3', 'azw', 'azw4', 'prc', 'fb2', 'fbz', 'pdf', 'djvu', 'txt', 'txtz', 'rtf', 'docx', 'odt',
-    'html', 'htm', 'htmlz', 'lit', 'pdb', 'pml', 'rb', 'snb', 'tcr', 'chm', 'cbz', 'cbr', 'cb7', 'cbc', 'lrf']);
+// Only EPUB is converted: the Kindle opens MOBI, PDF, TXT and more, but not EPUB.
+const CONVERTIBLE = new Set(['epub']);
 const MAX_CONVERT_BYTES = 300 * 1024 * 1024;
 const CONVERT_MS = 300000;
 let converting = Promise.resolve();
@@ -57,7 +56,7 @@ async function convert(req, res) {
     try { name = decodeURIComponent(String(req.headers['x-file-name'] || 'book')); } catch { }
     name = name.replace(/[\\/\0\r\n"]/g, '_').slice(0, 200);
     const ext = (path.extname(name).slice(1) || '').toLowerCase();
-    if (!CONVERTIBLE.has(ext)) { req.resume(); return convertError(res, 415, `A .${ext || '?'} file can't be converted to MOBI.`); }
+    if (!CONVERTIBLE.has(ext)) { req.resume(); return convertError(res, 415, 'Only EPUB books are converted to MOBI.'); }
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'convert-'));
     const cleanup = () => fs.rmSync(dir, { recursive: true, force: true });
     const input = path.join(dir, 'book.' + ext), output = path.join(dir, 'book.mobi');

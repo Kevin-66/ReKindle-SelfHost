@@ -127,18 +127,19 @@ export function loadBrowserCatalogue(url) {
 // shared with the public catalogue session or other readers) opens the book page in
 // the same headed Chromium, so Z-Library's verification passes, and saves the file.
 //
-// The Kindle only opens MOBI, so in order of preference:
+// The Kindle opens MOBI, PDF, TXT and more, but not EPUB. Only EPUB books are handled
+// (owner's rule); any other book downloads as it is. For an EPUB book, in order:
 // 1. a MOBI file of the same book (a /dl/ link whose own text says MOBI, after the
 //    "other formats" button has loaded the book's other files);
-// 2. Z-Library's own converter: the book page's "Convert to" menu has
+// 2. Z-Library's converter: the "Convert to" menu has
 //    a.converterLink[data-convert_to="mobi"]; clicking it makes the page's script POST
 //    /papi/book/<id>/file-conversion/mobi (answer: {error} | {jobId} | {response:
 //    {statusOkContent, downloadUrl}} when already converted), poll
 //    /papi/book/<id>/file-conversion/jobs every 10 s and, when the job is "ok", open
 //    its downloadUrl, which we catch as the download. A failed job shows
 //    #converterCurrentStatusesBox .status-error. (Read from book-details.min.js, 2026-10.)
-// 3. otherwise, or when Z-Library's conversion fails or takes too long, the original
-//    file, which the browser service converts with Calibre (POST /convert).
+// 3. when that fails or takes too long, the EPUB itself, which the browser service
+//    converts with Calibre (POST /convert).
 // Subresources are limited to Z-Library and its assets; page navigations (download
 // links redirect to download hosts we can't list in advance) may go to any https host.
 const MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024;
@@ -217,27 +218,31 @@ async function runDownload(url, cookie) {
         const page = await context.newPage();
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.locator('a[href*="/dl/"]').first().waitFor({ state: 'attached', timeout: 25000 });
-        // Other files of the same book (perhaps a MOBI) load into the menu on demand:
-        // the "other formats" button fetches /papi/book/<id>/formats.
-        const formats = page.waitForResponse((r) => /\/papi\/book\/\d+\/formats/.test(r.url()), { timeout: 15000 }).catch(() => null);
-        await page.evaluate(() => { const b = document.getElementById('btnCheckOtherFormats'); if (b) b.click(); });
-        if (await formats) await page.waitForTimeout(700);
-        const choice = await page.evaluate(() => {
-            const links = Array.prototype.slice.call(document.querySelectorAll('a[href*="/dl/"]'));
-            const label = (a) => [a.textContent, a.title, a.getAttribute('data-extension')].join(' ');
-            const mobi = links.find((a) => /(^|[^a-z])mobi([^a-z]|$)/i.test(label(a)));
-            const toggle = document.querySelector('[data-convertation-available]');
-            return {
-                mobi: mobi ? mobi.href : null,
-                original: links[0] ? links[0].href : null,
-                convert: !!document.querySelector('a.converterLink[data-convert_to="mobi"]') && !(toggle && toggle.getAttribute('data-convertation-available') === '0')
-            };
+        const main = await page.evaluate(() => {
+            const a = document.querySelector('a[href*="/dl/"]');   // the book's own file, e.g. "epub, 649 KB"
+            return a ? { href: a.href, epub: /(^|[^a-z])epub([^a-z]|$)/i.test([a.textContent, a.title, a.getAttribute('data-extension')].join(' ')) } : null;
         });
+        if (!main) throw downloadFailed();
         let download = null;
-        if (choice.mobi) download = await clickDownload(page, choice.mobi);
-        if (!download && choice.convert) download = await zlibraryConvert(page);
-        if (!download && choice.original) download = await clickDownload(page, choice.original);
-        if (!download) throw downloadFailed();
+        if (main.epub) {
+            // Other files of the same book (perhaps a MOBI) load into the menu on demand:
+            // the "other formats" button fetches /papi/book/<id>/formats.
+            const formats = page.waitForResponse((r) => /\/papi\/book\/\d+\/formats/.test(r.url()), { timeout: 15000 }).catch(() => null);
+            await page.evaluate(() => { const b = document.getElementById('btnCheckOtherFormats'); if (b) b.click(); });
+            if (await formats) await page.waitForTimeout(700);
+            const choice = await page.evaluate(() => {
+                const label = (a) => [a.textContent, a.title, a.getAttribute('data-extension')].join(' ');
+                const mobi = Array.prototype.find.call(document.querySelectorAll('a[href*="/dl/"]'), (a) => /(^|[^a-z])mobi([^a-z]|$)/i.test(label(a)));
+                const toggle = document.querySelector('[data-convertation-available]');
+                return {
+                    mobi: mobi ? mobi.href : null,
+                    convert: !!document.querySelector('a.converterLink[data-convert_to="mobi"]') && !(toggle && toggle.getAttribute('data-convertation-available') === '0')
+                };
+            });
+            if (choice.mobi) download = await clickDownload(page, choice.mobi);
+            if (!download && choice.convert) download = await zlibraryConvert(page);
+        }
+        if (!download) download = await clickDownload(page, main.href);
         const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zlib-')), 'book');
         await download.saveAs(file);
         const size = fs.statSync(file).size;
