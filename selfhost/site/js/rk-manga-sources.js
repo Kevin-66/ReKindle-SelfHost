@@ -82,16 +82,55 @@
 
     var SELECT_STYLE = 'border: 2px solid black; padding: 4px 6px; font-family: inherit; font-size: 0.8rem; background: white; outline: none;';
 
+    // Styles for the source buttons and the chapter picker (scoped ids/classes;
+    // no flex gap, no transitions: Kindle rules in AGENTS.md).
+    function addStyle() {
+        if (document.getElementById('rk-manga-style')) return;
+        var css =
+            '.rk-source-btn{min-height:48px;border:2px solid #000;background:#fff;color:#000;box-shadow:2px 2px 0 #000;' +
+            'font-family:inherit;font-size:0.95rem;font-weight:bold;cursor:pointer;padding:6px 8px;}' +
+            '.rk-source-btn.active{background:#000;color:#fff;box-shadow:none;}' +
+            '#chapter-select-wrapper .custom-select-container,#chapter-select-wrapper select{display:none !important;}' +
+            '#rk-ch-btn{border:2px solid #000;background:#fff;color:#000;box-shadow:1px 1px 0 #000;font-family:inherit;' +
+            'font-size:0.75rem;font-weight:bold;padding:3px 8px;max-width:180px;overflow:hidden;white-space:nowrap;' +
+            'text-overflow:ellipsis;cursor:pointer;vertical-align:middle;}' +
+            '#rk-ch-btn.open{background:#000;color:#fff;}' +
+            '#rk-ch-panel{position:absolute;top:0;left:0;right:0;bottom:0;z-index:50;background:#fff;display:flex;flex-direction:column;}' +
+            '#rk-ch-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:2px solid #000;flex-shrink:0;font-weight:bold;}' +
+            '#rk-ch-close{min-width:48px;min-height:40px;border:2px solid #000;background:#fff;box-shadow:2px 2px 0 #000;font-family:inherit;font-weight:bold;cursor:pointer;}' +
+            '#rk-ch-cols{flex:1 1 auto;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);}' +
+            '.rk-ch-col{display:flex;flex-direction:column;min-height:0;}' +
+            '.rk-ch-col+.rk-ch-col{border-left:2px solid #000;}' +
+            '.rk-ch-col-title{padding:6px 10px;border-bottom:1px solid #000;font-weight:bold;background:#eee;flex-shrink:0;}' +
+            '.rk-ch-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}' +
+            '.rk-ch-item{padding:12px 10px;border-bottom:1px solid #000;cursor:pointer;font-size:0.95rem;line-height:1.3;}' +
+            '.rk-ch-item.current{background:#000;color:#fff;font-weight:bold;}';
+        var style = el('style', { id: 'rk-manga-style' });
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
+    }
+
     function buildControls() {
         var controls = document.getElementById('store-controls');
         if (!controls || document.getElementById('rk-source-select')) return;
+        addStyle();
 
-        var sourceRow = el('div', { style: 'display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center;' });
-        sourceRow.appendChild(el('label', { 'for': 'rk-source-select', style: 'font-weight: bold; font-size: 0.8rem;' }, 'Source'));
-        var sel = el('select', { id: 'rk-source-select', 'class': 'no-custom-select', style: SELECT_STYLE });
+        // Two large buttons instead of a small drop-down; the hidden select keeps
+        // the current value for currentSource().
+        var sourceRow = el('div', { id: 'rk-source-row', style: 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px;' });
+        var sel = el('select', { id: 'rk-source-select', 'class': 'no-custom-select', style: 'display: none;' });
         sel.appendChild(el('option', { value: 'mangadex' }, 'MangaDex'));
         sel.appendChild(el('option', { value: 'manhuagui' }, '漫画柜 Manhuagui'));
         sourceRow.appendChild(sel);
+        [['mangadex', 'MangaDex'], ['manhuagui', '漫画柜 Manhuagui']].forEach(function (s) {
+            var b = el('button', { type: 'button', 'class': 'rk-source-btn', 'data-source': s[0] }, s[1]);
+            b.onclick = function () {
+                if (sel.value === s[0]) return;
+                sel.value = s[0];
+                sel.onchange();
+            };
+            sourceRow.appendChild(b);
+        });
         controls.insertBefore(sourceRow, controls.firstChild);
 
         // Manhuagui filters, shown instead of the MangaDex category/language/sort row.
@@ -134,6 +173,10 @@
 
     function applySourceUi() {
         var mhg = currentSource() === 'manhuagui';
+        var buttons = document.querySelectorAll('.rk-source-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].className = 'rk-source-btn' + (buttons[i].getAttribute('data-source') === currentSource() ? ' active' : '');
+        }
         var mdRow = document.getElementById('store-category');
         mdRow = mdRow ? mdRow.parentNode : null;
         if (mdRow) mdRow.style.display = mhg ? 'none' : 'grid';
@@ -186,6 +229,8 @@
             var genre = document.getElementById('rk-mhg-genre').value;
             return api('list?page=' + page + '&q=' + encodeURIComponent(q) + '&sort=' + encodeURIComponent(sort) + '&genre=' + encodeURIComponent(genre));
         }).then(function (data) {
+            // The reader may have switched back to MangaDex while this was loading.
+            if (currentSource() !== 'manhuagui') return;
             if (!data.items.length && page === 1) {
                 container.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">No results.</div>';
             }
@@ -201,6 +246,7 @@
             }
             showStatus((window.t && window.t('manga.msg.ready')) || 'Ready');
         })['catch'](function (e) {
+            if (currentSource() !== 'manhuagui') return;
             showStatus('Manhuagui: ' + e.message);
             if (page === 1) container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">' + escapeHtml(e.message) + '</div>';
         }).then(function () { mhgLoading = false; });
@@ -247,6 +293,7 @@
 
     var originalOpenReader = openReader;
     openReader = function (item) {
+        closeChapterPicker();
         if (!isMhg(item)) return originalOpenReader.apply(this, arguments);
         // Work on a copy so page lists never end up saved in the library.
         currentReading = {};
@@ -284,6 +331,117 @@
             content.innerHTML = '<div style="padding: 20px; color: red;">Error: ' + escapeHtml(e.message) + '</div>';
         });
     };
+
+    // ------------------------------------------------------------ chapter picker
+    //
+    // The chapter drop-down (the site-wide custom select) is 200 px tall and fiddly
+    // on e-ink. For both sources, a button takes its place and opens a panel over
+    // the reader that reaches the bottom of the window. Manhuagui titles that have
+    // both chapters (回/话) and volumes (卷) get one column for each. The hidden
+    // <select id="chapter-select"> stays the source of truth, so manga.html's own
+    // chapter code keeps working.
+
+    var VOLUME_RE = /卷|单行本|單行本/;
+    var SECTION_PREFIX = /^(单话|單話|单行本|單行本)\s+/;
+
+    function chapterOptions() {
+        var select = document.getElementById('chapter-select');
+        var out = [];
+        if (!select) return out;
+        for (var i = 0; i < select.options.length; i++) {
+            out.push({ idx: parseInt(select.options[i].value, 10), text: select.options[i].text || select.options[i].innerText || '' });
+        }
+        return out;
+    }
+
+    function shortName(text) {
+        return String(text || '').replace(SECTION_PREFIX, '');
+    }
+
+    function syncChapterButton(idx) {
+        var wrap = document.getElementById('chapter-select-wrapper');
+        if (!wrap) return;
+        addStyle();
+        var btn = document.getElementById('rk-ch-btn');
+        if (!btn) {
+            btn = el('button', { id: 'rk-ch-btn', type: 'button', title: 'Chapters' });
+            btn.onclick = function (e) {
+                e.stopPropagation();
+                if (document.getElementById('rk-ch-panel')) closeChapterPicker();
+                else openChapterPicker();
+            };
+            wrap.appendChild(btn);
+        }
+        var opts = chapterOptions();
+        var cur = null;
+        for (var i = 0; i < opts.length; i++) if (opts[i].idx === idx) cur = opts[i];
+        btn.textContent = cur ? shortName(cur.text) : 'Chapters';
+    }
+
+    function closeChapterPicker() {
+        var panel = document.getElementById('rk-ch-panel');
+        if (panel) panel.parentNode.removeChild(panel);
+        var btn = document.getElementById('rk-ch-btn');
+        if (btn) btn.className = '';
+    }
+
+    function openChapterPicker() {
+        var view = document.getElementById('reader-view');
+        var opts = chapterOptions();
+        if (!view || !opts.length) return;
+        closeChapterPicker();
+
+        var chapters = [], volumes = [];
+        opts.forEach(function (o) { (VOLUME_RE.test(o.text) ? volumes : chapters).push(o); });
+        var columns = chapters.length && volumes.length
+            ? [['回', chapters], ['卷', volumes]]
+            : [[volumes.length ? '卷' : 'Chapters', volumes.length ? volumes : chapters]];
+
+        var panel = el('div', { id: 'rk-ch-panel' });
+        var head = el('div', { id: 'rk-ch-head' });
+        head.appendChild(el('span', {}, 'Chapters (' + opts.length + ')'));
+        var close = el('button', { id: 'rk-ch-close', type: 'button' }, 'Close');
+        close.onclick = closeChapterPicker;
+        head.appendChild(close);
+        panel.appendChild(head);
+
+        var cols = el('div', { id: 'rk-ch-cols', style: 'grid-template-columns: repeat(' + columns.length + ', minmax(0, 1fr));' });
+        var currentItems = [];
+        columns.forEach(function (c) {
+            var col = el('div', { 'class': 'rk-ch-col' });
+            col.appendChild(el('div', { 'class': 'rk-ch-col-title' }, c[0] + ' (' + c[1].length + ')'));
+            var list = el('div', { 'class': 'rk-ch-list' });
+            c[1].forEach(function (o) {
+                var item = el('div', { 'class': 'rk-ch-item' + (o.idx === currentChapterIndex ? ' current' : ''), 'data-idx': String(o.idx) }, shortName(o.text));
+                if (o.idx === currentChapterIndex) currentItems.push(item);
+                list.appendChild(item);
+            });
+            col.appendChild(list);
+            cols.appendChild(col);
+        });
+        cols.onclick = function (e) {
+            var t = e.target;
+            while (t && t !== cols && !(t.className && /rk-ch-item/.test(t.className))) t = t.parentNode;
+            if (!t || t === cols) return;
+            closeChapterPicker();
+            loadChapter(parseInt(t.getAttribute('data-idx'), 10));
+        };
+        panel.appendChild(cols);
+        view.appendChild(panel);
+        document.getElementById('rk-ch-btn').className = 'open';
+        // Show the current chapter a third of the way down its column.
+        currentItems.forEach(function (item) {
+            item.parentNode.scrollTop = Math.max(0, item.offsetTop - item.parentNode.offsetTop - item.parentNode.clientHeight / 3);
+        });
+    }
+
+    if (typeof closeReader === 'function') {
+        var originalCloseReader = closeReader;
+        closeReader = function () {
+            closeChapterPicker();
+            return originalCloseReader.apply(this, arguments);
+        };
+    }
 
     // ------------------------------------------------------------ preloading
     //
@@ -387,6 +545,8 @@
     var originalLoadChapter = loadChapter;
     loadChapter = function (chapterIndex) {
         if (chapterIndex < 0 || chapterIndex >= currentChapterList.length) return Promise.resolve();
+        closeChapterPicker();
+        syncChapterButton(chapterIndex);
         var ch = currentChapterList[chapterIndex];
         var ready = cachedPages(ch);
         if (!isMhg(currentReading) && !ready) {

@@ -138,3 +138,15 @@ opaque (grey arrow), or the page shows through them.
 `manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Manhuagui
 (port of the keiyoushi extension) and preloading live in `selfhost/site/js/rk-manga-sources.js`,
 which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
+
+- Chapter picker: the chapter drop-down (site-wide custom select, 200 px max-height) is
+  hidden by CSS and replaced by `#rk-ch-btn`, which opens `#rk-ch-panel` over
+  `#reader-view` down to the bottom of the window. It reads its entries from the hidden
+  `<select id="chapter-select">`, which stays the source of truth for manga.html.
+  Manhuagui titles with both 回/话 and 卷 (单行本) get two columns (`VOLUME_RE`).
+- Source switch: two 48 px buttons (`.rk-source-btn`) drive a hidden
+  `#rk-source-select`. Async store loads must check `currentSource()` before writing
+  results, or a slow reply from the other source overwrites the list.
+- Variables such as `currentChapterList`, `currentReading` and `isReaderOpen` are
+  top-level `let` in manga.html: they are visible to this script by name, but NOT as
+  `window.*` properties.
