@@ -202,12 +202,10 @@ export async function handleWorker(req, res, name, rest, search, origin) {
     const key = ttl ? workerCacheKey(name, req, rest, search) : null;
     const hit = key ? workerCache.get(key) : null;
     if (hit && Date.now() - hit.t < ttl) {
-        console.log(`[workers] ${name} GET /${rest} -> 200 (cached)`);
         await sendResponse(res, new Response(hit.body, { status: 200, headers: hit.headers }));
         return true;
     }
     const request = await toRequest(req, `${origin}/${rest}${search}`);
-    const started = Date.now();
     let response = await withPublicNetworkOnly(() => handler.fetch(request, env, ctx()));
     if (key && response.status === 200 && /json/i.test(response.headers.get('content-type') || '')) {
         const body = new Uint8Array(await response.arrayBuffer());
@@ -216,21 +214,6 @@ export async function handleWorker(req, res, name, rest, search, origin) {
         rememberWorkerAnswer(key, headers, body);
         response = new Response(body, { status: 200, headers });
     }
-    // Path and status (no query or headers), plus the error message of a failed
-    // request: pages such as Substack hide failures behind an empty list, so the log
-    // is where to look.
-    let note = '';
-    if (response.status >= 400) {
-        const type = response.headers.get('content-type') || '';
-        try {
-            if (/json/i.test(type)) note = ' ' + (await response.clone().text()).replace(/\s+/g, ' ').slice(0, 300);
-            else if (/html/i.test(type)) {
-                const m = (await response.clone().text()).match(/<title[^>]*>([^<]*)/i);
-                if (m) note = ' html: ' + m[1].trim().slice(0, 120);
-            }
-        } catch { }
-    }
-    console.log(`[workers] ${name} ${req.method} /${rest} -> ${response.status} (${Date.now() - started} ms)${note}`);
     await sendResponse(res, response);
     return true;
 }

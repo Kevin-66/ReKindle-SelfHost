@@ -196,9 +196,11 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
 - Article view font and formatting: `selfhost/site/css/rk-substack.css` (Georgia, heading
   sizes, quotes/callouts/captions, Substack's expand/restack buttons and subscribe
   widgets hidden). Everything is in `em`, so Text Size still applies.
-- Debugging: `workers-host.js` logs each worker request's path and status, plus the error
-  message of failed ones. Don't use the owner's Substack cookie yourself; ask them to
-  run requests (they did, with a Terminal one-liner that hid the cookie).
+- Debugging: the page hides failed requests behind "No posts found." Temporary logging
+  of each worker request's path, status and error message in `handleWorker` found the
+  `tvOnly` 400 (removed afterwards at the owner's request; add it back locally when
+  needed). Don't use the owner's Substack cookie yourself; ask them to run requests
+  (they did, with a Terminal one-liner that hid the cookie).
 
 ## Manga
 
