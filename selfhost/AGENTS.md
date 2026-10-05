@@ -49,6 +49,13 @@ as possible so `git merge upstream/main` stays clean.
   file has loaded, so the fallback never shows. `fixTranslationFallbacks()` in
   `transform.js` rewrites these to `window.t('key', 'Text')` in every page and script
   (25 places in 2026-10: Manga, Comics, ...). Write new code the same way.
+- `js/emoji-render.js` (`renderEmojis`, used by Substack and others) scans any text node
+  with a character above U+2600, and Chinese text counts. It then swapped EVERY
+  character found in `EMOJI_SVG_MAP` for an OpenMoji picture, and the map has about 60
+  ordinary characters below U+2600 (`-` 002D, ©, ®, ™, arrows, ▶, □...). So "re-lending"
+  in a paragraph that also had Chinese showed a black bar. `transformJs` now swaps a
+  single character only if it is itself above U+2600; multi-character sequences
+  (keycaps, ZWJ, FE0F) are unchanged.
 - `netguard.js` drops `cf-*` headers (CF-Connecting-IP, ...) from requests that workers
   and `/api` functions send out, as Cloudflare's runtime does. `workers-host.js` adds
   `cf-connecting-ip` to each incoming worker request, and the Substack worker forwards
