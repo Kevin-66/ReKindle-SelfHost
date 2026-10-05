@@ -182,6 +182,46 @@ the display scale.
 - `hackernews.html` uses `calc(<size> * var(--rk-text, 1))` in its own CSS and sets the
   variable itself (pages in `selfhost/site` are not transformed).
 
+## Z-Library (`selfhost/site/zlibrary.html`)
+
+- Launcher entry is injected by `transform.js`; `/__rk/zlibrary` serves a bounded,
+  five-minute cached public catalogue through `server/src/zlibrary.js`.
+- Current search markup uses `z-bookcard` with `slot="title"`/`slot="author"`
+  children and metadata attributes. Popular books use `a > z-cover`. Ignore hidden
+  cards on any ancestor: live search includes hidden synthetic records. Missing
+  catalogue markup is an upstream failure, not a zero-result search.
+- Plain HTTP via Netcup's `PROXY_URL` gets a 307 cookie redirect then DiamWall
+  verification (513). Headless Chromium is explicitly denied (517). A normal
+  headed Chromium under Xvfb, with its sandbox enabled and the same proxy, passes
+  the site's own JavaScript verification: verified popular + two search pages.
+  No CAPTCHA-solving service or imported account cookies are involved.
+- Direct headed-browser access from Netcup also works (2026-10-05): popular books
+  loaded in 3 seconds and search in 1.7 seconds with no proxy. The browser now uses
+  direct access by default, with optional `ZLIBRARY_PROXY_URL`; never implicitly
+  reuse archive.today's `PROXY_URL`. The sidecar only receives the optional
+  Z-Library-specific variable. Keep archive.today's proxy configuration intact.
+- `zlibrary-browser.js` defaults to headed Chromium and reuses a public context.
+  One tab at a time, a bounded queue, 60-second deadlines, and a five-minute idle
+  shutdown limit CPU/memory. Only HTTPS z-lib.sk, cdn-zlib.sk and diamwall.com
+  subresources are allowed; downloads, service workers and WebSockets are blocked.
+  Never log Playwright launch errors (proxy credentials can appear in them).
+- Dockerfile includes Playwright's matching browser, its dependencies and Xvfb.
+  `xvfb-run` must not be PID 1: it stalls awaiting Xvfb startup signals. Use
+  `tini -- xvfb-run` in Docker, or a waiting parent shell in the sidecar. The
+  sidecar has a liveness check only; its startup must not gate the whole app.
+  ConfigMaps contain three launcher variants and exceed the client-side apply
+  annotation limit, so deployment uses versioned `kubectl create` objects.
+  The server runs under xvfb-run; never change this to headless or disable Chromium's
+  sandbox to fix launch errors. `ZLIBRARY_BROWSER=false` selects HTTP-only mode.
+- An existing image can use `ZLIBRARY_BROWSER_ENDPOINT=http://127.0.0.1:8091`.
+  `selfhost/browser/deploy-netcup.py` installs a private sidecar and a ConfigMap
+  overlay, preserving live API/launcher changes. This avoids deploying unrelated
+  local edits. Reapply after platform redeploys, or retire the overlay when the
+  new image contains the feature. Rollback snapshots stay private on the host.
+- `rk_zlibrary_saved_v1` stores up to 200 local bookmarks, not downloads. The page
+  includes text-size setup and `rk-pager.js`; client timeout allows cold verification.
+- Focused checks: `node --test selfhost/server/test/zlibrary.test.js`.
+
 ## Minesweeper long press (`selfhost/site/js/rk-minesweeper.js`)
 
 `transform.js` adds the script to `minesweeper.html`. Holding a covered cell for 450 ms

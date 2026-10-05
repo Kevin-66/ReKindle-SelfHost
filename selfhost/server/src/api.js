@@ -12,6 +12,7 @@ import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
 import * as mangaState from './manga-state.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
+import { listBooks } from './zlibrary.js';
 import { Readable } from 'node:stream';
 
 const MAX_JSON = 16 * 1024 * 1024;
@@ -303,6 +304,11 @@ export async function handleApi(req, res, url) {
         if (section === 'st') return await handleStorage(req, res, parts[2], parts.slice(3).join('/'), url);
         if (section === 'manga') return await handleManga(req, res, url, parts);
         if (section === 'img') return await handleImage(req, res, url);
+        if (section === 'zlibrary') {
+            if (req.method !== 'GET') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET' } });
+            rateLimit(req, 'zlibrary', 30, 60000);
+            return send(res, 200, await listBooks(url.searchParams.get('q') || '', Number(url.searchParams.get('page') || 1)));
+        }
         if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
         switch (section) {
             case 'auth': return await handleAuth(req, res, parts[2]);

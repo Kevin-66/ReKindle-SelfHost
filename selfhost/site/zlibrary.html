@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Z-Library</title>
+<script>try{document.documentElement.style.setProperty('--rk-text',localStorage.getItem('rk_text_size')||'1');}catch(e){}</script>
+<style>
+:root{--shadow:4px 4px 0 #000;--stripe-pattern:repeating-linear-gradient(0deg,transparent,transparent 2px,#000 3px,#000 4px)}
+*{box-sizing:border-box;animation:none!important;transition:none!important}
+html{-webkit-tap-highlight-color:rgba(0,0,0,0)}
+body{margin:0;height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#e5e5e5;color:#000;font-family:Geneva,Verdana,sans-serif;image-rendering:pixelated}
+.window{width:95%;max-width:900px;height:90vh;background:#fff;border:2px solid #000;box-shadow:var(--shadow);display:flex;flex-direction:column;position:relative}
+.title-bar{height:52px;flex-shrink:0;border-bottom:2px solid #000;display:flex;align-items:center;justify-content:center;position:relative}
+.title-stripes{position:absolute;top:4px;bottom:4px;left:4px;right:4px;background-image:var(--stripe-pattern)}
+.title-text{position:relative;background:#fff;padding:0 15px;font-size:1.1rem;font-weight:bold;z-index:1;display:inline-flex;align-items:center;height:100%}
+.close-box{position:absolute;left:4px;top:0;width:48px;height:48px;z-index:2;display:flex;align-items:center;justify-content:center;text-decoration:none;color:#000}
+.close-box span{border:2px solid #000;box-shadow:2px 2px 0 #000;background:#fff;width:22px;height:22px;text-align:center}
+.toolbar{padding:10px;border-bottom:2px solid #000;background:#eee;flex-shrink:0}
+form{display:flex}input{min-width:0;flex:1;border:2px solid #000;padding:10px;font:inherit;border-radius:0;height:48px}form button{margin-left:8px}
+button,.button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;border:2px solid #000;background:#fff;color:#000;box-shadow:2px 2px 0 #000;padding:8px 12px;font:inherit;font-size:.9rem;cursor:pointer;text-decoration:none}
+button:active,.button:active{background:#000;color:#fff;box-shadow:none}button:disabled{color:#666;box-shadow:none;cursor:default}button[aria-pressed="true"]{background:#000;color:#fff}
+.tabs{display:flex;flex-wrap:wrap;margin-top:10px}.tabs>*{margin-right:8px;margin-top:4px}
+#content{overflow-y:auto;flex:1;min-height:0;padding:16px 16px 75px}
+h1{font-size:calc(1.25rem * var(--rk-text,1));margin:0 0 12px}p{line-height:1.6}#status{font-size:calc(.9rem * var(--rk-text,1));line-height:1.5;margin-bottom:12px}
+.book{border-top:2px solid #000;padding:14px 0}.book-title{display:block;border:0;box-shadow:none;padding:4px 0;font-size:calc(1.05rem * var(--rk-text,1));font-weight:bold;text-align:left;min-height:48px;text-decoration:underline}
+.author,.metadata{font-size:calc(.9rem * var(--rk-text,1));line-height:1.6;overflow-wrap:break-word}.metadata{margin-top:4px;color:#444}.actions{margin-top:10px;display:flex;flex-wrap:wrap}.actions>*{margin:0 10px 8px 0}
+#pagination{display:flex;align-items:center;margin-top:16px}#pagination>*{margin-right:12px}#page-label{font-size:.9rem}
+#detail h1{margin-top:18px;overflow-wrap:break-word}dl{font-size:calc(1rem * var(--rk-text,1));line-height:1.6}dt{font-weight:bold;margin-top:12px}dd{margin:0;overflow-wrap:break-word}
+[hidden]{display:none!important}.hint{font-size:.85rem;line-height:1.5;color:#444}
+@media(max-width:430px){.toolbar{padding:8px}.tabs>*{padding:6px 8px;margin-right:6px}#content{padding:12px 12px 75px}}
+</style>
+<script src="theme.js?v=18"></script>
+<script src="js/i18n.js"></script>
+</head>
+<body>
+<div class="window">
+ <div class="title-bar"><div class="title-stripes"></div><a class="close-box" href="index" aria-label="Back to ReKindle"><span>X</span></a><span class="title-text" data-i18n="zlibrary.title">Z-Library</span></div>
+ <div class="toolbar">
+  <form id="search-form"><input id="query" type="search" maxlength="200" aria-label="Title, author or ISBN" placeholder="Title, author or ISBN" data-i18n-placeholder="zlibrary.search_hint"><button type="submit" data-i18n="zlibrary.search">Search</button></form>
+  <nav class="tabs" aria-label="Books"><button id="popular" aria-pressed="true" data-i18n="zlibrary.popular">Popular</button><button id="saved" aria-pressed="false" data-i18n="zlibrary.saved">Saved books</button><a class="button" id="source" href="https://z-lib.sk/" target="_blank" rel="noopener noreferrer" data-i18n="zlibrary.open">Open on Z-Library</a></nav>
+ </div>
+ <main id="content">
+  <section id="listing"><h1 id="heading">Popular books</h1><div id="status" role="status" aria-live="polite"></div><button id="retry" hidden data-i18n="zlibrary.retry">Try again</button><div id="books"></div><div id="pagination" hidden><button id="previous" data-i18n="zlibrary.previous">Previous</button><span id="page-label"></span><button id="next" data-i18n="zlibrary.next">Next</button></div></section>
+  <section id="detail" hidden></section>
+ </main>
+</div>
+<script>
+(function () {
+ 'use strict';
+ var key = 'rk_zlibrary_saved_v1', saved = [], mode = 'popular', query = '', page = 1, seq = 0, scroll = 0;
+ var content = document.getElementById('content'), listing = document.getElementById('listing'), detail = document.getElementById('detail');
+ function tr(key, fallback) { return window.t ? window.t('zlibrary.' + key, fallback) : fallback; }
+ function safeBook(book) { try { var u = new URL(book.url); return u.origin === 'https://z-lib.sk' && /^\/book\/[^/]+\/[^/]+\.html$/.test(u.pathname) && typeof book.title === 'string'; } catch(e) { return false; } }
+ try { var data = JSON.parse(localStorage.getItem(key) || '[]'); if (Array.isArray(data)) saved = data.filter(safeBook).slice(0,200); } catch(e) {}
+ function el(tag, text, cls) { var node = document.createElement(tag); if (text) node.textContent = text; if (cls) node.className = cls; return node; }
+ function status(text) { document.getElementById('status').textContent = text; }
+ function isSaved(book) { return saved.some(function(b) { return b.url === book.url; }); }
+ function saveButton(book) {
+  var button = el('button', isSaved(book) ? tr('remove','Remove saved book') : tr('save','Save book'));
+  button.setAttribute('aria-pressed', String(isSaved(book)));
+  button.onclick = function() {
+   var next = saved.filter(function(b) { return b.url !== book.url; });
+   if (!isSaved(book)) { if(next.length >= 200) { button.textContent = tr('limit','Saved book limit reached (200)'); return; } next.push(book); }
+   try { localStorage.setItem(key, JSON.stringify(next)); saved = next; }
+   catch(e) { button.textContent = tr('storage_error','Could not save on this device'); return; }
+   button.textContent = isSaved(book) ? tr('remove','Remove saved book') : tr('save','Save book');
+   button.setAttribute('aria-pressed', String(isSaved(book)));
+   if (mode === 'saved' && detail.hidden) renderSaved();
+  };
+  return button;
+ }
+ function sourceLink(book) { var a = el('a',tr('open','Open on Z-Library'),'button'); a.href = book.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a; }
+ function showDetails(book) {
+  scroll = content.scrollTop; listing.hidden = true; detail.hidden = false; detail.textContent = ''; content.scrollTop = 0;
+  var back = el('button',tr('back','Back to books')); back.onclick = function() { detail.hidden = true; listing.hidden = false; if(mode === 'saved') renderSaved(); else renderBooks(currentBooks); content.scrollTop = scroll; }; detail.appendChild(back);
+  detail.appendChild(el('h1',book.title)); detail.appendChild(el('p',book.author || '', 'author'));
+  var dl = el('dl'); [['year','Year'],['language','Language'],['extension','Format'],['filesize','File size'],['publisher','Publisher'],['isbn','ISBN']].forEach(function(pair) { if(book[pair[0]]) { dl.appendChild(el('dt',tr(pair[0],pair[1]))); dl.appendChild(el('dd',book[pair[0]])); } }); detail.appendChild(dl);
+  var actions = el('div','','actions'); actions.appendChild(sourceLink(book)); actions.appendChild(saveButton(book)); detail.appendChild(actions);
+  detail.appendChild(el('p',tr('account_hint','Reading, downloads and sign-in open on Z-Library.'),'hint'));
+  back.focus();
+ }
+ var currentBooks = [];
+ function renderBooks(books) {
+  currentBooks = books; var root = document.getElementById('books'); root.textContent = '';
+  books.filter(safeBook).forEach(function(book) {
+   var row = el('article','','book'), title = el('button',book.title,'book-title'); title.onclick = function() { showDetails(book); }; row.appendChild(title);
+   row.appendChild(el('div',book.author || '', 'author'));
+   row.appendChild(el('div',[book.year,book.language,book.extension && book.extension.toUpperCase(),book.filesize].filter(Boolean).join(' · '),'metadata'));
+   var actions = el('div','','actions'); actions.appendChild(saveButton(book)); row.appendChild(actions); root.appendChild(row);
+  });
+ }
+ function renderSaved() { renderBooks(saved.slice().reverse()); status(saved.length ? tr('saved_hint','Saved on this device. These are bookmarks, not downloaded books.') : tr('no_saved','No saved books yet. Choose Save book while exploring.')); }
+ function urlForSearch() { return 'https://z-lib.sk/' + (query ? 's/' + encodeURIComponent(query) + (page > 1 ? '?page=' + page : '') : ''); }
+ function load() {
+  var request = ++seq; detail.hidden = true; listing.hidden = false; content.scrollTop = 0;
+  document.getElementById('popular').setAttribute('aria-pressed',String(mode === 'popular'));
+  document.getElementById('saved').setAttribute('aria-pressed',String(mode === 'saved'));
+  document.getElementById('heading').textContent = mode === 'saved' ? tr('saved','Saved books') : mode === 'popular' ? tr('popular_heading','Popular books') : tr('results','Search results') + ': ' + query;
+  document.getElementById('source').href = mode === 'saved' ? 'https://z-lib.sk/' : urlForSearch();
+  document.getElementById('pagination').hidden = true; document.getElementById('retry').hidden = true;
+  if (mode === 'saved') { renderSaved(); return; }
+  renderBooks([]); status(tr('loading','Loading books… The first visit may take a moment while Z-Library verifies the connection.'));
+  var controller = new AbortController(); var timeout = setTimeout(function(){controller.abort();},75000);
+  fetch('/__rk/zlibrary?q=' + encodeURIComponent(query) + '&page=' + page,{signal:controller.signal}).then(function(response) {
+   return response.json().then(function(data) { if(!response.ok) throw new Error(data.error && data.error.message || tr('load_error','Could not load books.')); return data; });
+  }).then(function(data) {
+   if(request !== seq) return;
+   renderBooks(data.books || []);
+   status(data.stale ? tr('stale','Showing recently cached books. Z-Library is temporarily unavailable.') : data.books.length ? '' : tr('empty','No books found. Try another title, author or ISBN.'));
+   document.getElementById('pagination').hidden = mode !== 'search' || (!data.hasNext && page === 1);
+   document.getElementById('previous').disabled = page === 1;
+   document.getElementById('next').disabled = !data.hasNext;
+   document.getElementById('page-label').textContent = tr('page','Page') + ' ' + page;
+  }).catch(function(error) {
+   if(request !== seq) return;
+   status(error.name === 'AbortError' ? tr('timeout','The request timed out. Try again or open Z-Library directly.') : error.message);
+   document.getElementById('retry').hidden = false;
+  }).then(function(){clearTimeout(timeout);});
+ }
+ document.getElementById('search-form').onsubmit = function(e) { e.preventDefault(); query = document.getElementById('query').value.trim(); mode = query ? 'search' : 'popular'; page = 1; load(); };
+ document.getElementById('popular').onclick = function() { mode = 'popular'; query = ''; page = 1; document.getElementById('query').value = ''; load(); };
+ document.getElementById('saved').onclick = function() { mode = 'saved'; load(); };
+ document.getElementById('retry').onclick = load;
+ document.getElementById('previous').onclick = function() { if(page > 1) { page--; load(); } };
+ document.getElementById('next').onclick = function() { page++; load(); };
+ if(window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
+ load();
+})();
+</script>
+<script src="js/rk-pager.js"></script>
+</body>
+</html>

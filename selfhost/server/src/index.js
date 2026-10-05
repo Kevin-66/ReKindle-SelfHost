@@ -9,6 +9,7 @@ import { loadWorkers, handleWorker, handlePagesFunction } from './workers-host.j
 import { serveStatic, siteMode } from './static.js';
 import { proxyEnabled } from './netguard.js';
 import './functions-host.js';
+import { closeCatalogueBrowser } from './zlibrary-browser.js';
 
 await loadWorkers();
 
@@ -71,6 +72,7 @@ server.listen(config.port, config.host, () => {
 function shutdown() {
     console.log('Shutting down...');
     rtdb.flush();
+    closeCatalogueBrowser();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
 }
