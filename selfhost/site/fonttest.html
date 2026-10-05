@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Font test</title>
+<!-- Self-hosted ReKindle: which Chinese fonts can this browser use? Not linked from
+     the launcher; open /fonttest on the device. A font counts as present when text
+     drawn with it differs from the same text in the fallback font. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&amp;text=%E7%A1%AE%E8%A7%92%E9%AA%A8%E7%9B%B4%E6%AD%A3%E9%80%89%E6%8B%A9%E8%BF%94&amp;display=block">
+<style>
+body { background: #fff; color: #000; font-family: "Geneva", "Verdana", sans-serif; margin: 0; padding: 12px; }
+h1 { font-size: 1.2rem; margin: 0 0 8px; }
+p { margin: 0 0 10px; font-size: 0.9rem; }
+.row { border-top: 1px solid #000; padding: 8px 0; }
+.name { font-size: 0.8rem; font-weight: bold; }
+.sample { font-size: 2.4rem; line-height: 1.3; }
+.none { color: #555; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<h1>Chinese font test</h1>
+<p>Look at the 角 in 确 and in 角: in Chinese fonts its middle stroke goes through the bottom; in Japanese fonts it stops. Tell Claude which lines look Chinese.</p>
+<div id="out" data-rk-cjk="off">Testing...</div>
+<h1 style="margin-top:18px">With the fix (rk-cjk.js)</h1>
+<div class="row"><div class="name">Serif text (like Substack articles): Chinese should use STSong</div>
+<p style="font-family: Georgia, serif; font-size: 1.4rem; line-height: 1.5">He said 当前的中日关系又一次面临严峻局面，有待再次实现正常化, and asked Japan to make the 正确选择.</p></div>
+<div class="row"><div class="name">Sans-serif text (like ReKindle menus): Chinese should use STHeiti</div>
+<p style="font-family: Geneva, Verdana, sans-serif; font-size: 1.4rem; line-height: 1.5">漫画柜 Manhuagui: 鬼灭之刃 第23卷, 斗罗大陆 更新至第749话 正确</p></div>
+<script>
+(function () {
+    var SAMPLE = '确角骨直 正确选择';  // 确角骨直 正确选择
+    var CANDIDATES = [
+        'STSong', 'STSongMedium', 'STSong-Light', 'STSongStd-Light', 'STSongSC', 'STSongTC',
+        'STKai', 'STKaiti', 'STKaiTi', 'STKaiSC', 'STKaiTC', 'STHeiti', 'STHeitiSC', 'STHeitiSC-Medium', 'STHeitiTC',
+        'STYuan', 'STYuanSC', 'STYuanTC', 'Song', 'Hei', 'Kai', 'Yuan', '宋体', '黑体', '楷体', '圆体',
+        'Songti SC', 'Heiti SC', 'Kaiti SC', 'PingFang SC', 'Hiragino Sans GB',
+        'Noto Sans CJK SC', 'Noto Serif CJK SC', 'Noto Sans SC', 'Noto Sans CJK', 'Noto Sans CJK JP',
+        'Source Han Sans SC', 'Source Han Serif SC', 'Source Han Sans CN', 'Droid Sans Fallback', 'DroidSansFallback',
+        'WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'AR PL UMing CN', 'AR PL UKai CN', 'SimSun', 'SimHei', 'Microsoft YaHei',
+        'FZLanTingHei', 'FZYaSong', 'DFPKingGothicGB', 'MYing Hei', 'MYingHeiPRC', 'MYingHeiSMedium', 'MYingHeiTMedium',
+        'MYuen', 'MKai', 'HYKaiti', 'TBGothic', 'TBMincho', 'Tsukushi A Round Gothic', 'MHei', 'Amazon Ember', 'Bookerly'
+    ];
+    var canvas = document.createElement('canvas');
+    canvas.width = 420; canvas.height = 70;
+    var ctx = canvas.getContext('2d');
+    function draw(font) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#000';
+        ctx.textBaseline = 'top';
+        ctx.font = '48px ' + font;
+        ctx.fillText(SAMPLE, 0, 4);
+        var d = ctx.getImageData(0, 0, canvas.width, canvas.height).data, h = 0;
+        for (var i = 3; i < d.length; i += 16) h = (h * 31 + d[i]) | 0;
+        return h;
+    }
+    var fallbacks = ['monospace', 'serif', 'sans-serif'];
+    var base = {};
+    for (var f = 0; f < fallbacks.length; f++) base[fallbacks[f]] = draw(fallbacks[f]);
+    function present(name) {
+        for (var f = 0; f < fallbacks.length; f++) {
+            if (draw('"' + name + '", ' + fallbacks[f]) !== base[fallbacks[f]]) return true;
+        }
+        return false;
+    }
+    function row(label, style, attrs) {
+        return '<div class="row"><div class="name">' + label + '</div><div class="sample" style="' + style + '"' + (attrs || '') + '>' + SAMPLE + '</div></div>';
+    }
+    var html = '';
+    html += row('Default (page is English)', '');
+    html += row('Default, lang="zh-Hans"', '', ' lang="zh-Hans"');
+    html += row('Default, lang="zh-CN"', '', ' lang="zh-CN"');
+    html += row('Default, lang="zh-TW"', '', ' lang="zh-TW"');
+    html += row('Default, lang="ja"', '', ' lang="ja"');
+    html += row('Web font: Noto Sans SC (downloaded)', 'font-family: \'Noto Sans SC\', monospace');
+    var found = [];
+    for (var c = 0; c < CANDIDATES.length; c++) if (present(CANDIDATES[c])) found.push(CANDIDATES[c]);
+    if (!found.length) html += '<div class="row none">None of the ' + CANDIDATES.length + ' font names tested is installed in this browser.</div>';
+    for (var k = 0; k < found.length; k++) html += row('Installed: ' + found[k], 'font-family: \'' + found[k] + '\', monospace');
+    html += '<div class="row none">Tested: ' + CANDIDATES.join(', ') + '</div>';
+    document.getElementById('out').innerHTML = html;
+})();
+</script>
+<script src="js/rk-cjk.js"></script>
+</body>
+</html>
