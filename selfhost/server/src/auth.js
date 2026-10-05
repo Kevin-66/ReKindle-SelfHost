@@ -128,6 +128,7 @@ export function deleteUser(uid) {
     if (!getUser(uid)) throw new AuthError('auth/user-not-found', 'There is no user record corresponding to the provided identifier.', 404);
     db.prepare('DELETE FROM sessions WHERE uid = ?').run(uid);
     db.prepare('DELETE FROM user_claims WHERE uid = ?').run(uid);
+    db.prepare('DELETE FROM manga_state WHERE uid = ?').run(uid);
     db.prepare('DELETE FROM users WHERE uid = ?').run(uid);
     adminCache = null;
 }
