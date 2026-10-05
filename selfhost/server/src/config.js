@@ -25,7 +25,7 @@ export const config = {
     upstreamDir: path.resolve(env.UPSTREAM_DIR || path.join(SERVER_DIR, '..', '..')),
 
     // Every signed-in user gets ReKindle+ features on this server.
-    plusForAll: bool(env.PLUS_FOR_ALL, true),
+    plusForAll: bool(env.PLUS_FOR_ALL, false),
 
     // Username of the server admin. Empty = the first account created becomes admin.
     adminUsername: (env.ADMIN_USERNAME || '').trim().toLowerCase(),
