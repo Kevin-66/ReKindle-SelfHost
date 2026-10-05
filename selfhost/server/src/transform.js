@@ -128,6 +128,52 @@ export function transformHtml(html, fileName) {
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
     }
+    if (base === 'substack.html') {
+        // Font and formatting of the article view (selfhost/site/css/rk-substack.css).
+        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css">\n</head>');
+        // Substack's subscriptions API changed (2026-10), which left the app's feed empty:
+        // - a signed-in request without ?tvOnly= is rejected (HTTP 400 "Invalid value");
+        // - publications the reader follows come back in `publications` while
+        //   `subscriptions` can be empty, and the app only read `subscriptions`.
+        html = html.replace(/apiCall\((['"])\/subscriptions\1\)/, "apiCall('/subscriptions?tvOnly=false')");
+        html = html.replace('const rawSubs = subData.subscriptions || [];',
+            'const rawSubs = (subData.subscriptions || []).slice();\n' +
+            '                    (subData.publications || []).forEach(p => {\n' +
+            '                        if (!rawSubs.some(s => (s.publication_id || (s.publication && s.publication.id)) == p.id)) rawSubs.push({ publication_id: p.id, publication: p });\n' +
+            '                    });');
+        // Publication addresses can be bare domains ("newsletter.example.com"), which
+        // made `new URL()` throw and the publication drop out of the feed.
+        html = html.replace('async function apiCall(endpoint, options = {}) {',
+            'function rkAbsUrl(u) { return /^https?:\\/\\//i.test(u) ? u : \'https://\' + u; }\n' +
+            // Older images point at Heroku "bucketeer" S3 buckets that now answer 403 (e.g.
+            // Noahpinion's logo); the same files are on substack-post-media.
+            '        function rkFixImages(text) { return text.replace(/https:\\/\\/bucketeer-[a-z0-9-]+\\.s3\\.amazonaws\\.com\\//g, \'https://substack-post-media.s3.amazonaws.com/\'); }\n' +
+            // rss_icon.png does not exist in ReKindle; a missing icon becomes an outlined square, once.
+            '        function rkNoIcon(img) { img.onerror = null; img.src = \'data:image/svg+xml;charset=utf-8,\' + encodeURIComponent(\'<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect x="1" y="1" width="30" height="30" fill="#fff" stroke="#000" stroke-width="2"/></svg>\'); }\n\n' +
+            '        async function apiCall(endpoint, options = {}) {');
+        html = html.replace('return await res.json();', 'return JSON.parse(rkFixImages(await res.text()));');
+        html = html.split('onerror="this.src=\'rss_icon.png\'"').join('onerror="rkNoIcon(this)"');
+        html = html.replace(' || pub.cover_photo_url || "rss_icon.png";', ' || pub.cover_photo_url || "";');
+        html = html.replace('new URL(resolvedBase)', 'new URL(rkAbsUrl(resolvedBase))');
+        html = html.replace('new URL(baseUrl)', 'new URL(rkAbsUrl(baseUrl))');
+        // "Following" takes 15 posts from each publication, but the next batch started at
+        // post 50, so posts 16-50 of every publication were never shown.
+        html = html.replace('state.subOffset += 50;', 'state.subOffset += 15;');
+        // Full articles: a publication's own domain (e.g. sinocism.com) does not know the
+        // reader's substack.com login and sends only the free preview of paid posts (the
+        // owner saw 1,300 of 16,700 words). substack.com/api/v1/posts/by-id/<id> does.
+        html = html.replace(
+            "                let data;\n                try {\n                    data = await apiCall(`/posts/${id}`, { headers: { 'X-Substack-Target': targetDomain } });\n                } catch (err1) {",
+            "                let data = null;\n" +
+            "                try {\n" +
+            "                    const full = await apiCall(`/posts/by-id/${id}`);\n" +
+            "                    data = full && (full.post || full);\n" +
+            "                    if (!data || !data.body_html) data = null;\n" +
+            "                } catch (err0) { data = null; }\n" +
+            "                if (!data) try {\n" +
+            "                    data = await apiCall(`/posts/${id}`, { headers: { 'X-Substack-Target': targetDomain } });\n" +
+            "                } catch (err1) {");
+    }
     if (base === 'manga.html') {
         // Upstream switched the Manga app off with an immediate redirect; turn it back
         // on and add the Manhuagui source (selfhost/site/js/rk-manga-sources.js).

@@ -152,6 +152,44 @@ the display scale.
 - `hackernews.html` uses `calc(<size> * var(--rk-text, 1))` in its own CSS and sets the
   variable itself (pages in `selfhost/site` are not transformed).
 
+## Substack (`substack.html`)
+
+`transform.js` edits the page at build time (upstream file untouched):
+
+- Substack's subscriptions API changed (2026-10): a signed-in
+  `GET /api/v1/subscriptions` without `?tvOnly=` answers 400 `{"param":"tvOnly","msg":"Invalid
+  value"}` (signed out it answers 401 first, so a fake cookie never shows this). With
+  `?tvOnly=false` the owner's account got `subscriptions: []` and 7 `publications`, so the
+  feed is now built from both lists (publications without a subscription entry become
+  `{ publication_id, publication }`). The app only uses `sub.publication.*` fields.
+- Publication addresses may be bare domains (`custom_domain_optional`), and `new URL()`
+  threw on them, silently dropping that publication from the feed; `rkAbsUrl()` adds
+  `https://`.
+- Full articles: `fetchFullPost` asked the publication's own domain (e.g. sinocism.com),
+  which does not know the reader's substack.com login and returns only the free preview
+  of paid posts (1,300 of 16,700 words). It now tries `substack.com/api/v1/posts/by-id/<id>`
+  first (answer `{ post: {...} }`), then the old domain-based requests.
+- Images: old publications point at Heroku "bucketeer" S3 buckets that answer 403 (e.g.
+  Noahpinion's logo); the same paths exist on `substack-post-media.s3.amazonaws.com`.
+  `apiCall` rewrites them in the JSON text (`rkFixImages`). The page's fallback
+  `rss_icon.png` does not exist in ReKindle; `rkNoIcon()` swaps in an outlined square
+  once (clearing `onerror`, so a failing fallback can't loop).
+- "Following" is the author's aggregation (15 newest posts from each publication, merged
+  by date) and stays that way: the owner rejected a reworked timeline. Only its bug is
+  fixed: the next batch started at post 50 (`subOffset += 50`), skipping posts 16-50.
+- `workers-host.js` caches the Substack relay's successful JSON answers for 1 hour
+  (`WORKER_CACHE_MS`), keyed by path, query, `X-Substack-Target` and a hash of the cookie,
+  because the app re-requests every publication each time a view opens. The Refresh
+  button therefore shows answers up to an hour old (owner's choice).
+- The cookie is sent exactly as pasted. The owner asked NOT to add parsing of a whole
+  Cookie line; the settings text says to copy only the `substack.sid` value.
+- Article view font and formatting: `selfhost/site/css/rk-substack.css` (Georgia, heading
+  sizes, quotes/callouts/captions, Substack's expand/restack buttons and subscribe
+  widgets hidden). Everything is in `em`, so Text Size still applies.
+- Debugging: `workers-host.js` logs each worker request's path and status, plus the error
+  message of failed ones. Don't use the owner's Substack cookie yourself; ask them to
+  run requests (they did, with a Terminal one-liner that hid the cookie).
+
 ## Manga
 
 `manga.html` is upstream's disabled MangaDex app, re-enabled at build time. Its title uses the

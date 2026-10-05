@@ -1,6 +1,7 @@
 // Runs ReKindle's Cloudflare Workers (workers/*/worker.js) and Pages Functions
 // (functions/api/*.js) inside this server, unmodified.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -167,13 +168,54 @@ async function sendResponse(res, response) {
 
 const ctx = () => ({ waitUntil: (p) => { Promise.resolve(p).catch(() => { }); }, passThroughOnException: () => { } });
 
+// Workers whose successful GET answers are kept for a while. Substack: the app asks
+// every publication for its posts again each time "Following" or a publication is
+// opened. Keyed by the whole request (path, query, target site) and a hash of the
+// reader's cookie, so readers never share answers. Only JSON with status 200 is kept.
+const WORKER_CACHE_MS = { 'rekindle-substack': 60 * 60 * 1000 };
+const WORKER_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const workerCache = new Map(); // key -> { t, headers, body }
+let workerCacheBytes = 0;
+
+function workerCacheKey(name, req, rest, search) {
+    const sid = crypto.createHash('sha256').update(String(req.headers['x-substack-sid'] || '')).digest('base64url').slice(0, 22);
+    return `${name} /${rest}${search} @${req.headers['x-substack-target'] || ''} #${sid}`;
+}
+
+function rememberWorkerAnswer(key, headers, body) {
+    const old = workerCache.get(key);
+    if (old) { workerCacheBytes -= old.body.length; workerCache.delete(key); }
+    workerCache.set(key, { t: Date.now(), headers, body });
+    workerCacheBytes += body.length;
+    for (const [k, v] of workerCache) {
+        if (workerCacheBytes <= WORKER_CACHE_MAX_BYTES) break;
+        workerCacheBytes -= v.body.length;
+        workerCache.delete(k);
+    }
+}
+
 // /__rk/w/<worker>/<rest>  ->  worker sees  <origin>/<rest>
 export async function handleWorker(req, res, name, rest, search, origin) {
     const handler = workers.get(name);
     if (!handler) return false;
+    const ttl = req.method === 'GET' ? WORKER_CACHE_MS[name] || 0 : 0;
+    const key = ttl ? workerCacheKey(name, req, rest, search) : null;
+    const hit = key ? workerCache.get(key) : null;
+    if (hit && Date.now() - hit.t < ttl) {
+        console.log(`[workers] ${name} GET /${rest} -> 200 (cached)`);
+        await sendResponse(res, new Response(hit.body, { status: 200, headers: hit.headers }));
+        return true;
+    }
     const request = await toRequest(req, `${origin}/${rest}${search}`);
     const started = Date.now();
-    const response = await withPublicNetworkOnly(() => handler.fetch(request, env, ctx()));
+    let response = await withPublicNetworkOnly(() => handler.fetch(request, env, ctx()));
+    if (key && response.status === 200 && /json/i.test(response.headers.get('content-type') || '')) {
+        const body = new Uint8Array(await response.arrayBuffer());
+        const headers = [];
+        response.headers.forEach((v, k) => { if (k !== 'set-cookie') headers.push([k, v]); });
+        rememberWorkerAnswer(key, headers, body);
+        response = new Response(body, { status: 200, headers });
+    }
     // Path and status (no query or headers), plus the error message of a failed
     // request: pages such as Substack hide failures behind an empty list, so the log
     // is where to look.

@@ -30,6 +30,11 @@ Manga library) when it grows past 64 MB.
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.
 
+The **Substack** app works again: Substack changed its subscriptions API (the feed was
+empty), paid posts now load in full instead of the free preview, old publication
+icons load, articles get a readable font and layout, and Substack's answers are kept
+on the server for an hour so switching views is quick.
+
 **Reddit** is turned off for now and hidden from the launcher. Reddit no longer serves
 servers: its feeds allow about one request a minute (and end on 2026-11-13), its JSON
 API answers "blocked by network security", new API apps need Reddit's approval, and
