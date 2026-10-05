@@ -24,18 +24,11 @@ ENV NODE_ENV=production \
     PORT=8080 \
     DATA_DIR=/data \
     SITE_DIR=/app/site \
-    UPSTREAM_DIR=/app/upstream \
-    PLAYWRIGHT_BROWSERS_PATH=/opt/rekindle-browsers
+    UPSTREAM_DIR=/app/upstream
 WORKDIR /app/selfhost/server
 
 COPY --from=server-deps /app/selfhost/server/node_modules ./node_modules
 COPY selfhost/server/ ./
-# Z-Library's verification requires a browser with a display. Chromium retains
-# its sandbox; Xvfb provides a private display without exposing a desktop port.
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth tini \
-    && node node_modules/playwright-core/cli.js install --with-deps --no-shell chromium \
-    && chmod -R a+rX /opt/rekindle-browsers \
-    && rm -rf /var/lib/apt/lists/*
 COPY selfhost/client/ /app/selfhost/client/
 COPY --from=site /build/_deploy/ /app/site/
 
@@ -51,4 +44,5 @@ EXPOSE 8080
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
     CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/__rk/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["tini", "--", "xvfb-run", "-a", "--server-args=-screen 0 1280x800x24", "node", "--disable-warning=ExperimentalWarning", "src/index.js"]
+# Z-Library's Chromium runs in its own service: Dockerfile.zlibrary-browser.
+CMD ["node", "--disable-warning=ExperimentalWarning", "src/index.js"]

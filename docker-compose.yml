@@ -12,6 +12,22 @@ services:
     environment:
       # Server time zone (used for logs; pages detect each device's own zone).
       - TZ=${TZ:-UTC}
+      # Z-Library's catalogue browser (the service below).
+      - ZLIBRARY_BROWSER_ENDPOINT=http://zlibrary-browser:8091
+      - ZLIBRARY_BROWSER_TOKEN=${ZLIBRARY_BROWSER_TOKEN:-}
     volumes:
       # Accounts, app data and uploaded files. Back this folder up.
       - ./selfhost/data:/data
+
+  # Chromium for the Z-Library app, kept out of the main image. Not published on a
+  # port: only the rekindle container reaches it on the Compose network.
+  zlibrary-browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.zlibrary-browser
+    image: rekindle-zlibrary-browser
+    container_name: rekindle-zlibrary-browser
+    restart: unless-stopped
+    environment:
+      - ZLIBRARY_BROWSER_TOKEN=${ZLIBRARY_BROWSER_TOKEN:-}
+      - ZLIBRARY_PROXY_URL=${ZLIBRARY_PROXY_URL:-}
