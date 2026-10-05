@@ -177,19 +177,19 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   reaches the screen. Tried and rejected by the owner on 2026-10-05: swapping straight
   from page to page in one redraw, and keeping the old page until the next was ready
   then blanking and drawing in back-to-back frames. Keep the original.
-- `pageSrc()` turns page links into `/__rk/img?url=...&page=WxH` (MangaDex, was
-  `/api/proxy`) or `/__rk/manga/img?...&page=WxH` (Manhuagui), where WxH is the reader's
-  size in device pixels (`devicePixelRatio` x the theme.js zoom on `.window`).
-  `server/src/images.js` fits the page to that box (enlarging too; the browser would
-  enlarge with blocky nearest-neighbour scaling) and the client shows it 1:1. The only
-  other change is the background: pixels whose darkest channel is above 225 fade to
-  pure white (fully white from 240). The owner wants the panels/artwork left exactly as
-  drawn: no grayscale conversion (Kindle Scribe Colorsoft shows colour), no contrast or
-  levels, no dithering. A black-and-white dithered mode was built and rejected
-  (2026-10-05: it spoils fine screentone such as clothes); don't bring it back.
+- `pageSrc()` turns page links into `/__rk/img?url=...&page=1` (MangaDex, was
+  `/api/proxy`) or `/__rk/manga/img?...&page=1` (Manhuagui). `server/src/images.js`
+  passes the original image through unchanged (server memory cache, `no-store` for the
+  browser, MangaDex@Home -> uploads.mangadex.org fallback). Tried and rejected on
+  2026-10-05, don't bring back: resizing/re-encoding pages to the screen (mozjpeg made
+  page turns ~1 s slower), whitening the background, grayscale conversion, and a
+  dithered black-and-white mode. The owner wants the original images, colour included
+  (Kindle Scribe Colorsoft).
 - Pages are served with `Cache-Control: no-store` and the preloaded `<img>` elements
   are what gets shown (`takePreloaded`), since no-store images are not reused from
-  the browser cache. Reason: the Kindle erases the browser's whole data folder
+  the browser cache. The last `RECENT_KEEP` (2) pages shown are kept too, so going back
+  is instant. The server keeps pages in a 64 MB in-memory LRU (`serveImage`).
+  Reason for no-store: the Kindle erases the browser's whole data folder
   (localStorage sign-in, IndexedDB Manga library/progress) at launch once it passes
   64 MB, and cached pages (MangaDex@Home sent 14-day caching, up to 2.4 MB a page) did
   that; the owner saw it as "logged out and library gone after a deploy" (they reopened

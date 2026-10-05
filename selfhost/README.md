@@ -23,10 +23,9 @@ Manhuagui (漫画柜) is added as a second source (a port of the
 [keiyoushi](https://github.com/keiyoushi/extensions-source) Mihon extension).
 Manhuagui needs an account on the server; pages are WebP, which the Kindle
 experimental browser shows but very old devices may not. Both sources preload the
-next pages and the next chapter. The server fits pages to the reader's screen pixels
-and makes their near-white background pure white; the artwork is left as drawn, colour
-included. Page images are not kept in the browser cache: the Kindle erases the
-browser's data (sign-in, Manga library) when it grows past 64 MB.
+next pages and the next chapter. Pages are shown exactly as the sources serve them,
+but are not kept in the browser cache: the Kindle erases the browser's data (sign-in,
+Manga library) when it grows past 64 MB.
 
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.

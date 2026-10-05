@@ -106,7 +106,7 @@
             '.rk-ch-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}' +
             '.rk-ch-item{padding:12px 10px;border-bottom:1px solid #000;cursor:pointer;font-size:0.95rem;line-height:1.3;}' +
             '.rk-ch-item.current{background:#000;color:#fff;font-weight:bold;}' +
-            // Pure white behind pages, like their whitened background.
+            // Pure white behind pages.
             '#reader-content{background:#fff;}';
         var style = el('style', { id: 'rk-manga-style' });
         style.appendChild(document.createTextNode(css));
@@ -519,11 +519,23 @@
         return img;
     }
 
+    // The last pages shown stay in memory too, so going back a page is instant.
+    var RECENT_KEEP = 2;
+    var recent = [];
+
     function takePreloaded(url) {
-        for (var i = 0; i < preloaded.length; i++) {
-            if (preloaded[i].src === absolute(url)) return preloaded.splice(i, 1)[0];
+        var lists = [preloaded, recent];
+        for (var l = 0; l < lists.length; l++) {
+            for (var i = 0; i < lists[l].length; i++) {
+                if (lists[l][i].src === absolute(url)) return lists[l].splice(i, 1)[0];
+            }
         }
         return null;
+    }
+
+    function remember(img) {
+        recent.unshift(img);
+        if (recent.length > RECENT_KEEP) recent.length = RECENT_KEEP;
     }
 
     function preloadAhead() {
@@ -606,16 +618,12 @@
     // the page appears when it has loaded. The owner tried a straight page-to-page
     // swap and a blank drawn together with the page (2026-10-05) and preferred this.
     //
-    // Pages come from this server (server/src/images.js) fitted to the reader in
-    // device pixels, shown 1:1, with their near-white background made pure white;
-    // the artwork itself is not changed.
-    //
-    // They are sent with Cache-Control: no-store. The Kindle deletes the browser's
+    // Pages are the original images, passed through this server (server/src/images.js)
+    // unchanged, only marked Cache-Control: no-store: the Kindle deletes the browser's
     // whole data folder (sign-in, the Manga library and progress) when it passes
     // 64 MB, and cached manga pages (up to 2 MB each) used to fill it.
 
     var showSeq = 0;
-    var box = null; // the reader's size in device pixels, measured once per layout
 
     function absolute(url) {
         var a = document.createElement('a');
@@ -623,61 +631,19 @@
         return a.href;
     }
 
-    // Device pixels per CSS pixel inside the window (theme.js may zoom .window).
-    function pixelScale() {
-        var zoom = 1;
-        var win = document.querySelector('.window');
-        if (win && window.getComputedStyle) zoom = parseFloat(getComputedStyle(win).zoom) || 1;
-        return (window.devicePixelRatio || 1) * zoom;
-    }
-
-    function measureBox() {
-        var content = document.getElementById('reader-content');
-        var w = content ? content.clientWidth : 0;
-        var h = content ? content.clientHeight : 0;
-        if (!w || !h) return null;
-        var s = pixelScale();
-        return { w: Math.min(4096, Math.round(w * s)), h: Math.min(4096, Math.round(h * s)), s: s };
-    }
-
-    function readerBox() {
-        if (!box) box = measureBox();
-        return box || { w: Math.round(window.innerWidth * pixelScale()), h: Math.round(window.innerHeight * pixelScale()), s: pixelScale() };
-    }
-
-    // The URL of a page fitted to the reader: MangaDex pages come as /api/proxy links
-    // (manga.html), Manhuagui ones as this server's signed /__rk/manga/img links.
+    // The page URL to show: MangaDex pages come as /api/proxy links (manga.html),
+    // Manhuagui ones as this server's signed /__rk/manga/img links.
     function pageSrc(url) {
         if (!url) return url;
-        var b = readerBox();
-        var q = 'page=' + b.w + 'x' + b.h;
         var m = /^\/api\/proxy\?url=([^&]+)$/.exec(url);
-        if (m) return '/__rk/img?url=' + m[1] + '&' + q;
-        if (url.indexOf('/__rk/manga/img?') === 0) return url + '&' + q;
+        if (m) return '/__rk/img?url=' + m[1] + '&page=1';
+        if (url.indexOf('/__rk/manga/img?') === 0) return url + '&page=1';
         return url;
-    }
-
-    // 1:1 in device pixels when the page was made for this reader size, otherwise fitted.
-    function fitPage(img, content) {
-        var s = pixelScale();
-        var nw = img.naturalWidth / s, nh = img.naturalHeight / s;
-        if (!nw || !nh) return;
-        var k = Math.min(content.clientWidth / nw, content.clientHeight / nh);
-        if (Math.abs(k - 1) < 0.02) k = 1;
-        img.style.width = (nw * k) + 'px';
-        img.style.height = (nh * k) + 'px';
     }
 
     function nextFrame(fn) {
         if (window.requestAnimationFrame) window.requestAnimationFrame(fn);
         else setTimeout(fn, 16);
-    }
-
-    function relayout() {
-        var b = measureBox();
-        if (!b || (box && b.w === box.w && b.h === box.h && b.s === box.s)) return;
-        box = b;
-        if (isReaderOpen && currentReading && currentReading.pages) updateMangaPage();
     }
 
     if (typeof updateMangaPage === 'function' && typeof saveProgress === 'function') {
@@ -704,8 +670,8 @@
 
             var shown = function () {
                 if (!current()) return;
-                fitPage(img, content);
                 showStatus(label);
+                remember(img);
                 preloadAhead();
             };
             var retried = false;
@@ -749,20 +715,6 @@
             saveProgress(reading.id, chapterIndex, page, chapterNum);
         };
     }
-
-    if (typeof toggleFullScreen === 'function') {
-        var originalToggleFullScreen = toggleFullScreen;
-        toggleFullScreen = function () {
-            var r = originalToggleFullScreen.apply(this, arguments);
-            relayout();
-            return r;
-        };
-    }
-    var resizeTimer = null;
-    window.addEventListener('resize', function () {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(relayout, 300);
-    });
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildControls);
     else buildControls();

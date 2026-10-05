@@ -251,7 +251,7 @@ async function handleManga(req, res, url, parts) {
     if (parts[2] === 'img') {
         const u = url.searchParams.get('u');
         const k = url.searchParams.get('k');
-        // With ?page=WxH: the Manga reader's page, fitted and background whitened (images.js).
+        // With ?page=1: a Manga reader page, unchanged but not cached by the browser (images.js).
         const opts = pageOptions(url.searchParams);
         if (opts) return await sendImage(req, res, () => serveImage(`mhg:${u}:${k}`, [() => manhuagui.proxyImage(u, k)], opts));
         const r = await manhuagui.proxyImage(u, k);
