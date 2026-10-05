@@ -125,17 +125,31 @@ export function loadBrowserCatalogue(url) {
 //
 // Downloads one book with the reader's Z-Library cookie: a fresh context (nothing
 // shared with the public catalogue session or other readers) opens the book page in
-// the same headed Chromium, so Z-Library's verification passes, clicks its download
-// link and saves the file. Z-Library's own and its download hosts are allowed.
-const DOWNLOAD_HOST = /(^|\.)(z-?lib(rary)?|z-library|singlelogin|1lib)[a-z0-9-]*\.[a-z]{2,24}$/i;
+// the same headed Chromium, so Z-Library's verification passes, and saves the file.
+//
+// The Kindle only opens MOBI, so in order of preference:
+// 1. a MOBI file of the same book (a /dl/ link whose own text says MOBI, after the
+//    "other formats" button has loaded the book's other files);
+// 2. Z-Library's own converter: the book page's "Convert to" menu has
+//    a.converterLink[data-convert_to="mobi"]; clicking it makes the page's script POST
+//    /papi/book/<id>/file-conversion/mobi (answer: {error} | {jobId} | {response:
+//    {statusOkContent, downloadUrl}} when already converted), poll
+//    /papi/book/<id>/file-conversion/jobs every 10 s and, when the job is "ok", open
+//    its downloadUrl, which we catch as the download. A failed job shows
+//    #converterCurrentStatusesBox .status-error. (Read from book-details.min.js, 2026-10.)
+// 3. otherwise, or when Z-Library's conversion fails or takes too long, the original
+//    file, which the browser service converts with Calibre (POST /convert).
+// Subresources are limited to Z-Library and its assets; page navigations (download
+// links redirect to download hosts we can't list in advance) may go to any https host.
 const MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024;
+const CONVERT_WAIT_MS = 5 * 60 * 1000;
 let downloads = Promise.resolve();
 
-function downloadAllowed(value) {
+function downloadAllowed(request) {
     try {
-        const url = new URL(value);
+        const url = new URL(request.url());
         if (url.protocol !== 'https:' || url.username || url.password) return false;
-        return allowedBrowserUrl(value) || DOWNLOAD_HOST.test(url.hostname);
+        return allowedBrowserUrl(url.href) || (request.isNavigationRequest() && request.resourceType() === 'document');
     } catch { return false; }
 }
 
@@ -148,10 +162,40 @@ export function cookiePairs(text) {
     return pairs;
 }
 
-function downloadFailed(status = 502) {
-    return Object.assign(new Error('Z-Library did not start the download. Your cookie may have expired (sign in on Z-Library and copy it again), or the daily download limit may be reached.'), {
+function downloadFailed(status = 502, message) {
+    return Object.assign(new Error(message || 'Z-Library did not start the download. Your cookie may have expired (sign in on Z-Library and copy it again), or the daily download limit may be reached.'), {
         code: 'zlibrary/download-failed', status
     });
+}
+
+const plain = (html) => String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 300);
+
+// Clicks a /dl/ link (DOM click: other formats sit in a hidden menu) and returns the download.
+async function clickDownload(page, href) {
+    const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 90000 }),
+        page.evaluate((h) => {
+            const a = Array.prototype.find.call(document.querySelectorAll('a[href*="/dl/"]'), (x) => x.href === h);
+            if (a) a.click();
+        }, href)
+    ]);
+    return download;
+}
+
+// Z-Library's own conversion to MOBI. Returns the download, or null to fall back to
+// the original file; throws when Z-Library refuses (e.g. the daily limit), since the
+// original would be refused too.
+async function zlibraryConvert(page) {
+    const answered = page.waitForResponse((r) => r.request().method() === 'POST' && /\/file-conversion\/mobi(\?|$)/.test(r.url()), { timeout: 30000 });
+    const downloaded = page.waitForEvent('download', { timeout: CONVERT_WAIT_MS });
+    downloaded.catch(() => {});
+    await page.evaluate(() => { document.querySelector('a.converterLink[data-convert_to="mobi"]').click(); });
+    let answer = null;
+    try { answer = await (await answered).json(); } catch { return null; }
+    if (answer && answer.error) throw downloadFailed(502, 'Z-Library: ' + plain(answer.error));
+    const failed = page.locator('#converterCurrentStatusesBox .status-error').first()
+        .waitFor({ state: 'attached', timeout: CONVERT_WAIT_MS }).then(() => null, () => null);
+    return Promise.race([downloaded.catch(() => null), failed]);
 }
 
 async function runDownload(url, cookie) {
@@ -165,7 +209,7 @@ async function runDownload(url, cookie) {
         await context.addCookies(pairs.map(([name, value]) => ({ name, value, domain: '.z-lib.sk', path: '/', secure: true, sameSite: 'Lax' })));
         await context.route('**/*', (route) => {
             const request = route.request();
-            if (!downloadAllowed(request.url())) return route.abort();
+            if (!downloadAllowed(request)) return route.abort();
             if (['image', 'media', 'font'].includes(request.resourceType()) && !request.url().includes('diamwall')) return route.abort();
             return route.continue();
         });
@@ -173,22 +217,27 @@ async function runDownload(url, cookie) {
         const page = await context.newPage();
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.locator('a[href*="/dl/"]').first().waitFor({ state: 'attached', timeout: 25000 });
-        // The Kindle only opens MOBI: take a MOBI file when the page lists one (other
-        // formats sit in a hidden menu, hence a DOM click), else the main file, which
-        // the browser service then converts (POST /convert).
-        const href = await page.$$eval('a[href*="/dl/"]', (links) => {
+        // Other files of the same book (perhaps a MOBI) load into the menu on demand:
+        // the "other formats" button fetches /papi/book/<id>/formats.
+        const formats = page.waitForResponse((r) => /\/papi\/book\/\d+\/formats/.test(r.url()), { timeout: 15000 }).catch(() => null);
+        await page.evaluate(() => { const b = document.getElementById('btnCheckOtherFormats'); if (b) b.click(); });
+        if (await formats) await page.waitForTimeout(700);
+        const choice = await page.evaluate(() => {
+            const links = Array.prototype.slice.call(document.querySelectorAll('a[href*="/dl/"]'));
             const label = (a) => [a.textContent, a.title, a.getAttribute('data-extension')].join(' ');
-            const pick = links.find((a) => /(^|[^a-z])mobi([^a-z]|$)/i.test(label(a))) || links[0];
-            return pick ? pick.href : null;
+            const mobi = links.find((a) => /(^|[^a-z])mobi([^a-z]|$)/i.test(label(a)));
+            const toggle = document.querySelector('[data-convertation-available]');
+            return {
+                mobi: mobi ? mobi.href : null,
+                original: links[0] ? links[0].href : null,
+                convert: !!document.querySelector('a.converterLink[data-convert_to="mobi"]') && !(toggle && toggle.getAttribute('data-convertation-available') === '0')
+            };
         });
-        if (!href) throw downloadFailed();
-        const [download] = await Promise.all([
-            page.waitForEvent('download', { timeout: 90000 }),
-            page.evaluate((h) => {
-                const a = Array.prototype.find.call(document.querySelectorAll('a[href*="/dl/"]'), (x) => x.href === h);
-                if (a) a.click();
-            }, href)
-        ]);
+        let download = null;
+        if (choice.mobi) download = await clickDownload(page, choice.mobi);
+        if (!download && choice.convert) download = await zlibraryConvert(page);
+        if (!download && choice.original) download = await clickDownload(page, choice.original);
+        if (!download) throw downloadFailed();
         const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zlib-')), 'book');
         await download.saveAs(file);
         const size = fs.statSync(file).size;

@@ -121,7 +121,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(error.status === 429 ? 429 : 502, { 'Content-Type': 'text/plain' }).end('Catalogue browser unavailable');
     }
 });
-server.requestTimeout = 420000;
+server.requestTimeout = 600000;   // a download can include Z-Library's conversion (up to 5 min)
 server.listen(PORT, HOST, () => console.log(`ReKindle catalogue browser ready on ${HOST}:${PORT}`));
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, async () => {
     server.close();

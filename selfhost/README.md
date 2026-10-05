@@ -73,8 +73,8 @@ paste your Z-Library sign-in cookie under **Account** (copied from a desktop bro
 where you are signed in, like the Substack app's cookie). It is kept with your ReKindle
 account; **Download** then has the Chromium service fetch the book with it, as MOBI,
 the one e-book format the Kindle browser opens: it takes a MOBI file when Z-Library
-lists one and otherwise converts the book with Calibre (`ebook-convert`, in the
-Chromium service's image). This runs in the background while the page shows the step;
+has one, otherwise uses Z-Library's own "Convert to MOBI", and if that fails converts
+the original with Calibre (`ebook-convert`, in the Chromium service's image). This runs in the background while the page shows the step;
 when the file is ready the Kindle asks where to save it. Reading and sign-in still open on `https://z-lib.sk/`. Saved books are local to
 the browser and are not downloaded files or synced account data. Public catalogue
 requests are cached for five minutes. If Z-Library blocks the server or requires
