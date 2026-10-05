@@ -125,9 +125,6 @@ export function transformHtml(html, fileName) {
     // Page Up / Page Down buttons on every page that scrolls (selfhost/site/js/rk-pager.js).
     html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-pager.js"></script>\n</body>');
 
-    // Chinese text in a Chinese font, not the Kindle's Japanese one (selfhost/site/js/rk-cjk.js).
-    html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-cjk.js"></script>\n</body>');
-
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
     }

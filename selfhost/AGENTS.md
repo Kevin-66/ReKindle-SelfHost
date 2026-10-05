@@ -120,17 +120,13 @@ switched off. The switch is injected into Settings > Accessibility ("Page Button
 their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
 opaque (grey arrow), or the page shows through them.
 
-## Chinese text (`selfhost/site/js/rk-cjk.js`)
+## Chinese text on the Kindle
 
-ReKindle's pages say `lang="en"`, so for Han characters the Kindle browser falls back
-to its Japanese font and many characters get Japanese shapes (reported by the owner on a
-Kindle Scribe Colorsoft, 2026-10). `transform.js` adds `rk-cjk.js` to every page (and
-`hackernews.html` includes it): it wraps runs of Han characters, with the CJK
-punctuation between them, in `<span lang="zh-Hans">`, so the browser picks a Chinese
-font for those runs while English keeps its own font. Text with kana (Japanese),
-elements already marked `lang="zh..."`/`"ja..."`, form fields and editable areas are left
-alone; a MutationObserver (250 ms batches) marks text added later. Desktop browsers
-often fall back to a Chinese font anyway, so check the effect on the Kindle itself.
+The owner finds Chinese on the Kindle Scribe Colorsoft looks Japanese. Tried and
+reverted (2026-10-05): wrapping Chinese runs in `<span lang="zh-Hans">` on every page
+(`rk-cjk.js`) made no visible difference on the device. Don't retry `lang` labelling;
+a fix would need a font the Kindle browser really has (or a web font), checked on the
+device.
 
 ## Hacker News (`selfhost/site/hackernews.html`)
 
