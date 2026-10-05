@@ -71,10 +71,11 @@ A **Z-Library** explorer is added under Lifestyle: popular books, title/author/I
 search, result pages, book metadata and up to 200 local saved bookmarks. To download,
 paste your Z-Library sign-in cookie under **Account** (copied from a desktop browser
 where you are signed in, like the Substack app's cookie). It is kept with your ReKindle
-account; **Download** then has the Chromium service fetch the book with it, as MOBI,
-the one e-book format the Kindle browser opens: it takes a MOBI file when Z-Library
-has one, otherwise uses Z-Library's own "Convert to MOBI", and if that fails converts
-the original with Calibre (`ebook-convert`, in the Chromium service's image). This runs in the background while the page shows the step;
+account; **Download** then has the Chromium service fetch the book with it. The
+Kindle opens MOBI, PDF, TXT and more but not EPUB, so EPUB books become MOBI: a MOBI
+file of the same book if Z-Library has one, otherwise Z-Library's own "Convert to
+MOBI", and if that fails Calibre (`ebook-convert`, in the Chromium service's image).
+Other formats download as they are. This runs in the background while the page shows the step;
 when the file is ready the Kindle asks where to save it. Reading and sign-in still open on `https://z-lib.sk/`. Saved books are local to
 the browser and are not downloaded files or synced account data. Public catalogue
 requests are cached for five minutes. If Z-Library blocks the server or requires
