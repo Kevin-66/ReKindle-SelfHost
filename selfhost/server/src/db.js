@@ -88,6 +88,13 @@ CREATE TABLE IF NOT EXISTS kv (
     PRIMARY KEY (ns, key)
 );
 
+-- The Z-Library app's account cookie per ReKindle account (zlibrary-account.js).
+CREATE TABLE IF NOT EXISTS zlib_accounts (
+    uid TEXT PRIMARY KEY,
+    cookie TEXT NOT NULL,
+    updated INTEGER NOT NULL
+);
+
 -- The Manga app's library and reading progress per account (manga-state.js).
 CREATE TABLE IF NOT EXISTS manga_state (
     uid TEXT PRIMARY KEY,

@@ -92,3 +92,10 @@ test('browser loader results are parsed and cached', async () => {
  await listBooks('browser-loader-test',1,rawFetch,loader);
  assert.equal(calls,1);
 });
+
+test('account cookie parsing keeps only name=value pairs', async () => {
+ const {cookiePairs}=await import('../src/zlibrary-browser.js');
+ assert.deepEqual(cookiePairs('remix_userid=123; remix_userkey=abcDEF09'),[['remix_userid','123'],['remix_userkey','abcDEF09']]);
+ assert.deepEqual(cookiePairs('junk; a="quoted"; b=has space; c=ok'),[['c','ok']]);
+ assert.deepEqual(cookiePairs(''),[]);
+});

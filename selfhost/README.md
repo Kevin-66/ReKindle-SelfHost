@@ -47,8 +47,11 @@ and come back on any device, or after the Kindle clears its browser data, when y
 the home screen.
 
 A **Z-Library** explorer is added under Lifestyle: popular books, title/author/ISBN
-search, result pages, book metadata and up to 200 local saved bookmarks. Reading,
-downloads and sign-in open directly on `https://z-lib.sk/`. Saved books are local to
+search, result pages, book metadata and up to 200 local saved bookmarks. To download,
+paste your Z-Library sign-in cookie under **Account** (copied from a desktop browser
+where you are signed in, like the Substack app's cookie). It is kept with your ReKindle
+account; **Download** then has the Chromium service fetch the book with it and hands
+the file to the device. Reading and sign-in still open on `https://z-lib.sk/`. Saved books are local to
 the browser and are not downloaded files or synced account data. Public catalogue
 requests are cached for five minutes. If Z-Library blocks the server or requires
 verification, the explorer offers a direct link and a retry instead of empty results.

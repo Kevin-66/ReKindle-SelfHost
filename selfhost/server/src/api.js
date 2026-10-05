@@ -13,6 +13,7 @@ import * as manhuagui from './manhuagui.js';
 import * as mangaState from './manga-state.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { listBooks } from './zlibrary.js';
+import * as zlibAccount from './zlibrary-account.js';
 import { Readable } from 'node:stream';
 
 const MAX_JSON = 16 * 1024 * 1024;
@@ -305,6 +306,21 @@ export async function handleApi(req, res, url) {
         if (section === 'manga') return await handleManga(req, res, url, parts);
         if (section === 'img') return await handleImage(req, res, url);
         if (section === 'zlibrary') {
+            // The reader's Z-Library cookie and downloads with it (zlibrary-account.js).
+            if (parts[2] === 'download') return await zlibAccount.sendDownload(res, url.searchParams.get('t'));
+            if (parts[2] === 'account' || parts[2] === 'download-link') {
+                const me = bearer(req);
+                if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle first.' } });
+                if (parts[2] === 'download-link') {
+                    if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
+                    rateLimit(req, 'zlibrary-download', 20, 60000);
+                    return send(res, 200, zlibAccount.downloadLink(me.uid, (await readJson(req)).url));
+                }
+                if (req.method === 'GET') return send(res, 200, zlibAccount.accountStatus(me.uid));
+                if (req.method === 'PUT') return send(res, 200, zlibAccount.saveAccount(me.uid, (await readJson(req)).cookie));
+                if (req.method === 'DELETE') return send(res, 200, zlibAccount.removeAccount(me.uid));
+                return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET, PUT or DELETE' } });
+            }
             if (req.method !== 'GET') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET' } });
             rateLimit(req, 'zlibrary', 30, 60000);
             return send(res, 200, await listBooks(url.searchParams.get('q') || '', Number(url.searchParams.get('page') || 1)));

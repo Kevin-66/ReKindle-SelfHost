@@ -29,6 +29,16 @@ as possible so `git merge upstream/main` stays clean.
   set dark colour variables or `color-scheme: dark` (both double-invert to invisible
   text); the root uses `min-height: 100%` and repeats the desktop pattern
   (`--rk-wallpaper`) so tall pages have no seam.
+- Dark mode white flash (fixed 2026-10-05): theme.js only darkens a page once it has
+  downloaded and run (the server makes browsers revalidate it on every page, and
+  settings.html loads it at the end of the body), and the Kindle's Chromium 75 has no
+  "paint holding", so every page turn showed a white page first, which e-ink redraws
+  in full. `transform.js` puts `DARK_HEAD` first in every `<head>`: an inline script
+  that reads `rekindle_theme_mode` (and the auto rule) and adds the same
+  `#rekindle-dark-theme` style theme.js would. Keep `DARK_CSS` in sync with
+  `injectDarkStyles()` in theme.js. `selfhost/site` pages (not transformed) carry a
+  copy of the snippet. Modern desktop browsers hold the old page during loads, so
+  the flash only reproduces on the device.
 
 ## Server gotchas
 
@@ -225,6 +235,19 @@ the display scale.
 - The earlier hand-applied Kubernetes overlay (`selfhost/browser/deploy-netcup.py`,
   a loopback sidecar in the ReKindle pod) was removed when the separate service
   replaced it; it is in git history.
+- Downloads use the reader's own Z-Library cookie (2026-10-05, owner's choice over a
+  remote-browser view): pasted under Account in zlibrary.html (`remix_userid`,
+  `remix_userkey`; any name=value pairs are kept), stored per ReKindle account in the
+  `zlib_accounts` table (`zlibrary-account.js`, GET/PUT/DELETE `/__rk/zlibrary/account`,
+  removed with the account). Download asks POST `/__rk/zlibrary/download-link` for a
+  10-minute HMAC-signed `/__rk/zlibrary/download?t=` link (a plain link cannot carry
+  the ReKindle sign-in), which calls the browser service's POST `/download`
+  (`downloadBook`): a fresh context with the cookie on `.z-lib.sk` opens the book page
+  in headed Chromium, clicks the first `a[href*="/dl/"]`, saves the download (300 MB
+  cap, one at a time) and streams it back with `X-File-Name`; the server answers with
+  Content-Disposition. Failures go back to the Kindle as an HTML notice page. The real
+  Z-Library step was not testable without the owner's account: if downloads fail,
+  check the download link selector and the allowed download hosts (`DOWNLOAD_HOST`).
 - `rk_zlibrary_saved_v1` stores up to 200 local bookmarks, not downloads. The page
   includes text-size setup and `rk-pager.js`; client timeout allows cold verification.
 - Focused checks: `node --test selfhost/server/test/zlibrary.test.js`.

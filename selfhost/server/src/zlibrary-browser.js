@@ -1,5 +1,10 @@
-// Runs the site's own JavaScript in a sandboxed Chromium session. Only the public
-// catalogue is exposed; the browser never receives ReKindle account credentials.
+// Runs the site's own JavaScript in a sandboxed Chromium session. The catalogue uses
+// a public session; downloadBook() uses a separate, throwaway session carrying the
+// reader's own Z-Library cookie (pasted in the app), never ReKindle credentials.
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const BASE = 'https://z-lib.sk';
 const READY = '#searchResultBox, a[href*="/book/"] z-cover, z-bookcard';
@@ -115,6 +120,84 @@ export function loadBrowserCatalogue(url) {
     return task.finally(() => { queued--; });
 }
 
+
+// ---------------------------------------------------------------- downloads
+//
+// Downloads one book with the reader's Z-Library cookie: a fresh context (nothing
+// shared with the public catalogue session or other readers) opens the book page in
+// the same headed Chromium, so Z-Library's verification passes, clicks its download
+// link and saves the file. Z-Library's own and its download hosts are allowed.
+const DOWNLOAD_HOST = /(^|\.)(z-?lib(rary)?|z-library|singlelogin|1lib)[a-z0-9-]*\.[a-z]{2,24}$/i;
+const MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024;
+let downloads = Promise.resolve();
+
+function downloadAllowed(value) {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' || url.username || url.password) return false;
+        return allowedBrowserUrl(value) || DOWNLOAD_HOST.test(url.hostname);
+    } catch { return false; }
+}
+
+export function cookiePairs(text) {
+    const pairs = [];
+    for (const part of String(text || '').split(';')) {
+        const m = /^\s*([A-Za-z0-9_-]{1,64})=([^;\s,"\\]{1,1024})\s*$/.exec(part);
+        if (m) pairs.push([m[1], m[2]]);
+    }
+    return pairs;
+}
+
+function downloadFailed(status = 502) {
+    return Object.assign(new Error('Z-Library did not start the download. Your cookie may have expired (sign in on Z-Library and copy it again), or the daily download limit may be reached.'), {
+        code: 'zlibrary/download-failed', status
+    });
+}
+
+async function runDownload(url, cookie) {
+    const parsed = new URL(url);
+    if (parsed.origin !== BASE || !/^\/book\/[^/]+\/[^/]+\.html$/.test(parsed.pathname)) throw downloadFailed(400);
+    const pairs = cookiePairs(cookie);
+    if (!pairs.length) throw downloadFailed(400);
+    const { browser } = await getSession();
+    const context = await browser.newContext({ locale: 'en-US', acceptDownloads: true, serviceWorkers: 'block' });
+    try {
+        await context.addCookies(pairs.map(([name, value]) => ({ name, value, domain: '.z-lib.sk', path: '/', secure: true, sameSite: 'Lax' })));
+        await context.route('**/*', (route) => {
+            const request = route.request();
+            if (!downloadAllowed(request.url())) return route.abort();
+            if (['image', 'media', 'font'].includes(request.resourceType()) && !request.url().includes('diamwall')) return route.abort();
+            return route.continue();
+        });
+        context.on('page', (page) => page.on('dialog', (dialog) => dialog.dismiss()));
+        const page = await context.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const link = page.locator('a[href*="/dl/"]').first();
+        await link.waitFor({ state: 'attached', timeout: 25000 });
+        const [download] = await Promise.all([
+            page.waitForEvent('download', { timeout: 90000 }),
+            link.click()
+        ]);
+        const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zlib-')), 'book');
+        await download.saveAs(file);
+        const size = fs.statSync(file).size;
+        if (!size || size > MAX_DOWNLOAD_BYTES) { fs.rmSync(path.dirname(file), { recursive: true, force: true }); throw downloadFailed(); }
+        const name = (download.suggestedFilename() || 'book').replace(/[\\/\0\r\n"]/g, '_').slice(0, 200);
+        return { file, name, size };
+    } catch (error) {
+        // Never echo Playwright errors: launch options can contain proxy credentials.
+        throw error.code === 'zlibrary/download-failed' ? error : downloadFailed();
+    } finally {
+        await context.close().catch(() => {});
+    }
+}
+
+// { file, name, size }; the caller deletes path.dirname(file) when done. One at a time.
+export function downloadBook(url, cookie) {
+    const task = downloads.then(() => runDownload(url, cookie));
+    downloads = task.catch(() => {});
+    return task;
+}
 
 // The catalogue browser as a separate service (Dockerfile.zlibrary-browser): its own
 // Zeabur service (<name>.zeabur.internal), a Docker Compose service (single-label
