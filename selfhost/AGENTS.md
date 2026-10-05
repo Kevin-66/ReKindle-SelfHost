@@ -289,6 +289,18 @@ since it was read, so the merge is redone and retried. It wraps `openNote`, `sho
 `saveNoteData` (only for the open note) and `deleteNoteData`; guest notes are untouched.
 Tested with two tabs: live update, simultaneous edits on different lines, caret kept.
 
+## Notes stopwatch (`selfhost/site/js/rk-notes-stopwatch.js`)
+
+`transform.js` adds it to `notes.html` after `rk-notes-sync.js`. A `.sys-btn` inserted after
+`#note-title-input` counts up from 0:00 each time a note is opened (wraps `openNote`; only
+when the editor actually shows) and stops in `showList` (Back, Delete). Tapping toggles
+pause (pause-bars icon) / resume (stopwatch icon). It listens to `touchstart` and
+`mousedown` with `preventDefault`, like the page's B/I/U buttons, so the caret and Kindle
+keyboard stay in the note; keyboard activation comes through `click` with `detail === 0`.
+Elapsed time is `Date.now()`-based (banked + since resume), redrawn by a `setTimeout`
+aligned to the next whole second; only the label text changes, so a tick is a small
+e-ink update. Format `m:ss`, then `h:mm:ss`. Not saved anywhere, works for guests too.
+
 ## Minesweeper long press (`selfhost/site/js/rk-minesweeper.js`)
 
 `transform.js` adds the script to `minesweeper.html`. Holding a covered cell for 450 ms
