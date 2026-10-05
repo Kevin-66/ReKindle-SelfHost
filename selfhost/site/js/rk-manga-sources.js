@@ -593,9 +593,12 @@
 
     // ------------------------------------------------------------ page display
     //
-    // manga.html emptied the reader before each page (an e-ink redraw to blank, then
-    // one for the page) and changed the status line twice. Here the old page stays
-    // until the new one has loaded, then the two swap in one redraw.
+    // The old page stays up while the next one loads. Once it is ready, the reader
+    // goes blank (white) and draws the page in the very next frame: the owner found
+    // a blank before each page cleaner on e-ink than swapping straight from page to
+    // page, and wanted the blank and the page together rather than a white screen
+    // first and the page a moment later (2026-10-05). Back-to-back frames let the
+    // Kindle merge them into one refresh.
     //
     // Pages come from this server (server/src/images.js) fitted to the reader in
     // device pixels, shown 1:1, with their near-white background made pure white;
@@ -659,6 +662,11 @@
         img.style.height = (nh * k) + 'px';
     }
 
+    function nextFrame(fn) {
+        if (window.requestAnimationFrame) window.requestAnimationFrame(fn);
+        else setTimeout(fn, 16);
+    }
+
     function relayout() {
         var b = measureBox();
         if (!b || (box && b.w === box.w && b.h === box.h && b.s === box.s)) return;
@@ -689,15 +697,18 @@
                 if (!current()) return;
                 img.className = 'reader-page';
                 fitPage(img, content);
-                var old = content.querySelector('img.reader-page');
-                if (old) content.replaceChild(img, old);
-                else {
-                    content.innerHTML = '';
-                    content.appendChild(img);
-                }
-                content.scrollTop = 0;
-                showStatus(label);
-                preloadAhead();
+                content.innerHTML = '';
+                // Two frames: the first paints the blank, the second the page.
+                nextFrame(function () {
+                    nextFrame(function () {
+                        if (!current()) return;
+                        content.innerHTML = '';
+                        content.appendChild(img);
+                        content.scrollTop = 0;
+                        showStatus(label);
+                        preloadAhead();
+                    });
+                });
             };
             var retried = false;
             var failed = function () {
