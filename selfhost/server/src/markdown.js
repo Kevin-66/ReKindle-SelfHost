@@ -1,8 +1,9 @@
-// Markdown to HTML for notes sent to the Notes upload link (notes-inbox.js).
+// Markdown to HTML (and back) for notes handled through the Notes agent link (notes-agent.js).
 //
 // Safe by construction: all text is HTML-escaped (raw HTML in the Markdown shows as
 // text), and links and images keep only http(s) (and mailto for links) addresses. The
 // result goes straight into the reader's Notes editor, so nothing in it may run.
+// htmlToMarkdown (end of file) turns a note's HTML back into Markdown for agents.
 //
 // The editor shows notes with `white-space: pre-wrap`, so the output has no whitespace
 // between tags (it would show as blank lines), and a line break inside a paragraph
@@ -11,6 +12,8 @@
 // Covers what agents write: ATX and setext headings, paragraphs, **bold**, *italic*,
 // ~~strike~~, `code`, fenced code blocks, links, images, autolinks and bare URLs,
 // block quotes, nested bullet and numbered lists, GitHub tables and rules.
+
+import { parseHTML } from 'linkedom';
 
 const MAX_SPAN = 500;   // inline emphasis spans stay on one line and this short (no slow regexes)
 
@@ -273,4 +276,119 @@ function blocks(lines, tight) {
 export function markdownToHtml(md) {
     const lines = String(md || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');
     return blocks(lines, false);
+}
+
+// ------------------------------------------------------------------ HTML -> Markdown
+
+// A note's HTML (as the Notes editor saves it: text with <div>/<br> lines, <b>/<i>/<u>,
+// and the Markdown elements above) back to Markdown, for agents reading notes. Same
+// rules as the Notes page's .md download (selfhost/site/js/rk-notes-markdown.js).
+const BLOCK_TAGS = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|UL|OL|TABLE|TR|TD|TH|HR)$/;
+
+class MdOut {
+    constructor() { this.s = ''; }
+    lines(n) {   // make sure the text ends with n line breaks
+        if (!this.s) return;
+        let have = /\n*$/.exec(this.s)[0].length;
+        while (have < n) { this.s += '\n'; have++; }
+    }
+}
+
+function hasContent(el) {
+    return /\S/.test(el.textContent || '') || !!el.querySelector('img,hr');
+}
+
+function wrapMark(mark, inner) {
+    const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(inner);
+    return m[2] ? m[1] + mark + m[2] + mark + m[3] : inner;
+}
+
+function mdText(el, root) {
+    const o = new MdOut();
+    mdChildren(el, o, root);
+    return o.s;
+}
+
+function mdChildren(el, out, root) {
+    for (let c = el.firstChild; c; c = c.nextSibling) mdNode(c, out, root);
+}
+
+function mdNode(c, out, root) {
+    if (c.nodeType === 3) { out.s += c.nodeValue.replace(/ /g, ' ').replace(/​/g, ''); return; }
+    if (c.nodeType !== 1) return;
+    const tag = c.nodeName.toUpperCase();
+    switch (tag) {
+        case 'BR':
+            if (!c.nextSibling && c.parentNode !== root && BLOCK_TAGS.test(c.parentNode.nodeName.toUpperCase()) && hasContent(c.parentNode)) return;
+            out.s += '\n';
+            return;
+        case 'B': case 'STRONG': out.s += wrapMark('**', mdText(c, root)); return;
+        case 'I': case 'EM': out.s += wrapMark('*', mdText(c, root)); return;
+        case 'S': case 'STRIKE': case 'DEL': out.s += wrapMark('~~', mdText(c, root)); return;
+        case 'CODE': out.s += '`' + c.textContent + '`'; return;
+        case 'A': out.s += '[' + mdText(c, root) + '](' + (c.getAttribute('href') || '') + ')'; return;
+        case 'IMG': out.s += '![' + (c.getAttribute('alt') || '') + '](' + (c.getAttribute('src') || '') + ')'; return;
+        case 'SCRIPT': case 'STYLE': return;
+        case 'HR': out.lines(2); out.s += '---'; out.lines(2); return;
+        case 'H1': case 'H2': case 'H3': case 'H4': case 'H5': case 'H6':
+            out.lines(2);
+            out.s += '#'.repeat(Number(tag[1])) + ' ' + mdText(c, root).replace(/\s*\n\s*/g, ' ').trim();
+            out.lines(2);
+            return;
+        case 'P': out.lines(2); mdChildren(c, out, root); out.lines(2); return;
+        case 'DIV':
+            out.lines(1);
+            if (!hasContent(c)) { out.s += '\n'; return; }
+            mdChildren(c, out, root);
+            out.lines(1);
+            return;
+        case 'PRE':
+            out.lines(2);
+            out.s += '```\n' + c.textContent.replace(/\n$/, '') + '\n```';
+            out.lines(2);
+            return;
+        case 'BLOCKQUOTE': {
+            const inner = mdText(c, root).replace(/^\n+|\n+$/g, '');
+            out.lines(2);
+            out.s += inner.split('\n').map((l) => (l ? '> ' + l : '>')).join('\n');
+            out.lines(2);
+            return;
+        }
+        case 'UL': case 'OL': {
+            out.lines(c.parentNode && c.parentNode.nodeName.toUpperCase() === 'LI' ? 1 : 2);
+            let n = tag === 'OL' ? parseInt(c.getAttribute('start') || '1', 10) : 0;
+            for (let li = c.firstChild; li; li = li.nextSibling) {
+                if (li.nodeType !== 1 || li.nodeName.toUpperCase() !== 'LI') continue;
+                const mark = tag === 'OL' ? (n++) + '. ' : '- ';
+                const pad = ' '.repeat(mark.length);
+                const body = mdText(li, root).replace(/^\n+|\n+$/g, '').replace(/\n{2,}/g, '\n');
+                out.lines(1);
+                out.s += mark + body.split('\n').map((l, k) => (k ? (l ? pad + l : '') : l)).join('\n');
+            }
+            out.lines(2);
+            return;
+        }
+        case 'TABLE': {
+            const rows = c.querySelectorAll('tr');
+            out.lines(2);
+            rows.forEach((row, r) => {
+                const cells = [...row.querySelectorAll('th,td')].map((cell) => mdText(cell, root).replace(/\s*\n\s*/g, ' ').replace(/\|/g, '\\|').trim());
+                out.s += '| ' + cells.join(' | ') + ' |\n';
+                if (r === 0) out.s += '|' + cells.map(() => ' --- ').join('|') + '|\n';
+            });
+            out.lines(2);
+            return;
+        }
+        default:
+            mdChildren(c, out, root);
+    }
+}
+
+export function htmlToMarkdown(html) {
+    const { document } = parseHTML('<!doctype html><html><body><div id="rk-root"></div></body></html>');
+    const root = document.getElementById('rk-root');
+    root.innerHTML = String(html || '');
+    const out = new MdOut();
+    mdChildren(root, out, root);
+    return out.s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+|\s+$/g, '') + '\n';
 }

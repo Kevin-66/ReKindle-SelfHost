@@ -95,8 +95,8 @@ CREATE TABLE IF NOT EXISTS zlib_accounts (
     updated INTEGER NOT NULL
 );
 
--- Each account's secret Notes upload link for AI agents (notes-inbox.js).
-CREATE TABLE IF NOT EXISTS notes_inbox (
+-- Each account's secret Notes link for AI agents (notes-agent.js).
+CREATE TABLE IF NOT EXISTS notes_agent (
     uid TEXT PRIMARY KEY,
     key TEXT NOT NULL UNIQUE,
     created INTEGER NOT NULL

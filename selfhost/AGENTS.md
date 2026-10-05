@@ -311,7 +311,7 @@ on a canvas one buffer pixel per glyph pixel, shown at 2 CSS px per pixel with
 so ticks don't move the toolbar until hours appear. Any live-updating readout on the
 Kindle should be drawn this way, not as changing text.
 
-## Notes Markdown and the agent upload link
+## Notes Markdown and the agent link
 
 - Notes stay HTML (`users/{uid}/notes/{id}`: `title`, `content` HTML, `updated` ms), so old
   notes, B/I/U and `rk-notes-sync.js` merging are unchanged. `selfhost/site/js/rk-notes-markdown.js`
@@ -332,16 +332,23 @@ Kindle should be drawn this way, not as changing text.
   event, and calling `execCommand('insertText')` per character from page JS nests the
   rules' commands inside another command (garbled results). Test with one `type`
   action per character and `key Return`, like the Kindle keyboard.
-- The upload link (`server/src/notes-inbox.js`): table `notes_inbox(uid, key UNIQUE)`,
-  key = 24 random bytes base64url. `GET/POST /__rk/notes/inbox-link` (signed in) returns
-  or replaces it; `/__rk/notes/inbox/<key>` answers GET with plain-text instructions,
-  POST with a new note (201), OPTIONS for CORS (`*`); 30 requests/min per IP; 256 KB.
-  The owner asked for no verification: the link itself is the permission and can only
-  add notes. The note is written with `fsStore.commit(..., {internal: true})`, so open
-  Notes lists update live.
+- The agent link (`server/src/notes-agent.js`): table `notes_agent(uid, key UNIQUE)`,
+  key = 24 random bytes base64url. `GET/POST /__rk/notes/agent-link` (signed in) returns
+  or replaces it. Under `/__rk/notes/agent/<key>`: GET (no path) = plain-text
+  instructions for agents; `GET /notes[?q=]` list/search (newest first), `POST /notes`
+  add (201), `GET /notes/<id>` read as Markdown, `PATCH|PUT|POST /notes/<id>` replace
+  the fields given (`title`, `markdown`) or `append`, `DELETE /notes/<id>`. CORS `*`,
+  120 requests/min per IP, 256 KB bodies. The owner asked for no verification and,
+  after a first add-only version, for full editing: the link alone grants read/write
+  access to that account's notes. Writes use `fsStore.commit(..., {internal: true})`,
+  so open Notes lists update live and an open note merges the change (rk-notes-sync).
+  `append` adds the rendered HTML after the note's own HTML (no Markdown round trip,
+  so editor formatting such as underline is kept).
 - `server/src/markdown.js` turns the Markdown into HTML. It escapes all text (raw HTML
   shows as text) and keeps only http(s)/mailto links and http(s) images, because the
-  link holder must not be able to run script in the owner's session. The editor uses
+  link holder must not be able to run script in the owner's session. `htmlToMarkdown`
+  (linkedom) turns notes back for reading, with the same rules as the page's `.md`
+  download; a Markdown -> HTML -> Markdown round trip is exact (tested). The editor uses
   `white-space: pre-wrap`, so the output has NO whitespace between tags (it shows as
   blank lines); paragraph line breaks become `<br>`. All inline patterns are bounded
   (one line, 500 chars) after a stress test of 50,000 unclosed `[` took 11 s;
