@@ -172,7 +172,11 @@ export async function handleWorker(req, res, name, rest, search, origin) {
     const handler = workers.get(name);
     if (!handler) return false;
     const request = await toRequest(req, `${origin}/${rest}${search}`);
+    const started = Date.now();
     const response = await withPublicNetworkOnly(() => handler.fetch(request, env, ctx()));
+    // Path and status only (no query, headers or bodies): pages such as Substack
+    // hide failed requests behind an empty list, so the log is where to look.
+    console.log(`[workers] ${name} ${req.method} /${rest} -> ${response.status} (${Date.now() - started} ms)`);
     await sendResponse(res, response);
     return true;
 }
