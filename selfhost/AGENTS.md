@@ -120,13 +120,24 @@ switched off. The switch is injected into Settings > Accessibility ("Page Button
 their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
 opaque (grey arrow), or the page shows through them.
 
-## Chinese text on the Kindle
+## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
-The owner finds Chinese on the Kindle Scribe Colorsoft looks Japanese. Tried and
-reverted (2026-10-05): wrapping Chinese runs in `<span lang="zh-Hans">` on every page
-(`rk-cjk.js`) made no visible difference on the device. Don't retry `lang` labelling;
-a fix would need a font the Kindle browser really has (or a web font), checked on the
-device.
+The Kindle browser draws Chinese with its Japanese font (角 in 确 gets the Japanese
+stroke), and `lang="zh-Hans"` alone changes nothing there (tried 2026-10-05). The device
+does have Chinese fonts, STSong and STHeiti, but only uses them when named:
+`selfhost/site/fonttest.html` (open `/fonttest` on the device) found them; Noto Sans SC
+as a web font also works but would cost storage.
+
+`transform.js` adds `rk-cjk.js` to every page (`hackernews.html` includes it). It wraps
+runs of Chinese characters, with the CJK punctuation between them, in
+`<span class="rk-zh-serif|rk-zh-sans">` (no `lang`: it had no effect): STSong when the surrounding
+font list starts with a serif (Georgia, serif, ...), STHeiti otherwise; other devices
+fall back to their own Chinese fonts (Songti/Heiti/PingFang/Noto). English keeps its
+font. Text with kana (Japanese), elements marked `lang="zh..."`/`"ja..."` or
+`data-rk-cjk="off"`, form fields and editable areas are left alone; a MutationObserver
+(250 ms batches) handles text added later. Check changes on the Kindle itself: desktop
+browsers usually pick a Chinese font anyway. The local dev server listens on all
+interfaces, so the Kindle can open it on the home network (http://<Mac's IP>:8787).
 
 ## Hacker News (`selfhost/site/hackernews.html`)
 
