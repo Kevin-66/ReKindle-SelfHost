@@ -11,12 +11,6 @@
  * buttons; the book reader renders inside epub.js. Buttons and layout never scale.
  */
 
-/* Reddit */
-html[data-rk-text][data-rk-page="reddit"] .post-title { font-size: calc(1.1rem * var(--rk-text)); }
-html[data-rk-text][data-rk-page="reddit"] .thread-title { font-size: calc(1.4rem * var(--rk-text)); }
-html[data-rk-text][data-rk-page="reddit"] .thread-body { font-size: calc(1.1rem * var(--rk-text)); }
-html[data-rk-text][data-rk-page="reddit"] .comment-body { font-size: calc(1rem * var(--rk-text)); }
-
 /* Wikipedia */
 html[data-rk-text][data-rk-page="wikipedia"] #article-body { font-size: calc(1.1rem * var(--rk-text)); }
 html[data-rk-text][data-rk-page="wikipedia"] #article-body th,
@@ -28,7 +22,7 @@ html[data-rk-text][data-rk-page="readwise"] #reader-content { font-size: calc(1.
 html[data-rk-text][data-rk-page="readwise"] .highlight-item { font-size: calc(0.9rem * var(--rk-text)); }
 html[data-rk-text][data-rk-page="readwise"] .review-text { font-size: calc(1.05rem * var(--rk-text)); }
 
-/* Browser reading view (also used by Read Later and links opened from Reddit) */
+/* Browser reading view (also used by Read Later) */
 html[data-rk-text][data-rk-page="browser"] .tab-content { font-size: calc(1rem * var(--rk-text)); }
 
 /* Mail: the message body sits in a shadow root and inherits this size */

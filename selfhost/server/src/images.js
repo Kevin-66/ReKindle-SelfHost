@@ -1,14 +1,13 @@
 // Pictures for e-readers: fetch an image, scale it down to IMAGE_MAX_WIDTH and
-// re-encode it as JPEG (first frame of animations; e-ink can't animate). Used by
-// /api/reddit and by /__rk/img?url=..., which the Hacker News app uses for article
-// and comment images (a 9.6 MB animated WebP on a GitHub page would not load on
-// a Kindle otherwise).
+// re-encode it as JPEG (first frame of animations; e-ink can't animate). Served at
+// /__rk/img?url=..., which the Hacker News app uses for article and comment images
+// (a 9.6 MB animated WebP on a GitHub page would not load on a Kindle otherwise).
 
 import sharp from 'sharp';
 import { withPublicNetworkOnly } from './netguard.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
-// E-reader screens are ~1072-1448 px wide. REDDIT_IMAGE_MAX_WIDTH is the old name.
+// E-reader screens are ~1072-1448 px wide. REDDIT_IMAGE_MAX_WIDTH is an old name.
 const IMAGE_MAX_WIDTH = Math.max(320, parseInt(process.env.IMAGE_MAX_WIDTH || process.env.REDDIT_IMAGE_MAX_WIDTH || '1080', 10) || 1080);
 const IMAGE_MAX_BYTES = 40 * 1024 * 1024;
 const IMAGE_CACHE_MAX = 64 * 1024 * 1024;

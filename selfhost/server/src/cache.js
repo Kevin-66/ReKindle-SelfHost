@@ -1,6 +1,6 @@
 // In-memory stand-in for the Cloudflare Cache API (`caches.default`), which the
-// upstream /api functions (reddit.js, nrl-scores.js) use to avoid refetching.
-// Without it every page view went straight to Reddit and got rate-limited.
+// upstream /api functions (e.g. nrl-scores.js) use to avoid refetching. Without it
+// every page view goes straight to the origin and gets rate-limited.
 
 const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 8 * 1024 * 1024;

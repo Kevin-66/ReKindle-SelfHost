@@ -12,6 +12,11 @@ export const DISABLED_APPS = [
 
 export const DISABLED_PAGES = DISABLED_APPS.map((id) => `${id}.html`);
 
+// Apps turned off for now, for other reasons (hidden from the launcher too).
+// reddit: Reddit no longer serves servers (RSS ~1 request a minute, JSON blocked) and
+// old.reddit.com needs a login whose reCAPTCHA only works on reddit.com.
+export const PAUSED_APPS = { reddit: 'Reddit is turned off on this server for now: Reddit no longer lets servers read it without signing in.' };
+
 const FIREBASE_TAG = /<script\b[^>]*\bsrc\s*=\s*["']https:\/\/www\.gstatic\.com\/firebasejs\/[^"']+["'][^>]*>\s*<\/script>/gi;
 const COUNTER_TAG = /<script\b[^>]*cdn\.counter\.dev[^>]*>\s*<\/script>/gi;
 
@@ -87,6 +92,8 @@ export function transformHtml(html, fileName) {
     if (DISABLED_PAGES.includes(base)) {
         return noticePage('Not available', 'Chat and online multiplayer are turned off on this ReKindle server.');
     }
+    const paused = PAUSED_APPS[base.replace(/\.html$/, '')];
+    if (paused) return noticePage('Not available', paused);
     if (base === 'pay.html') {
         return noticePage('ReKindle+', 'ReKindle+ subscriptions are not sold on this self-hosted server; its owner decides whether ReKindle+ apps are available. If you enjoy ReKindle, consider supporting its creator at <a href="https://rekindle.ink">rekindle.ink</a>.');
     }
@@ -135,7 +142,7 @@ const ICONS_FILTER = `
 // --- Self-hosted ReKindle: hide apps that need the central chat/multiplayer services,
 // bring back the Manga app (upstream commented it out) and add Hacker News ---
 (function () {
-    var off = ${JSON.stringify(DISABLED_APPS)};
+    var off = ${JSON.stringify(DISABLED_APPS.concat(Object.keys(PAUSED_APPS)))};
     var lists = [];
     if (typeof APPS !== 'undefined') lists.push(APPS);
     if (typeof APPS_BETA !== 'undefined') lists.push(APPS_BETA);
