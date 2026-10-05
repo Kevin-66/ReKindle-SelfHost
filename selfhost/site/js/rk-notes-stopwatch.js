@@ -3,9 +3,14 @@
 //
 // The editor toolbar shows a stopwatch that waits, paused at 0:00, each time a note is
 // opened; tapping it starts it, and further taps pause and resume (pause bars while
-// paused). Going back to the list stops it. Like the B/I/U buttons, the tap keeps the caret and
-// keyboard in the note. Time comes from the clock, not from counting ticks, so a slow
-// or sleeping Kindle doesn't lose seconds. Plain ES5 for the Kindle browser.
+// paused). Going back to the list stops it. Like the B/I/U buttons, the tap keeps the
+// caret and keyboard in the note. Time comes from the clock, not from counting ticks, so
+// a slow or sleeping Kindle doesn't lose seconds. Plain ES5 for the Kindle browser.
+//
+// The time is drawn as 1-bit pixel glyphs on a small canvas, not as text: an update
+// with any grey (anti-aliased) pixel makes the Kindle redraw the whole screen in
+// grayscale (a full flash), and a text clock did that every second. Pure black and
+// white pixels, scaled with image-rendering: pixelated, get a quick local update.
 (function () {
     'use strict';
 
@@ -14,27 +19,39 @@
     var titleInput = document.getElementById('note-title-input');
     if (!editor || !titleInput) return;
 
-    var ICON_RUN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square">' +
-        '<circle cx="12" cy="14" r="8"></circle><path d="M12 14V10M9 2h6M12 2v4"></path></svg>';
-    var ICON_PAUSE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">' +
-        '<rect x="5" y="4" width="5" height="16"></rect><rect x="14" y="4" width="5" height="16"></rect></svg>';
+    var SCALE = 2;   // CSS px per glyph pixel
+    var ROWS = 7;
+    // 5x7 digits (bit 4 is the left column), a 1-wide colon, and 7-wide state icons.
+    var GLYPHS = {
+        '0': [5, [14, 17, 17, 17, 17, 17, 14]],
+        '1': [5, [4, 12, 4, 4, 4, 4, 14]],
+        '2': [5, [14, 17, 1, 2, 4, 8, 31]],
+        '3': [5, [31, 2, 4, 2, 1, 17, 14]],
+        '4': [5, [2, 6, 10, 18, 31, 2, 2]],
+        '5': [5, [31, 16, 30, 1, 1, 17, 14]],
+        '6': [5, [6, 8, 16, 30, 17, 17, 14]],
+        '7': [5, [31, 1, 2, 4, 8, 8, 8]],
+        '8': [5, [14, 17, 17, 14, 17, 17, 14]],
+        '9': [5, [14, 17, 17, 15, 1, 2, 12]],
+        ':': [1, [0, 0, 1, 0, 1, 0, 0]],
+        'P': [7, [54, 54, 54, 54, 54, 54, 54]],   // paused: two bars
+        'R': [7, [28, 8, 62, 73, 77, 65, 62]]     // running: a stopwatch
+    };
 
     var style = document.createElement('style');
     style.appendChild(document.createTextNode(
-        '#rk-note-stopwatch{display:inline-flex;align-items:center;flex-shrink:0;white-space:nowrap;font-variant-numeric:tabular-nums;}' +
-        '#rk-note-stopwatch svg{margin-right:5px;flex-shrink:0;}'));
+        '#rk-note-stopwatch{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
+        '#rk-note-stopwatch canvas{display:block;image-rendering:pixelated;}'));
     document.head.appendChild(style);
 
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.id = 'rk-note-stopwatch';
     btn.className = 'sys-btn';
-    btn.title = 'Time on this note. Tap to pause or resume.';
-    var icon = document.createElement('span');
-    icon.style.display = 'inline-flex';
-    var label = document.createElement('span');
-    btn.appendChild(icon);
-    btn.appendChild(label);
+    btn.title = 'Time on this note. Tap to start, pause or resume.';
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    btn.appendChild(canvas);
     titleInput.parentNode.insertBefore(btn, titleInput.nextSibling);
 
     var banked = 0;        // ms counted before the last pause
@@ -42,7 +59,7 @@
     var running = false;
     var noteId = null;     // the note it is timing
     var tick = null;
-    var shownIcon = null;
+    var shown = '';
 
     function elapsed() {
         return Math.max(0, banked + (running ? Date.now() - startedAt : 0));
@@ -55,13 +72,45 @@
         return h ? h + ':' + mmss : mmss;
     }
 
-    function render() {
-        var text = format(elapsed());
-        if (label.textContent !== text) label.textContent = text;
-        if (shownIcon !== running) {
-            icon.innerHTML = running ? ICON_RUN : ICON_PAUSE;
-            shownIcon = running;
+    function textWidth(text) {
+        var w = 0;
+        for (var i = 0; i < text.length; i++) w += GLYPHS[text.charAt(i)][0] + 1;
+        return w - 1;
+    }
+
+    // Icon, a 3-pixel gap, then the time; the width is kept for at least "00:00", so it
+    // only changes (moving the toolbar) when the hours appear.
+    function draw(time) {
+        var key = (running ? 'R' : 'P') + time;
+        if (key === shown) return;
+        shown = key;
+        var timeW = Math.max(textWidth(time), textWidth('00:00'));
+        var w = 7 + 3 + timeW;
+        if (canvas.width !== w) {
+            canvas.width = w;
+            canvas.height = ROWS;
+            canvas.style.width = (w * SCALE) + 'px';
+            canvas.style.height = (ROWS * SCALE) + 'px';
         }
+        ctx.clearRect(0, 0, w, ROWS);
+        ctx.fillStyle = '#000';
+        drawGlyph(running ? 'R' : 'P', 0);
+        var x = 10 + timeW - textWidth(time);   // right-aligned
+        for (var i = 0; i < time.length; i++) x = drawGlyph(time.charAt(i), x) + 1;
+    }
+
+    function drawGlyph(ch, x) {
+        var g = GLYPHS[ch], width = g[0], rows = g[1];
+        for (var y = 0; y < ROWS; y++) {
+            for (var c = 0; c < width; c++) {
+                if (rows[y] & (1 << (width - 1 - c))) ctx.fillRect(x + c, y, 1, 1);
+            }
+        }
+        return x + width;
+    }
+
+    function render() {
+        draw(format(elapsed()));
     }
 
     // Wake just after the next whole second, so the display steps once per second.
@@ -116,4 +165,6 @@
         stop();
         return originalShowList.apply(this, arguments);
     };
+
+    render();
 })();
