@@ -136,6 +136,23 @@ export function transformHtml(html, fileName) {
 
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
+        // The home screen copies the account's settings (users/{uid}/settings/general)
+        // into the browser when Settings signals a change, or when this browser has
+        // never synced (e.g. after the Kindle wiped its data), but it skipped several
+        // of the fields Settings saves, so those stayed at their defaults (Display Mode
+        // "Reduce flashing" among them). It now restores all of them, plus this server's
+        // Text Size and Page Buttons.
+        html = html.replace("if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());",
+            "if (data.displayMode) { localStorage.setItem('rekindle_display_mode', data.displayMode); if (window.rekindleInjectEInkStyles) window.rekindleInjectEInkStyles(); }\n" +
+            "                    if (data.opendyslexicFont !== undefined) { localStorage.setItem('rekindle_font_opendyslexic', data.opendyslexicFont); if (window.rekindleApplyFont) window.rekindleApplyFont(); }\n" +
+            "                    if (data.scaleAuto !== undefined) localStorage.setItem('rekindle_scale_auto', data.scaleAuto ? 'true' : 'false');\n" +
+            "                    if (data.scale) localStorage.setItem('rekindle_scale', data.scale);\n" +
+            "                    if ((data.scaleAuto !== undefined || data.scale) && window.rekindleApplyScale) window.rekindleApplyScale();\n" +
+            "                    if (data.homeLayout) localStorage.setItem('rekindle_layout', data.homeLayout);\n" +
+            "                    if (data.timezoneOffset !== undefined && data.timezoneOffset !== null) localStorage.setItem('rekindle_timezone_offset', data.timezoneOffset);\n" +
+            "                    if (data.rkTextSize) localStorage.setItem('rk_text_size', data.rkTextSize);\n" +
+            "                    if (data.rkPageButtons) localStorage.setItem('rk_page_buttons', data.rkPageButtons);\n" +
+            "                    if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());");
     }
     if (base === 'notes.html') {
         // Live sync and merging when a note is open in two browsers (selfhost/site/js/rk-notes-sync.js).

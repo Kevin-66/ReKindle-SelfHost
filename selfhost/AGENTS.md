@@ -222,6 +222,19 @@ the display scale.
   includes text-size setup and `rk-pager.js`; client timeout allows cold verification.
 - Focused checks: `node --test selfhost/server/test/zlibrary.test.js`.
 
+## Settings kept with the account
+
+Settings saves its options to `users/{uid}/settings/general` and bumps
+`users/{uid}.settingsLastUpdated`; the home screen (`index.html`/`index_old.html`,
+`syncGeneralSettings`) copies that document into localStorage when the signal is newer
+than `rekindle_settings_last_sync`, or when that mark is missing (a new device, or a
+Kindle that wiped its browser data). It skipped displayMode, opendyslexicFont, scale,
+scaleAuto, homeLayout and timezoneOffset, so those stayed at their defaults outside
+Settings. `transform.js` adds them (applying display mode, font and scale at once) plus
+this server's `rkTextSize` (`rk_text_size`) and `rkPageButtons` (`rk_page_buttons`),
+which `rk-textsize.js` and `rk-pager.js` now save to the account with the same signal
+(`saveToAccount`). New per-user settings should follow this pattern.
+
 ## Notes sync (`selfhost/site/js/rk-notes-sync.js`)
 
 notes.html saved the whole note (debounced 1 s) with a plain `set()` and never updated an
