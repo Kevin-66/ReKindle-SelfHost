@@ -271,7 +271,14 @@ the display scale.
      when it is "ok"; we catch that download (5 min limit). `answer.error` (e.g. daily
      limit) is reported as is; a failed job (`#converterCurrentStatusesBox
      .status-error`) or a timeout falls through to 3. Signed out it only shows a login
-     popup. Not yet seen working: needs the owner's account.
+     popup (and the link's `data-book-id` is empty, which is logged). Not yet seen
+     working: needs the owner's account.
+  Timing: Z-Library's script (jQuery 2.2.4) attaches its handlers only as the page
+  finishes loading, and a DOM click before that does nothing (the first version
+  clicked as soon as the `/dl/` link appeared). The code waits for the `load` event,
+  then `handlerReady()` polls `jQuery._data(document, 'events').click` for the
+  `.converterLink` delegate and `jQuery._data(#btnCheckOtherFormats, 'events')`.
+  Each step is logged as `[zlibrary download] ...` (book path only, never the cookie).
   3. The EPUB itself, converted by the browser service's POST `/convert` (body = file,
      name in
   `X-File-Name`): Calibre's `ebook-convert` (Debian `calibre` package in
