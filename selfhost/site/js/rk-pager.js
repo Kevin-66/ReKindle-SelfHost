@@ -8,6 +8,23 @@
     'use strict';
 
     var KEY = 'rk_page_buttons';
+
+    // Also keep the choice with the account (users/{uid}/settings/general, where
+    // Settings saves its own options) and signal the change, so the home screen copies
+    // it into other devices and back after the Kindle wipes its browser data.
+    function saveToAccount(field, value) {
+        try {
+            if (!window.firebase || !firebase.apps || !firebase.apps.length) return;
+            var user = firebase.auth().currentUser;
+            if (!user) return;
+            var update = {};
+            update[field] = value;
+            var userRef = firebase.firestore().collection('users').doc(user.uid);
+            userRef.collection('settings').doc('general').set(update, { merge: true }).then(function () {
+                return userRef.set({ settingsLastUpdated: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            })['catch'](function () { });
+        } catch (e) { }
+    }
     var BTN = 52;      // button size (px), above the 48 px touch minimum
     var MARGIN = 12;   // gap from the scrolling area's edges
     var THROTTLE = 1500;
@@ -198,6 +215,7 @@
         box.checked = enabled();
         box.onchange = function () {
             try { localStorage.setItem(KEY, box.checked ? '1' : '0'); } catch (e) { }
+            saveToAccount('rkPageButtons', box.checked ? '1' : '0');
             if (bar) refresh();
             else if (box.checked) init();
         };

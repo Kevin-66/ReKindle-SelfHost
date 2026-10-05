@@ -42,6 +42,10 @@ on the server for an hour so switching views is quick.
 **Notes** stay in sync when the same note is open on two devices: edits appear live
 and are merged instead of overwriting each other.
 
+Settings such as Display Mode, Text Size and Page Buttons are kept with your account
+and come back on any device, or after the Kindle clears its browser data, when you open
+the home screen.
+
 A **Z-Library** explorer is added under Lifestyle: popular books, title/author/ISBN
 search, result pages, book metadata and up to 200 local saved bookmarks. Reading,
 downloads and sign-in open directly on `https://z-lib.sk/`. Saved books are local to
