@@ -223,6 +223,13 @@ const ICONS_FILTER = `
             icon: '<path d="M6 4 h12 v24 h-12 z M18 4 l8 4 v20 l-8 -4 M18 4 v24" fill="none" stroke="black" stroke-width="2"/><line x1="8" y1="8" x2="16" y2="8" stroke="black" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="black" stroke-width="1.5"/><line x1="8" y1="16" x2="14" y2="16" stroke="black" stroke-width="1.5"/>'
         });
     }
+    if (typeof APPS !== 'undefined' && !APPS.some(function (a) { return a.id === 'zlibrary'; })) {
+        APPS.push({
+            id: 'zlibrary', name: 'Z-Library', cat: 'lifestyle',
+            desc: 'Explore popular books, search Z-Library and save books for later.',
+            icon: '<path d="M4 5 H14 L16 7 L18 5 H28 V26 H18 L16 28 L14 26 H4 Z M16 7 V28 M7 10 H12 M7 15 H12 M20 10 H25 M20 15 H25" fill="none" stroke="black" stroke-width="2"/>'
+        });
+    }
     // Hacker News reader added by this server (selfhost/site/hackernews.html).
     if (typeof APPS !== 'undefined' && !APPS.some(function (a) { return a.id === 'hackernews'; })) {
         APPS.push({

@@ -39,6 +39,30 @@ on the server for an hour so switching views is quick.
 
 **Minesweeper**: hold a covered cell to flag it, without switching to FLAG mode.
 
+A **Z-Library** explorer is added under Lifestyle: popular books, title/author/ISBN
+search, result pages, book metadata and up to 200 local saved bookmarks. Reading,
+downloads and sign-in open directly on `https://z-lib.sk/`. Saved books are local to
+the browser and are not downloaded files or synced account data. Public catalogue
+requests are cached for five minutes. If Z-Library blocks the server or requires
+verification, the explorer offers a direct link and a retry instead of empty results.
+Z-Library runs a sandboxed Chromium browser with a private virtual display to let
+its JavaScript verification complete. It connects directly (verified on Netcup)
+and keeps a public browsing session warm for five minutes. The archive.today
+`PROXY_URL` is separate; `ZLIBRARY_PROXY_URL` optionally sets a browser proxy.
+No account cookies are copied into this session. The Docker image includes
+Chromium and Xvfb; local
+non-Docker runs need a display and Playwright's Chromium installed. Set
+`ZLIBRARY_BROWSER=false` to opt into the older HTTP-only loader (which Z-Library
+currently challenges). Browser traffic is restricted to Z-Library and its assets.
+
+For an existing Netcup image without Chromium, `selfhost/browser/deploy-netcup.py`
+installs a private, loopback-only browser sidecar and a versioned source overlay.
+The overlay preserves the live API and launcher changes, and a private deployment
+snapshot is kept on the host at `/var/lib/rekindle-zlibrary/` for rollback. It survives
+pod restarts; reapply it after a Zeabur redeploy, or remove the sidecar/overlay once
+the updated Docker image is deployed. `ZLIBRARY_BROWSER_ENDPOINT` is reserved for
+this loopback sidecar.
+
 **Reddit** is turned off for now and hidden from the launcher. Reddit no longer serves
 servers: its feeds allow about one request a minute (and end on 2026-11-13), its JSON
 API answers "blocked by network security", new API apps need Reddit's approval, and
@@ -101,6 +125,7 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `IMAGE_MAX_WIDTH` | `1080` | Width Hacker News pictures are scaled down to |
 | `PROXY_URL` | – | HTTP proxy (`http://user:pass@host:port`) for sites that block this server |
 | `PROXY_DOMAINS` | archive.today domains | Sites fetched through `PROXY_URL` (comma-separated) |
+| `ZLIBRARY_PROXY_URL` | – | Optional HTTP proxy for the Z-Library browser; direct by default |
 | `MANHUAGUI_URL` | `https://www.manhuagui.com` | Manhuagui mirror (`https://tw.manhuagui.com` for Traditional Chinese) |
 | `MANHUAGUI_SHOW_R18` | `false` | Show Manhuagui titles marked R18 |
 | `TMDB_API_KEY` | – | Watchlist |
