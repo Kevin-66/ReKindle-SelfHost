@@ -137,6 +137,10 @@ export function transformHtml(html, fileName) {
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
     }
+    if (base === 'notes.html') {
+        // Live sync and merging when a note is open in two browsers (selfhost/site/js/rk-notes-sync.js).
+        html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-notes-sync.js"></script>\n</body>');
+    }
     if (base === 'minesweeper.html') {
         // Long press to flag (selfhost/site/js/rk-minesweeper.js).
         html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-minesweeper.js"></script>\n</body>');
