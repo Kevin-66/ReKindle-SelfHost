@@ -232,5 +232,14 @@ export function transformJs(code, fileName) {
     code = rewriteWorkerUrls(code);
     code = fixTranslationFallbacks(code);
     if (base === 'icons.js' || base === 'icons-beta.js') code += ICONS_FILTER;
+    if (base === 'emoji-render.js') {
+        // renderEmojis() scans any text with a character above U+2600 (Chinese text
+        // counts), then swapped every character in the OpenMoji map for a picture,
+        // including plain "-" (002D), ©, ™ and arrows: "re-lending" next to Chinese
+        // showed a black bar. A single character is swapped only if it is above U+2600
+        // itself (the renderer's own emoji test); sequences (keycaps, ZWJ, FE0F) still are.
+        code = code.replace('if (EMOJI_SVG_MAP[substr]) {',
+            'if (EMOJI_SVG_MAP[substr] && (len > 1 || substr.codePointAt(0) >= 0x2600)) {');
+    }
     return code;
 }
