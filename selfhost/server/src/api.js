@@ -14,6 +14,7 @@ import * as mangaState from './manga-state.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { listBooks } from './zlibrary.js';
 import * as zlibAccount from './zlibrary-account.js';
+import * as notesInbox from './notes-inbox.js';
 import { Readable } from 'node:stream';
 
 const MAX_JSON = 16 * 1024 * 1024;
@@ -290,6 +291,47 @@ async function handleManga(req, res, url, parts) {
     }
 }
 
+async function readBody(req, max) {
+    const chunks = [];
+    let size = 0;
+    for await (const c of req) {
+        size += c.length;
+        if (size > max) throw Object.assign(new Error(`The note is larger than ${Math.round(max / 1024)} KB.`), { status: 413, code: 'invalid-argument' });
+        chunks.push(c);
+    }
+    return Buffer.concat(chunks);
+}
+
+// Notes upload link (notes-inbox.js). The link itself is the permission: no sign-in,
+// open to any origin, so agents and scripts anywhere can post to it.
+async function handleNotes(req, res, url, parts) {
+    if (parts[2] === 'inbox' && parts[3]) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }
+        rateLimit(req, 'notes-inbox', 30, 60000);
+        const uid = notesInbox.ownerOf(parts[3]);
+        if (!uid) return send(res, 404, { error: { code: 'not-found', message: 'This upload link does not exist or was replaced.' } });
+        if (req.method === 'GET') {
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+            res.end(notesInbox.usage(publicOrigin(req), parts[3]));
+            return;
+        }
+        if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
+        const note = notesInbox.parseUpload(await readBody(req, notesInbox.MAX_BYTES), req.headers['content-type'], url.searchParams);
+        return send(res, 201, notesInbox.addNote(uid, note));
+    }
+    if (parts[2] === 'inbox-link') {
+        const me = bearer(req);
+        if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle first.' } });
+        if (req.method === 'GET') return send(res, 200, notesInbox.inboxLink(me.uid, publicOrigin(req)));
+        if (req.method === 'POST') return send(res, 200, { url: notesInbox.resetInbox(me.uid, publicOrigin(req)).url });
+        return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET or POST' } });
+    }
+    return send(res, 404, { error: { code: 'not-found', message: 'Not found' } });
+}
+
 export async function handleApi(req, res, url) {
     const parts = url.pathname.split('/').filter(Boolean); // ['__rk', ...]
     const section = parts[1];
@@ -305,6 +347,7 @@ export async function handleApi(req, res, url) {
         if (section === 'st') return await handleStorage(req, res, parts[2], parts.slice(3).join('/'), url);
         if (section === 'manga') return await handleManga(req, res, url, parts);
         if (section === 'img') return await handleImage(req, res, url);
+        if (section === 'notes') return await handleNotes(req, res, url, parts);
         if (section === 'zlibrary') {
             // The reader's Z-Library cookie and downloads with it (zlibrary-account.js).
             if (parts[2] === 'download') return await zlibAccount.sendDownload(res, url.searchParams.get('t'));

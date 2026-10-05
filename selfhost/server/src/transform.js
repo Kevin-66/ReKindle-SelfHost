@@ -181,8 +181,9 @@ export function transformHtml(html, fileName) {
     }
     if (base === 'notes.html') {
         // Live sync and merging when a note is open in two browsers (selfhost/site/js/rk-notes-sync.js),
-        // and a stopwatch in the editor toolbar (selfhost/site/js/rk-notes-stopwatch.js).
-        html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-notes-sync.js"></script>\n<script src="js/rk-notes-stopwatch.js"></script>\n</body>');
+        // a stopwatch in the editor toolbar (selfhost/site/js/rk-notes-stopwatch.js), and Markdown
+        // plus the agent upload link (selfhost/site/js/rk-notes-markdown.js).
+        html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-notes-sync.js"></script>\n<script src="js/rk-notes-stopwatch.js"></script>\n<script src="js/rk-notes-markdown.js"></script>\n</body>');
     }
     if (base === 'minesweeper.html') {
         // Long press to flag (selfhost/site/js/rk-minesweeper.js).
