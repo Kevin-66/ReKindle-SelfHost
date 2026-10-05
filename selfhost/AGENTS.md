@@ -167,3 +167,26 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
 - Variables such as `currentChapterList`, `currentReading` and `isReaderOpen` are
   top-level `let` in manga.html: they are visible to this script by name, but NOT as
   `window.*` properties.
+- Page display (`updateMangaPage` is replaced, not wrapped): manga.html emptied the
+  reader before each page and set the status line twice, so every page turn was a
+  blank redraw plus a page redraw. Now the new page loads off-screen and replaces the
+  old `<img>` in one swap.
+- `pageSrc()` turns page links into `/__rk/img?url=...&page=WxH` (MangaDex, was
+  `/api/proxy`) or `/__rk/manga/img?...&page=WxH` (Manhuagui), where WxH is the reader's
+  size in device pixels (`devicePixelRatio` x the theme.js zoom on `.window`).
+  `server/src/images.js` fits the page to that box (enlarging too; the browser would
+  enlarge with blocky nearest-neighbour scaling) and the client shows it 1:1. The only
+  other change is the background: pixels whose darkest channel is above 225 fade to
+  pure white (fully white from 240). The owner wants the panels/artwork left exactly as
+  drawn: no grayscale conversion (Kindle Scribe Colorsoft shows colour), no contrast or
+  levels, no dithering. A black-and-white dithered mode was built and rejected
+  (2026-10-05: it spoils fine screentone such as clothes); don't bring it back.
+- Pages are served with `Cache-Control: no-store` and the preloaded `<img>` elements
+  are what gets shown (`takePreloaded`), since no-store images are not reused from
+  the browser cache. Reason: the Kindle erases the browser's whole data folder
+  (localStorage sign-in, IndexedDB Manga library/progress) at launch once it passes
+  64 MB, and cached pages (MangaDex@Home sent 14-day caching, up to 2.4 MB a page) did
+  that; the owner saw it as "logged out and library gone after a deploy" (they reopened
+  the browser after deploys). Server data on Zeabur was intact (`/data` is a mounted volume).
+- A page that fails to load is retried once after 1.5 s (MangaDex@Home nodes sometimes
+  404 a page once).

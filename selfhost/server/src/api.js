@@ -10,7 +10,7 @@ import { currentSeq, waitForChanges } from './events.js';
 import { invokeCallable, errorStatus } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
-import { handleImage } from './images.js';
+import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { Readable } from 'node:stream';
 
 const MAX_JSON = 16 * 1024 * 1024;
@@ -249,7 +249,12 @@ async function handleStorage(req, res, action, rest, url) {
 // Manga sources (Manhuagui) for the Manga app's add-on script.
 async function handleManga(req, res, url, parts) {
     if (parts[2] === 'img') {
-        const r = await manhuagui.proxyImage(url.searchParams.get('u'), url.searchParams.get('k'));
+        const u = url.searchParams.get('u');
+        const k = url.searchParams.get('k');
+        // With ?page=WxH: the Manga reader's page, fitted and background whitened (images.js).
+        const opts = pageOptions(url.searchParams);
+        if (opts) return await sendImage(req, res, () => serveImage(`mhg:${u}:${k}`, [() => manhuagui.proxyImage(u, k)], opts));
+        const r = await manhuagui.proxyImage(u, k);
         res.writeHead(200, {
             'Content-Type': r.headers.get('content-type') || 'image/jpeg',
             'Cache-Control': 'public, max-age=604800, immutable'
