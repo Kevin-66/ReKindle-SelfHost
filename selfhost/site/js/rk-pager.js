@@ -140,6 +140,34 @@
         down.disabled = s.scrollTop + s.clientHeight >= s.scrollHeight - 2;
     }
 
+    // E-ink: on a high-density screen Chromium scrolls a scrolling box as its own
+    // composited layer and draws only about half a screen ahead, so a jump of almost a
+    // screen showed the part drawn ahead at once and the rest (the lower half) a moment
+    // later, white until then: a second refresh. With overflow-y: hidden the box is not
+    // composited, so the jump is a normal repaint that appears only when the whole view
+    // is ready. Scrolling by touch is given back once that frame is out. A classic
+    // scrollbar's width is kept as padding meanwhile, so the text doesn't reflow.
+    var restore = null, restoreTimer = null;
+
+    function jump(s, top) {
+        if (restore) { clearTimeout(restoreTimer); restore(); }
+        if (isDocScroller(scroller)) { s.scrollTop = top; return; }
+        var cs = window.getComputedStyle(s);
+        var gutter = s.offsetWidth - s.clientWidth - (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+        var oldOverflow = s.style.overflowY, oldPadding = s.style.paddingRight;
+        s.style.overflowY = 'hidden';
+        if (gutter > 0) s.style.paddingRight = ((parseFloat(cs.paddingRight) || 0) + gutter) + 'px';
+        s.scrollTop = top;
+        restore = function () {
+            restore = null;
+            s.style.overflowY = oldOverflow;
+            s.style.paddingRight = oldPadding;
+        };
+        requestAnimationFrame(function () {
+            restoreTimer = setTimeout(function () { if (restore) restore(); }, 400);
+        });
+    }
+
     function page(dir) {
         if (!scroller || !document.body.contains(scroller)) refresh();
         if (!scroller) return;
@@ -147,7 +175,7 @@
         var h = s.clientHeight;
         // Overlap covers the buttons' corner, so nothing stays hidden under them.
         var step = Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
-        s.scrollTop = Math.max(0, s.scrollTop + dir * step);
+        jump(s, Math.max(0, s.scrollTop + dir * step));
         place();
         updateButtons();
     }

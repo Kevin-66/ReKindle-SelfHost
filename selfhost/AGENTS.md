@@ -144,6 +144,17 @@ switched off. The switch is injected into Settings > Accessibility ("Page Button
 their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
 opaque (grey arrow), or the page shows through them.
 
+Lower half white after Page Down (owner, 2026-10-05, Substack and other apps): on the
+Kindle's high-density screen Chromium scrolls an `overflow: auto` box as its own
+composited layer and draws only about half a screen ahead, so a jump of almost a screen
+showed the top half at once and the lower half a moment later (white until then, a
+second e-ink refresh). `jump()` sets `overflow-y: hidden` on the box for the jump (not
+composited, so the jump is an ordinary repaint shown only when complete; `scrollTop`
+still works), keeps a classic scrollbar's width as extra `padding-right` so nothing
+reflows, and restores both 400 ms after the next frame. Document-level scrolling is
+unchanged (the root scroller is always composited). This explanation is a hypothesis
+until confirmed on the device: desktop Chrome draws fast enough to never show it.
+
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
 The Kindle browser draws Chinese with its Japanese font (角 in 确 gets the Japanese
