@@ -128,9 +128,10 @@ opaque (grey arrow), or the page shows through them.
 
 The Kindle browser draws Chinese with its Japanese font (角 in 确 gets the Japanese
 stroke), and `lang="zh-Hans"` alone changes nothing there (tried 2026-10-05). The device
-does have Chinese fonts, STSong and STHeiti, but only uses them when named:
-`selfhost/site/fonttest.html` (open `/fonttest` on the device) found them; Noto Sans SC
-as a web font also works but would cost storage.
+does have Chinese fonts, STSong and STHeiti, but only uses them when named: a test
+page (`selfhost/site/fonttest.html`, removed afterwards; it is in git history) drew
+characters in candidate fonts and found them; Noto Sans SC as a web font also worked
+but would cost storage.
 
 `transform.js` adds `rk-cjk.js` to every page (`hackernews.html` includes it). It wraps
 runs of Chinese characters, with the CJK punctuation between them, in
