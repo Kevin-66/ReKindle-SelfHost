@@ -13,8 +13,10 @@ and replaces everything the public rekindle.ink depends on:
 | Cloudflare Workers / Pages Functions | The repo's `workers/` and `functions/api/`, run unchanged |
 | Workers AI (handwriting) | Gemini, or any OpenAI-compatible vision model |
 
-ReKindle+ apps (Mail, Quick ToDo, AirType, Files, Photo Frame, ...) are on for every
-account by default.
+ReKindle+ apps (Mail, Quick ToDo, AirType, Files, Photo Frame, ...) are a paid feature
+of rekindle.ink and stay locked for ordinary accounts (the admin account has them): this
+server cannot sell subscriptions. A server's owner can unlock them for every account with
+`PLUS_FOR_ALL=true`.
 
 The **Manga** app, which upstream switched off, is back: MangaDex works as it did, and
 Manhuagui (漫画柜) is added as a second source (a port of the
@@ -44,11 +46,20 @@ games, Words Online, moderation tools and payments. They depend on ReKindle's ce
 community, so they are hidden from the launcher. Pass-and-play games on one device
 still work.
 
+## Credits and license
+
+Based on [ReKindle](https://github.com/ReKindleOS/ReKindle) by Ukiyo
+([rekindle.ink](https://rekindle.ink)). Like the original, this version is licensed under
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (see `LICENSE.md`):
+non-commercial use only, give credit, and share changes under the same license. The
+changes are described in this file; new code lives in `selfhost/`, and the few original
+files that are edited are listed under "Updating from the original ReKindle".
+
 ## Quick start
 
 ```bash
-git clone https://github.com/Kevin-66/ReKindle.git
-cd ReKindle
+git clone https://github.com/Kevin-66/ReKindle-SelfHost.git
+cd ReKindle-SelfHost
 cp .env.example .env        # optional: edit settings
 docker compose up -d --build
 ```
@@ -68,7 +79,7 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `PORT` | `8080` | Port on the host |
 | `ADMIN_USERNAME` | first account | Admin account |
 | `ALLOW_REGISTRATION` | `true` | Let new people sign up (first account always allowed) |
-| `PLUS_FOR_ALL` | `true` | ReKindle+ apps for everyone |
+| `PLUS_FOR_ALL` | `false` | Unlock the ReKindle+ apps for every account |
 | `TRUST_PROXY` | `true` | Read client IPs from `X-Forwarded-For` (behind a reverse proxy) |
 | `MAX_UPLOAD_MB` | `100` | Largest upload |
 | `GEMINI_API_KEY` | – | Oracle AI and handwriting recognition |

@@ -83,7 +83,7 @@ export function transformHtml(html, fileName) {
         return noticePage('Not available', 'Chat and online multiplayer are turned off on this ReKindle server.');
     }
     if (base === 'pay.html') {
-        return noticePage('ReKindle+', 'ReKindle+ features are included for every account on this server. If you enjoy ReKindle, consider supporting its creator at <a href="https://rekindle.ink">rekindle.ink</a>.');
+        return noticePage('ReKindle+', 'ReKindle+ subscriptions are not sold on this self-hosted server; its owner decides whether ReKindle+ apps are available. If you enjoy ReKindle, consider supporting its creator at <a href="https://rekindle.ink">rekindle.ink</a>.');
     }
 
     let first = true;
