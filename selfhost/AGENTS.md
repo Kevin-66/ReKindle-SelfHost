@@ -161,6 +161,9 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   `#reader-view` down to the bottom of the window. It reads its entries from the hidden
   `<select id="chapter-select">`, which stays the source of truth for manga.html.
   Manhuagui titles with both 回/话 and 卷 (单行本) get two columns (`VOLUME_RE`).
+- Manhuagui's genre and sort drop-downs use the same `CustomSelect` widget as the
+  MangaDex row (created in `buildControls`; the widget's MutationObserver shows the
+  options `loadFilters()` adds later). They were plain native selects before.
 - Source switch: two 48 px buttons (`.rk-source-btn`) drive a hidden
   `#rk-source-select`. Async store loads must check `currentSource()` before writing
   results, or a slow reply from the other source overwrites the list.
