@@ -49,6 +49,11 @@ as possible so `git merge upstream/main` stays clean.
   file has loaded, so the fallback never shows. `fixTranslationFallbacks()` in
   `transform.js` rewrites these to `window.t('key', 'Text')` in every page and script
   (25 places in 2026-10: Manga, Comics, ...). Write new code the same way.
+- `netguard.js` drops `cf-*` headers (CF-Connecting-IP, ...) from requests that workers
+  and `/api` functions send out, as Cloudflare's runtime does. `workers-host.js` adds
+  `cf-connecting-ip` to each incoming worker request, and the Substack worker forwards
+  all its headers; Substack's Cloudflare answered every such request with a 403 block
+  page (2026-10-05), so the Substack app showed "Access Denied" with a valid cookie.
 - `netguard.js`: upstream proxies (`/api/proxy`, reader worker, ...) may only reach public
   addresses, redirects included. 198.18.0.0/15 is allowed on purpose (fake-IP DNS from
   sing-box/Clash). Our own modules use `rawFetch`.

@@ -101,8 +101,22 @@ async function assertPublic(urlString) {
     if (!addrs.length || addrs.some(isPrivateAddress)) throw new BlockedAddressError(host);
 }
 
+// Cloudflare's own request headers (CF-Connecting-IP, ...) are added by Cloudflare,
+// and its runtime drops them from a worker's outgoing requests. Workers that forward
+// their incoming headers would otherwise pass on the ones workers-host.js adds, and
+// sites behind Cloudflare refuse those requests (Substack answered every one with 403).
+function withoutCloudflareHeaders(request) {
+    const headers = new Headers();
+    let found = false;
+    request.headers.forEach((v, k) => {
+        if (k.startsWith('cf-')) found = true;
+        else headers.append(k, v);
+    });
+    return found ? new Request(request, { headers }) : request;
+}
+
 async function guardedFetch(input, init) {
-    let request = new Request(input, init);
+    let request = withoutCloudflareHeaders(new Request(input, init));
     for (let hop = 0; hop < 6; hop++) {
         await assertPublic(request.url);
         const res = useProxy(request.url)
