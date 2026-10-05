@@ -169,6 +169,27 @@ function downloadFailed(status = 502, message) {
     });
 }
 
+// Each download step goes to the service log (book page only, never the cookie).
+const log = (...parts) => console.log('[zlibrary download]', ...parts);
+
+// Z-Library's script (jQuery 2.2.4) attaches its click handlers once the page has
+// loaded: "Convert to" is delegated on document (selector .converterLink), "other
+// formats" sits on #btnCheckOtherFormats. A click before that does nothing, so wait
+// until the handler we need is there.
+function handlerReady(page, which) {
+    return page.waitForFunction((w) => {
+        const $ = window.jQuery;
+        if (!$ || !$._data) return false;
+        if (w === 'convert') {
+            const events = $._data(document, 'events');
+            return !!(events && events.click && events.click.some((h) => h.selector === '.converterLink'));
+        }
+        const button = document.getElementById('btnCheckOtherFormats');
+        const events = button && $._data(button, 'events');
+        return !!(events && events.click && events.click.length);
+    }, which, { timeout: 20000 }).then(() => true, () => false);
+}
+
 const plain = (html) => String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 300);
 
 // Clicks a /dl/ link (DOM click: other formats sit in a hidden menu) and returns the download.
@@ -187,16 +208,24 @@ async function clickDownload(page, href) {
 // the original file; throws when Z-Library refuses (e.g. the daily limit), since the
 // original would be refused too.
 async function zlibraryConvert(page) {
+    if (!await handlerReady(page, 'convert')) { log('Convert to: no click handler on the page, using the EPUB'); return null; }
+    // Signed out, the link has an empty data-book-id and the click only opens a login box.
+    const bookId = await page.evaluate(() => document.querySelector('a.converterLink[data-convert_to="mobi"]').getAttribute('data-book-id'));
+    if (!bookId) log('Convert to: the page does not look signed in (empty data-book-id); trying anyway');
     const answered = page.waitForResponse((r) => r.request().method() === 'POST' && /\/file-conversion\/mobi(\?|$)/.test(r.url()), { timeout: 30000 });
     const downloaded = page.waitForEvent('download', { timeout: CONVERT_WAIT_MS });
     downloaded.catch(() => {});
     await page.evaluate(() => { document.querySelector('a.converterLink[data-convert_to="mobi"]').click(); });
     let answer = null;
-    try { answer = await (await answered).json(); } catch { return null; }
-    if (answer && answer.error) throw downloadFailed(502, 'Z-Library: ' + plain(answer.error));
+    try { answer = await (await answered).json(); } catch { log('Convert to: no answer from Z-Library, using the EPUB'); return null; }
+    if (answer && answer.error) { log('Convert to: Z-Library refused:', plain(answer.error)); throw downloadFailed(502, 'Z-Library: ' + plain(answer.error)); }
+    log('Convert to: started', answer && answer.response ? '(already converted)' : 'job ' + (answer && answer.jobId));
     const failed = page.locator('#converterCurrentStatusesBox .status-error').first()
-        .waitFor({ state: 'attached', timeout: CONVERT_WAIT_MS }).then(() => null, () => null);
-    return Promise.race([downloaded.catch(() => null), failed]);
+        .waitFor({ state: 'attached', timeout: CONVERT_WAIT_MS }).then(() => 'failed', () => 'timeout');
+    const result = await Promise.race([downloaded.catch(() => 'timeout'), failed]);
+    if (typeof result === 'string') { log('Convert to:', result === 'failed' ? 'Z-Library\'s conversion failed' : 'no file after 5 minutes', '- using the EPUB'); return null; }
+    log('Convert to: converted file arrived');
+    return result;
 }
 
 async function runDownload(url, cookie) {
@@ -218,18 +247,24 @@ async function runDownload(url, cookie) {
         const page = await context.newPage();
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.locator('a[href*="/dl/"]').first().waitFor({ state: 'attached', timeout: 25000 });
+        await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
         const main = await page.evaluate(() => {
             const a = document.querySelector('a[href*="/dl/"]');   // the book's own file, e.g. "epub, 649 KB"
             return a ? { href: a.href, epub: /(^|[^a-z])epub([^a-z]|$)/i.test([a.textContent, a.title, a.getAttribute('data-extension')].join(' ')) } : null;
         });
         if (!main) throw downloadFailed();
+        log(parsed.pathname, main.epub ? 'is EPUB' : 'is not EPUB: downloading it as it is');
         let download = null;
         if (main.epub) {
             // Other files of the same book (perhaps a MOBI) load into the menu on demand:
             // the "other formats" button fetches /papi/book/<id>/formats.
-            const formats = page.waitForResponse((r) => /\/papi\/book\/\d+\/formats/.test(r.url()), { timeout: 15000 }).catch(() => null);
-            await page.evaluate(() => { const b = document.getElementById('btnCheckOtherFormats'); if (b) b.click(); });
-            if (await formats) await page.waitForTimeout(700);
+            if (await handlerReady(page, 'formats')) {
+                const formats = page.waitForResponse((r) => /\/papi\/book\/\d+\/formats/.test(r.url()), { timeout: 15000 }).catch(() => null);
+                await page.evaluate(() => { document.getElementById('btnCheckOtherFormats').click(); });
+                if (await formats) await page.waitForTimeout(700);
+            } else {
+                log('other formats: no click handler on the page');
+            }
             const choice = await page.evaluate(() => {
                 const label = (a) => [a.textContent, a.title, a.getAttribute('data-extension')].join(' ');
                 const mobi = Array.prototype.find.call(document.querySelectorAll('a[href*="/dl/"]'), (a) => /(^|[^a-z])mobi([^a-z]|$)/i.test(label(a)));
@@ -239,10 +274,12 @@ async function runDownload(url, cookie) {
                     convert: !!document.querySelector('a.converterLink[data-convert_to="mobi"]') && !(toggle && toggle.getAttribute('data-convertation-available') === '0')
                 };
             });
+            log(choice.mobi ? 'a MOBI file is listed' : 'no MOBI file', choice.convert ? '- Convert to MOBI offered' : '- no Convert to MOBI');
             if (choice.mobi) download = await clickDownload(page, choice.mobi);
             if (!download && choice.convert) download = await zlibraryConvert(page);
         }
         if (!download) download = await clickDownload(page, main.href);
+        log('saving', download.suggestedFilename());
         const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zlib-')), 'book');
         await download.saveAs(file);
         const size = fs.statSync(file).size;
