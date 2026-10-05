@@ -222,6 +222,20 @@ the display scale.
   includes text-size setup and `rk-pager.js`; client timeout allows cold verification.
 - Focused checks: `node --test selfhost/server/test/zlibrary.test.js`.
 
+## Notes sync (`selfhost/site/js/rk-notes-sync.js`)
+
+notes.html saved the whole note (debounced 1 s) with a plain `set()` and never updated an
+open note from its list listener, so two browsers editing one note overwrote each other.
+`transform.js` adds `rk-notes-sync.js` for signed-in readers: while a note is open it has
+a document `onSnapshot` and shows remote saves (caret kept by mapping its text offset
+through the change); edits merge three-way against `base` (the last version both sides
+saw). Each side's unsent change is one stretch (common prefix/suffix); stretches in
+different places are both applied, overlapping ones are both kept side by side. Saves
+run in `db.runTransaction`, which the server aborts if the note's update time changed
+since it was read, so the merge is redone and retried. It wraps `openNote`, `showList`,
+`saveNoteData` (only for the open note) and `deleteNoteData`; guest notes are untouched.
+Tested with two tabs: live update, simultaneous edits on different lines, caret kept.
+
 ## Minesweeper long press (`selfhost/site/js/rk-minesweeper.js`)
 
 `transform.js` adds the script to `minesweeper.html`. Holding a covered cell for 450 ms

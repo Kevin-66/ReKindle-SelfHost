@@ -39,6 +39,9 @@ on the server for an hour so switching views is quick.
 
 **Minesweeper**: hold a covered cell to flag it, without switching to FLAG mode.
 
+**Notes** stay in sync when the same note is open on two devices: edits appear live
+and are merged instead of overwriting each other.
+
 A **Z-Library** explorer is added under Lifestyle: popular books, title/author/ISBN
 search, result pages, book metadata and up to 200 local saved bookmarks. Reading,
 downloads and sign-in open directly on `https://z-lib.sk/`. Saved books are local to
