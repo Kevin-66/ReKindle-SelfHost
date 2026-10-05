@@ -4,6 +4,8 @@
 # loads the public catalogue. The ReKindle server asks it over the private network:
 # ZLIBRARY_BROWSER_ENDPOINT=http://<this service>:8091 (and ZLIBRARY_BROWSER_TOKEN on
 # both). Built from the repository root so it shares selfhost/server/src/zlibrary-browser.js.
+# Calibre's ebook-convert turns downloaded books into MOBI, the format the Kindle
+# browser opens (POST /convert).
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/opt/rekindle-browsers \
@@ -11,7 +13,7 @@ ENV NODE_ENV=production \
     ZLIBRARY_BROWSER_PORT=8091
 WORKDIR /app
 RUN npm install --no-audit --no-fund --omit=dev playwright-core@1.63.0 \
-    && apt-get update && apt-get install -y --no-install-recommends xvfb xauth tini \
+    && apt-get update && apt-get install -y --no-install-recommends xvfb xauth tini calibre \
     && node node_modules/playwright-core/cli.js install --with-deps --no-shell chromium \
     && chmod -R a+rX /opt/rekindle-browsers \
     && rm -rf /var/lib/apt/lists/*

@@ -2,12 +2,19 @@
 // Like the Substack app, the reader pastes their own Z-Library cookie (from a desktop
 // browser where they are signed in); it is kept here and only ever sent to the
 // Z-Library browser service, whose Chromium downloads the book (downloadBook in
-// zlibrary-browser.js) so Z-Library's verification still passes. The Kindle then
-// gets the file from this server through a short-lived signed link, since a plain
-// link cannot carry the ReKindle sign-in.
+// zlibrary-browser.js) so Z-Library's verification still passes, and converts it to
+// MOBI (the Kindle browser opens no other e-book format; POST /convert, Calibre).
+// That can take minutes, longer than a page request should wait behind a proxy, so it
+// runs as a job: the page starts it (startJob), asks how it is going (jobStatus) and,
+// when the file is ready here, opens a short-lived signed link to it (sendDownload),
+// since a plain link cannot carry the ReKindle sign-in.
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { db, metaGet, metaSet } from './db.js';
 import { rawFetch } from './netguard.js';
 import { noticePage } from './transform.js';
@@ -63,11 +70,104 @@ function bookUrlOk(value) {
     } catch { return false; }
 }
 
-export function downloadLink(uid, bookUrl) {
+// ------------------------------------------------------------------ download jobs
+
+const JOB_KEEP_MS = 30 * 60 * 1000;   // a finished file stays this long (the Kindle may retry)
+const jobs = new Map();               // id -> { id, uid, book, status, step, started, file, name, size, message }
+
+function userError(message, status = 400, code = 'invalid-argument') {
+    return Object.assign(new Error(message), { status, code, userMessage: message });
+}
+
+function browserFetch(pathname, init) {
+    const headers = { ...(init.headers || {}) };
+    if (process.env.ZLIBRARY_BROWSER_TOKEN) headers.Authorization = 'Bearer ' + process.env.ZLIBRARY_BROWSER_TOKEN;
+    return rawFetch(new URL(pathname, process.env.ZLIBRARY_BROWSER_ENDPOINT), { ...init, headers });
+}
+
+async function browserError(res, fallback) {
+    const text = await res.text().catch(() => '');
+    return userError(text && text.length < 400 && !/^\s*</.test(text) ? text : fallback, 502, 'zlibrary/download-failed');
+}
+
+function fileName(res, fallback) {
+    try { return decodeURIComponent(res.headers.get('x-file-name') || fallback); } catch { return fallback; }
+}
+
+const extOf = (name) => (String(name).split('.').pop() || '').toLowerCase();
+
+async function runJob(job, cookie) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rk-zlib-'));
+    job.dir = dir;
+    try {
+        let res;
+        try {
+            res = await browserFetch('/download', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: job.book, cookie }), signal: AbortSignal.timeout(240000)
+            });
+        } catch { throw userError('The Z-Library browser could not be reached. Try again in a moment.', 502); }
+        if (!res.ok) throw await browserError(res, 'Z-Library did not start the download.');
+        let name = fileName(res, 'book');
+        let file = path.join(dir, 'original');
+        await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(file));
+        if (extOf(name) !== 'mobi') {
+            job.step = 'convert';
+            job.from = extOf(name);
+            try {
+                res = await browserFetch('/convert', {
+                    method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(name) },
+                    body: Readable.toWeb(fs.createReadStream(file)), duplex: 'half', signal: AbortSignal.timeout(400000)
+                });
+            } catch { throw userError('The converter could not be reached. Try again in a moment.', 502); }
+            if (!res.ok) throw await browserError(res, 'This book could not be converted to MOBI.');
+            name = fileName(res, name.replace(/\.[^.]*$/, '') + '.mobi');
+            const mobi = path.join(dir, 'book.mobi');
+            await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(mobi));
+            fs.rmSync(file, { force: true });
+            file = mobi;
+        }
+        Object.assign(job, { status: 'ready', file, name, size: fs.statSync(file).size, finished: Date.now() });
+    } catch (error) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        Object.assign(job, { status: 'failed', message: error.userMessage || 'The download failed. Try again in a moment.', finished: Date.now() });
+    }
+}
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, job] of jobs) {
+        if (job.finished && now - job.finished > JOB_KEEP_MS) {
+            if (job.dir) fs.rmSync(job.dir, { recursive: true, force: true });
+            jobs.delete(id);
+        }
+    }
+}, 60000).unref();
+
+// Starts downloading (and converting) a book for this reader; returns { id }.
+export function startJob(uid, bookUrl) {
     if (!bookUrlOk(bookUrl)) throw bad('Not a Z-Library book page.');
-    if (!getRow.get(uid)) throw bad('Connect your Z-Library account first (Account, then paste your cookie).', 'zlibrary/not-connected');
-    const payload = Buffer.from(JSON.stringify({ u: uid, b: bookUrl, e: Date.now() + LINK_MS })).toString('base64url');
-    return { href: '/__rk/zlibrary/download?t=' + payload + '.' + sign(payload) };
+    const row = getRow.get(uid);
+    if (!row) throw bad('Connect your Z-Library account first (Account, then paste your cookie).', 'zlibrary/not-connected');
+    if (!process.env.ZLIBRARY_BROWSER_ENDPOINT) throw userError('Downloads need the Z-Library browser service (ZLIBRARY_BROWSER_ENDPOINT).', 503, 'zlibrary/unavailable');
+    for (const job of jobs.values()) {
+        if (job.uid !== uid || job.status !== 'working') continue;
+        if (job.book === bookUrl) return { id: job.id };
+        throw userError('Another book is still downloading. Wait for it to finish.', 409, 'zlibrary/busy');
+    }
+    const job = { id: crypto.randomBytes(12).toString('base64url'), uid, book: bookUrl, status: 'working', step: 'download', started: Date.now() };
+    jobs.set(job.id, job);
+    runJob(job, row.cookie);
+    return { id: job.id };
+}
+
+export function jobStatus(uid, id) {
+    const job = jobs.get(String(id || ''));
+    if (!job || job.uid !== uid) throw userError('This download is no longer available. Tap Download again.', 404, 'not-found');
+    if (job.status === 'failed') return { status: 'failed', message: job.message };
+    if (job.status === 'working') return { status: 'working', step: job.step, from: job.from || null, seconds: Math.round((Date.now() - job.started) / 1000) };
+    const payload = Buffer.from(JSON.stringify({ u: uid, j: job.id, e: Date.now() + LINK_MS })).toString('base64url');
+    return { status: 'ready', name: job.name, size: job.size, href: '/__rk/zlibrary/download?t=' + payload + '.' + sign(payload) };
 }
 
 const TYPES = {
@@ -81,7 +181,8 @@ function failPage(res, status, message) {
         .end(noticePage('Download failed', message.replace(/[<>&]/g, '') + ' <a href="zlibrary">Back to Z-Library</a>'));
 }
 
-// GET /__rk/zlibrary/download?t=<signed>: opened by the Kindle as a normal link.
+// GET /__rk/zlibrary/download?t=<signed>: opened by the Kindle as a normal link once
+// the job's file is ready.
 export async function sendDownload(res, token) {
     const [payload, sig] = String(token || '').split('.');
     const expected = payload ? sign(payload) : '';
@@ -89,32 +190,15 @@ export async function sendDownload(res, token) {
     let link;
     try { link = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch { return failPage(res, 403, 'This download link is not valid.'); }
     if (!link || link.e < Date.now()) return failPage(res, 410, 'This download link has expired. Tap Download again.');
-    const row = getRow.get(link.u);
-    if (!row) return failPage(res, 400, 'Connect your Z-Library account first.');
-    if (!process.env.ZLIBRARY_BROWSER_ENDPOINT) return failPage(res, 503, 'Downloads need the Z-Library browser service (ZLIBRARY_BROWSER_ENDPOINT).');
-    let upstream;
-    try {
-        const headers = { 'Content-Type': 'application/json' };
-        if (process.env.ZLIBRARY_BROWSER_TOKEN) headers.Authorization = 'Bearer ' + process.env.ZLIBRARY_BROWSER_TOKEN;
-        upstream = await rawFetch(new URL('/download', process.env.ZLIBRARY_BROWSER_ENDPOINT), {
-            method: 'POST', headers, body: JSON.stringify({ url: link.b, cookie: row.cookie }), signal: AbortSignal.timeout(170000)
-        });
-    } catch {
-        return failPage(res, 502, 'The Z-Library browser could not be reached. Try again in a moment.');
-    }
-    if (!upstream.ok) {
-        const text = await upstream.text().catch(() => '');
-        return failPage(res, 502, text && text.length < 400 ? text : 'Z-Library did not start the download.');
-    }
-    let name = 'book';
-    try { name = decodeURIComponent(upstream.headers.get('x-file-name') || 'book'); } catch { }
-    const ext = (name.split('.').pop() || '').toLowerCase();
+    const job = jobs.get(String(link.j || ''));
+    if (!job || job.uid !== link.u || job.status !== 'ready' || !fs.existsSync(job.file)) return failPage(res, 410, 'This download is no longer available. Tap Download again.');
+    const name = job.name;
     const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
     res.writeHead(200, {
-        'Content-Type': TYPES[ext] || 'application/octet-stream',
+        'Content-Type': TYPES[extOf(name)] || 'application/octet-stream',
         'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`,
-        ...(upstream.headers.get('content-length') ? { 'Content-Length': upstream.headers.get('content-length') } : {}),
+        'Content-Length': job.size,
         'Cache-Control': 'no-store'
     });
-    Readable.fromWeb(upstream.body).on('error', () => res.destroy()).pipe(res);
+    fs.createReadStream(job.file).on('error', () => res.destroy()).pipe(res);
 }

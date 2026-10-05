@@ -363,13 +363,15 @@ export async function handleApi(req, res, url) {
         if (section === 'zlibrary') {
             // The reader's Z-Library cookie and downloads with it (zlibrary-account.js).
             if (parts[2] === 'download') return await zlibAccount.sendDownload(res, url.searchParams.get('t'));
-            if (parts[2] === 'account' || parts[2] === 'download-link') {
+            if (parts[2] === 'account' || parts[2] === 'jobs') {
                 const me = bearer(req);
                 if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle first.' } });
-                if (parts[2] === 'download-link') {
-                    if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
+                if (parts[2] === 'jobs') {
+                    // POST /jobs {url} starts a download (and MOBI conversion); GET /jobs/<id> reports on it.
+                    if (req.method === 'GET' && parts[3]) return send(res, 200, zlibAccount.jobStatus(me.uid, parts[3]));
+                    if (req.method !== 'POST' || parts[3]) return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST /jobs or GET /jobs/<id>' } });
                     rateLimit(req, 'zlibrary-download', 20, 60000);
-                    return send(res, 200, zlibAccount.downloadLink(me.uid, (await readJson(req)).url));
+                    return send(res, 200, zlibAccount.startJob(me.uid, (await readJson(req)).url));
                 }
                 if (req.method === 'GET') return send(res, 200, zlibAccount.accountStatus(me.uid));
                 if (req.method === 'PUT') return send(res, 200, zlibAccount.saveAccount(me.uid, (await readJson(req)).cookie));
