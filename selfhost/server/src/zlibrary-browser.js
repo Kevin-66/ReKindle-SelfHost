@@ -172,11 +172,22 @@ async function runDownload(url, cookie) {
         context.on('page', (page) => page.on('dialog', (dialog) => dialog.dismiss()));
         const page = await context.newPage();
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        const link = page.locator('a[href*="/dl/"]').first();
-        await link.waitFor({ state: 'attached', timeout: 25000 });
+        await page.locator('a[href*="/dl/"]').first().waitFor({ state: 'attached', timeout: 25000 });
+        // The Kindle only opens MOBI: take a MOBI file when the page lists one (other
+        // formats sit in a hidden menu, hence a DOM click), else the main file, which
+        // the browser service then converts (POST /convert).
+        const href = await page.$$eval('a[href*="/dl/"]', (links) => {
+            const label = (a) => [a.textContent, a.title, a.getAttribute('data-extension')].join(' ');
+            const pick = links.find((a) => /(^|[^a-z])mobi([^a-z]|$)/i.test(label(a))) || links[0];
+            return pick ? pick.href : null;
+        });
+        if (!href) throw downloadFailed();
         const [download] = await Promise.all([
             page.waitForEvent('download', { timeout: 90000 }),
-            link.click()
+            page.evaluate((h) => {
+                const a = Array.prototype.find.call(document.querySelectorAll('a[href*="/dl/"]'), (x) => x.href === h);
+                if (a) a.click();
+            }, href)
         ]);
         const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zlib-')), 'book');
         await download.saveAs(file);

@@ -249,13 +249,31 @@ the display scale.
   remote-browser view): pasted under Account in zlibrary.html (`remix_userid`,
   `remix_userkey`; any name=value pairs are kept), stored per ReKindle account in the
   `zlib_accounts` table (`zlibrary-account.js`, GET/PUT/DELETE `/__rk/zlibrary/account`,
-  removed with the account). Download asks POST `/__rk/zlibrary/download-link` for a
+  removed with the account). A finished download job (below) hands out a
   10-minute HMAC-signed `/__rk/zlibrary/download?t=` link (a plain link cannot carry
-  the ReKindle sign-in), which calls the browser service's POST `/download`
-  (`downloadBook`): a fresh context with the cookie on `.z-lib.sk` opens the book page
-  in headed Chromium, clicks the first `a[href*="/dl/"]`, saves the download (300 MB
-  cap, one at a time) and streams it back with `X-File-Name`; the server answers with
-  Content-Disposition. Failures go back to the Kindle as an HTML notice page. The real
+  the ReKindle sign-in). The browser service's POST `/download` (`downloadBook`): a
+  fresh context with the cookie on `.z-lib.sk` opens the book page in headed Chromium,
+  picks a `/dl/` link whose own text says MOBI, else the first, DOM-clicks it (other
+  formats sit in a hidden menu), saves the download (300 MB cap, one at a time) and
+  streams it back with `X-File-Name`.
+- MOBI only (owner, 2026-10-05: the Kindle browser opens no other e-book format).
+  Anything else goes to the browser service's POST `/convert` (body = file, name in
+  `X-File-Name`): Calibre's `ebook-convert` (Debian `calibre` package in
+  `Dockerfile.zlibrary-browser`) with `--output-profile kindle_pw3 --mobi-file-type
+  both` (old MOBI + KF8 in one file), `QT_QPA_PLATFORM=offscreen`, one at a time, 5 min
+  limit; formats Calibre can't read get 415 with a message.
+- Download + conversion can take minutes, longer than a page request should hang
+  behind Zeabur's proxy, so it is a job (`zlibrary-account.js`): POST
+  `/__rk/zlibrary/jobs` {url} -> {id} (same book again returns the running job; another
+  book while one runs -> 409), GET `/__rk/zlibrary/jobs/<id>` -> working (step
+  `download`/`convert`) | failed (message) | ready (name, size, signed `href`). The
+  server keeps the file in a temp dir for 30 minutes (the Kindle may retry) and
+  `sendDownload` serves it with Content-Disposition; failures there are an HTML notice
+  page. zlibrary.html polls every 3 s and changes its message only when the step
+  changes (a ticking counter would redraw the whole e-ink screen each time).
+- Tested locally with a stand-in `/download` and a fake `ebook-convert` on PATH (no
+  Calibre or Docker on the Mac); check real conversion in the deployed service with
+  `ebook-convert` on a small EPUB. The real
   Z-Library step was not testable without the owner's account: if downloads fail,
   check the download link selector and the allowed download hosts (`DOWNLOAD_HOST`).
 - `rk_zlibrary_saved_v1` stores up to 200 local bookmarks, not downloads. The page
