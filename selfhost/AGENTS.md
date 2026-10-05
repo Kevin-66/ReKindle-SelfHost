@@ -152,6 +152,16 @@ the display scale.
 - `hackernews.html` uses `calc(<size> * var(--rk-text, 1))` in its own CSS and sets the
   variable itself (pages in `selfhost/site` are not transformed).
 
+## Minesweeper long press (`selfhost/site/js/rk-minesweeper.js`)
+
+`transform.js` adds the script to `minesweeper.html`. Holding a covered cell for 450 ms
+flags or unflags it in either mode (the FLAG/DIG button is left alone); the click that
+ends the hold is swallowed in the capture phase so it doesn't also dig. Pointer Events
+on `#grid-container` (delegated, so re-rendered grids keep working); a move over 12 px
+cancels. `contextmenu` is prevented: right-click flags on a computer, and a browser
+long-press menu that fires before the timer flags once (the timer is cancelled). It
+calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
+
 ## Substack (`substack.html`)
 
 `transform.js` edits the page at build time (upstream file untouched):

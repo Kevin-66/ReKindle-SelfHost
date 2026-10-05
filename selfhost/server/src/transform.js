@@ -128,6 +128,10 @@ export function transformHtml(html, fileName) {
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
     }
+    if (base === 'minesweeper.html') {
+        // Long press to flag (selfhost/site/js/rk-minesweeper.js).
+        html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-minesweeper.js"></script>\n</body>');
+    }
     if (base === 'substack.html') {
         // Font and formatting of the article view (selfhost/site/css/rk-substack.css).
         html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css">\n</head>');
