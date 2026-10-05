@@ -63,6 +63,28 @@ function fixTranslationFallbacks(code) {
         .replace(T_TERNARY, (m, q, key, fallback) => `window.t ? window.t(${q}${key}${q}, ${fallback}) : ${fallback}`);
 }
 
+// Dark mode before the first paint. theme.js turns dark mode on only once it has
+// downloaded and run (the server makes the browser recheck it on every page), and
+// Settings loads it at the end of the page, so pages first appeared light: a white
+// flash on every page turn, which e-ink shows as a full redraw. This runs first in
+// <head>, with no download, and adds the same style element theme.js would
+// (id rekindle-dark-theme, same rules: keep in sync with injectDarkStyles in
+// theme.js), so theme.js finds it already there and can still remove it for light.
+const DARK_CSS =
+    ':root[data-theme="dark"]{background-color:#ffffff;background-image:var(--rk-wallpaper,none);' +
+    'background-size:var(--rk-wallpaper-size,auto);color:#000000;min-height:100%;filter:invert(1) hue-rotate(180deg);}' +
+    ':root[data-theme="dark"] img,:root[data-theme="dark"] video,:root[data-theme="dark"] canvas,' +
+    ':root[data-theme="dark"] .no-invert{filter:invert(1) hue-rotate(180deg);}' +
+    ':root[data-theme="dark"] img.keep-white{filter:none;}';
+
+export const DARK_HEAD = '<script>(function(){try{var m=localStorage.getItem("rekindle_theme_mode")||"light",d=m==="dark";' +
+    'if(m==="auto"){var n=new Date(),h=n.getHours(),o=parseFloat(localStorage.getItem("rekindle_timezone_offset"));' +
+    'if(!isNaN(o))h=Math.floor((((n.getUTCHours()+n.getUTCMinutes()/60+o)%24)+24)%24);' +
+    'd=h>=18||h<6||!!(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);}' +
+    'if(!d)return;var r=document.documentElement;r.style.colorScheme="light";r.setAttribute("data-theme","dark");' +
+    'var s=document.createElement("style");s.id="rekindle-dark-theme";s.appendChild(document.createTextNode(' +
+    JSON.stringify(DARK_CSS) + '));(document.head||r).appendChild(s);}catch(e){}})();</script>';
+
 export const TEXT_SIZE_HEAD = '<link rel="stylesheet" href="css/rk-text.css">' +
     '<script>try{var rkT=localStorage.getItem("rk_text_size"),rkD=document.documentElement;if(rkT&&rkT!=="1"){' +
     'rkD.style.setProperty("--rk-text",rkT);rkD.setAttribute("data-rk-text",rkT);' +
@@ -126,6 +148,9 @@ export function transformHtml(html, fileName) {
     // Text Size (Settings > Accessibility): set --rk-text before the page draws, and
     // css/rk-text.css multiplies it into each app's reading text. Font sizes only, no zoom.
     html = html.replace(/<\/head>/i, `${TEXT_SIZE_HEAD}\n</head>`);
+
+    // Dark mode from the first paint (no white flash): first thing in <head>.
+    html = html.replace(/<head(\s[^>]*)?>/i, (m) => `${m}\n${DARK_HEAD}`);
     if (base === 'settings.html') html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-textsize.js"></script>\n</body>');
 
     // Page Up / Page Down buttons on every page that scrolls (selfhost/site/js/rk-pager.js).

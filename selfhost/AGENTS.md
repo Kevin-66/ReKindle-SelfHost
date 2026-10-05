@@ -39,6 +39,16 @@ as possible so `git merge upstream/main` stays clean.
   `injectDarkStyles()` in theme.js. `selfhost/site` pages (not transformed) carry a
   copy of the snippet. Modern desktop browsers hold the old page during loads, so
   the flash only reproduces on the device.
+- Dark mode white flash (fixed 2026-10-05): theme.js only darkens a page once it has
+  downloaded and run (the server makes browsers revalidate it on every page, and
+  settings.html loads it at the end of the body), and the Kindle's Chromium 75 has no
+  "paint holding", so every page turn showed a white page first, which e-ink redraws
+  in full. `transform.js` puts `DARK_HEAD` first in every `<head>`: an inline script
+  that reads `rekindle_theme_mode` (and the auto rule) and adds the same
+  `#rekindle-dark-theme` style theme.js would. Keep `DARK_CSS` in sync with
+  `injectDarkStyles()` in theme.js. `selfhost/site` pages (not transformed) carry a
+  copy of the snippet. Modern desktop browsers hold the old page during loads, so
+  the flash only reproduces on the device.
 
 ## Server gotchas
 
