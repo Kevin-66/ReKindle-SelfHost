@@ -167,10 +167,13 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
 - Variables such as `currentChapterList`, `currentReading` and `isReaderOpen` are
   top-level `let` in manga.html: they are visible to this script by name, but NOT as
   `window.*` properties.
-- Page display (`updateMangaPage` is replaced, not wrapped): manga.html emptied the
-  reader before each page and set the status line twice, so every page turn was a
-  blank redraw plus a page redraw. Now the new page loads off-screen and replaces the
-  old `<img>` in one swap.
+- Page display (`updateMangaPage` is replaced, not wrapped): the old page stays up
+  while the next one loads; once it is ready the reader goes blank (white) and draws
+  the page in the next frame (two `requestAnimationFrame`s), so the Kindle can merge
+  the two into one refresh. History (2026-10-05): manga.html blanked on tap and drew
+  when loaded; a straight page-to-page swap in one redraw looked worse to the owner
+  than blanking; they asked for the blank and the page together instead of a white
+  screen first and the page later. Keep a blank before each page.
 - `pageSrc()` turns page links into `/__rk/img?url=...&page=WxH` (MangaDex, was
   `/api/proxy`) or `/__rk/manga/img?...&page=WxH` (Manhuagui), where WxH is the reader's
   size in device pixels (`devicePixelRatio` x the theme.js zoom on `.window`).
