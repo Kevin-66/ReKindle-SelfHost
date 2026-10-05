@@ -52,9 +52,15 @@ function rewriteTrafficCop(code) {
 // "manga.btn.continue". window.t takes the fallback as its second argument. Only a
 // lone fallback literal that ends the expression is moved, so `|| 'a' + b` is left alone.
 const T_OR_FALLBACK = /window\.t\((['"])([\w.-]+)\1\)\s*\|\|\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")(?=\s*[),;:}\]\n])/g;
+// The other common form, `window.t ? window.t('key') : 'Text'` (388 places in 53 apps,
+// e.g. Breathing's "BREATHING.STEP.INHALE"), has the same problem: window.t always
+// exists, so the fallback only ever applies when i18n.js is missing.
+const T_TERNARY = /window\.t\s*\?\s*window\.t\((['"])([\w.-]+)\1\)\s*:\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")(?=\s*[),;:}\]\n])/g;
 
 function fixTranslationFallbacks(code) {
-    return code.replace(T_OR_FALLBACK, (m, q, key, fallback) => `window.t(${q}${key}${q}, ${fallback})`);
+    return code
+        .replace(T_OR_FALLBACK, (m, q, key, fallback) => `window.t(${q}${key}${q}, ${fallback})`)
+        .replace(T_TERNARY, (m, q, key, fallback) => `window.t ? window.t(${q}${key}${q}, ${fallback}) : ${fallback}`);
 }
 
 export const TEXT_SIZE_HEAD = '<link rel="stylesheet" href="css/rk-text.css">' +

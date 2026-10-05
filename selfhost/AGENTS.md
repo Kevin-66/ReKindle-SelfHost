@@ -48,7 +48,11 @@ as possible so `git merge upstream/main` stays clean.
   `window.t('key') || 'Text'`, but `window.t` returns the key itself until the language
   file has loaded, so the fallback never shows. `fixTranslationFallbacks()` in
   `transform.js` rewrites these to `window.t('key', 'Text')` in every page and script
-  (25 places in 2026-10: Manga, Comics, ...). Write new code the same way.
+  (25 places in 2026-10: Manga, Comics, ...). The other common form,
+  `window.t ? window.t('key') : 'Text'` (388 places in 53 apps, e.g. Breathing's
+  "BREATHING.STEP.INHALE"), has the same problem and is rewritten to
+  `window.t ? window.t('key', 'Text') : 'Text'`. Only a lone string literal that ends the
+  expression is moved. Write new code as `window.t('key', 'Text')`.
 - `js/emoji-render.js` (`renderEmojis`, used by Substack and others) scans any text node
   with a character above U+2600, and Chinese text counts. It then swapped EVERY
   character found in `EMOJI_SVG_MAP` for an OpenMoji picture, and the map has about 60
