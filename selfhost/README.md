@@ -40,7 +40,24 @@ on the server for an hour so switching views is quick.
 **Minesweeper**: hold a covered cell to flag it, without switching to FLAG mode.
 
 **Notes** stay in sync when the same note is open on two devices: edits appear live
-and are merged instead of overwriting each other.
+and are merged instead of overwriting each other. Notes show Markdown formatting, and
+typing Markdown formats as you go (`# ` heading, `- ` list, `1. `, `> `, `---`,
+`**bold**`, `*italic*`, `` `code` ``, `~~strike~~`); the download button saves `.md`.
+A stopwatch in the editor (paused until tapped) times a writing session.
+
+**Notes upload link for AI agents**: the **Agent** button in Notes shows a private link
+per account. Anything that can send an HTTP request can add a note with it, with no
+sign-in; the link can only add notes (not read, change or delete them), and **New link**
+replaces it. Opening the link in a browser shows these instructions:
+
+```bash
+curl -X POST 'https://<server>/__rk/notes/inbox/<key>' -H 'Content-Type: text/markdown' --data-binary @note.md
+curl -X POST 'https://<server>/__rk/notes/inbox/<key>?title=Shopping' -H 'Content-Type: text/plain' --data-binary '- milk'
+curl -X POST 'https://<server>/__rk/notes/inbox/<key>' -H 'Content-Type: application/json' -d '{"title":"Plan","markdown":"- step one"}'
+```
+
+Without a title, a leading `# Heading` becomes the title, else the first line. Up to
+256 KB; raw HTML in the Markdown is shown as text. Answer: `201 {"ok":true,"id":...,"title":...}`.
 
 Settings such as Display Mode, Text Size and Page Buttons are kept with your account
 and come back on any device, or after the Kindle clears its browser data, when you open

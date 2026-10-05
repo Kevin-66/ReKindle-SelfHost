@@ -95,6 +95,13 @@ CREATE TABLE IF NOT EXISTS zlib_accounts (
     updated INTEGER NOT NULL
 );
 
+-- Each account's secret Notes upload link for AI agents (notes-inbox.js).
+CREATE TABLE IF NOT EXISTS notes_inbox (
+    uid TEXT PRIMARY KEY,
+    key TEXT NOT NULL UNIQUE,
+    created INTEGER NOT NULL
+);
+
 -- The Manga app's library and reading progress per account (manga-state.js).
 CREATE TABLE IF NOT EXISTS manga_state (
     uid TEXT PRIMARY KEY,

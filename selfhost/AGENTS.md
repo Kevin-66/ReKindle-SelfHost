@@ -311,6 +311,42 @@ on a canvas one buffer pixel per glyph pixel, shown at 2 CSS px per pixel with
 so ticks don't move the toolbar until hours appear. Any live-updating readout on the
 Kindle should be drawn this way, not as changing text.
 
+## Notes Markdown and the agent upload link
+
+- Notes stay HTML (`users/{uid}/notes/{id}`: `title`, `content` HTML, `updated` ms), so old
+  notes, B/I/U and `rk-notes-sync.js` merging are unchanged. `selfhost/site/js/rk-notes-markdown.js`
+  (added by `transform.js` after the stopwatch) styles Markdown elements in
+  `#note-content`, adds typing rules on `input` events (`inputType` `insertText`, one
+  character), replaces `downloadTXT` with a `.md` export (`window.rkNotesToMarkdown`), and
+  adds the Agent button and window.
+- Typing rules use `document.execCommand` so Undo keeps working: block rules
+  (`formatBlock` h1-h6/blockquote, `insertUnorderedList`/`insertOrderedList`) fire on the
+  space after a marker at the start of a line (`atLineStart`: no content before the text
+  node on its line); `---` inserts `<hr><div><br></div>`; bold/italic/strike type the
+  inner text, select it, apply the command and toggle the typing style off again.
+  `code` is built with `Range.insertNode` (insertHTML copied the surrounding font size
+  onto it) plus a trailing nbsp. Enter on an empty quote line removes it and turns the
+  line back into a `div` (Chrome otherwise starts another quote). Rules never fire in
+  PRE/CODE, block rules not in LI/headings/table cells.
+- Testing gotcha: the browser pane's `type` action inserts a whole string as ONE input
+  event, and calling `execCommand('insertText')` per character from page JS nests the
+  rules' commands inside another command (garbled results). Test with one `type`
+  action per character and `key Return`, like the Kindle keyboard.
+- The upload link (`server/src/notes-inbox.js`): table `notes_inbox(uid, key UNIQUE)`,
+  key = 24 random bytes base64url. `GET/POST /__rk/notes/inbox-link` (signed in) returns
+  or replaces it; `/__rk/notes/inbox/<key>` answers GET with plain-text instructions,
+  POST with a new note (201), OPTIONS for CORS (`*`); 30 requests/min per IP; 256 KB.
+  The owner asked for no verification: the link itself is the permission and can only
+  add notes. The note is written with `fsStore.commit(..., {internal: true})`, so open
+  Notes lists update live.
+- `server/src/markdown.js` turns the Markdown into HTML. It escapes all text (raw HTML
+  shows as text) and keeps only http(s)/mailto links and http(s) images, because the
+  link holder must not be able to run script in the owner's session. The editor uses
+  `white-space: pre-wrap`, so the output has NO whitespace between tags (it shows as
+  blank lines); paragraph line breaks become `<br>`. All inline patterns are bounded
+  (one line, 500 chars) after a stress test of 50,000 unclosed `[` took 11 s;
+  `test/markdown.test.js` keeps worst cases under 3 s.
+
 ## Minesweeper long press (`selfhost/site/js/rk-minesweeper.js`)
 
 `transform.js` adds the script to `minesweeper.html`. Holding a covered cell for 450 ms

@@ -130,6 +130,7 @@ export function deleteUser(uid) {
     db.prepare('DELETE FROM user_claims WHERE uid = ?').run(uid);
     db.prepare('DELETE FROM manga_state WHERE uid = ?').run(uid);
     db.prepare('DELETE FROM zlib_accounts WHERE uid = ?').run(uid);
+    db.prepare('DELETE FROM notes_inbox WHERE uid = ?').run(uid);
     db.prepare('DELETE FROM users WHERE uid = ?').run(uid);
     adminCache = null;
 }
