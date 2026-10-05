@@ -3,8 +3,8 @@
 [ReKindle](https://github.com/ReKindleOS/ReKindle) by Ukiyo is a web app suite for
 Kindle and other e-ink browsers ([rekindle.ink](https://rekindle.ink)). This version runs
 it on your own server with Docker: one container replaces Firebase and the Cloudflare
-services, and adds e-ink touches such as Page Up / Page Down buttons, a Hacker News app,
-working Reddit pictures and Manhuagui in the Manga app.
+services, and adds e-ink touches such as Page Up / Page Down buttons, a Text Size
+setting, a Hacker News app and Manhuagui in the Manga app.
 
 ReKindle+ apps stay locked for ordinary accounts, as on rekindle.ink without a
 subscription (the admin account has them, and a server owner can unlock them for everyone

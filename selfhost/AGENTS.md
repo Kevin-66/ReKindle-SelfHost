@@ -67,38 +67,30 @@ as possible so `git merge upstream/main` stays clean.
   not treat `.js` as CommonJS by default; Node in Docker behaves normally. Babel errors
   in a Deno build come from Deno's package layout; run the build after `npm ci`.
 
-## Reddit
+## Reddit (turned off)
 
-`/api/reddit` is `selfhost/server/src/reddit.js`; upstream `functions/api/reddit.js` is
-skipped (`SKIPPED_FUNCTIONS` in `workers-host.js`). Why, found 2026-10:
+The Reddit app is off (`PAUSED_APPS` in `transform.js`: hidden from the launcher,
+`reddit.html` shows a notice) and `/api/reddit` is not served (`SKIPPED_FUNCTIONS`). An
+RSS-based `server/src/reddit.js` existed until 2026-10-05; it is in git history. What
+was found, in case it is revisited:
 
-- old.reddit.com redirects logged-out requests to `/login/?reason=lor2` (upstream tried it
-  first for every feed: ~1 s and a 320 KB login page wasted per request).
-- i.redd.it / preview.redd.it answer page-load headers (`Accept: text/html`,
-  `Sec-Fetch-Dest: document`, which upstream sends) with a 307 to an HTML viewer, so every
-  proxied image was broken. Fetch images with an image `Accept` header. A missing
-  i.redd.it file is a 404 whose body is a placeholder PNG: check the status, not the type.
-- `preview.redd.it/<id>.<ext>?width=...&s=...` is signed (changing params gives 403), but
-  `i.redd.it/<id>.<ext>` serves the original for the same id (also for gallery
-  thumbnails); video thumbnails have no original, so fall back to the preview URL.
-- Reddit RSS for logged-out clients: `x-ratelimit-remaining: 0.0` after ONE request,
-  `x-ratelimit-reset` ~60 s. `fetchFeed()` serialises requests, waits up to 15 s for the
-  window, otherwise returns 429 + `Retry-After`; `reddit.html` honours Retry-After (max 60 s,
-  3 attempts) and shows its own "rate limiting" banner. Don't turn 429s into 200 notices
-  (`redditNotice` is only for 5xx), or the app stops retrying.
-- `www.reddit.com/*.json` answered "blocked by network security" (403 HTML) from a
-  datacenter address while RSS worked. The `/svc/shreddit/...` HTML partials that the
-  current website uses (`community-more-posts/hot/?name=<sub>`,
-  `comments/r/<sub>/t3_<id>`) did answer, if feeds ever have to be scraped.
-- In a feed entry with a thumbnail, Reddit puts the thumbnail AND the post text
-  (`<!-- SC_OFF --><div class="md">`) inside a `<table>`, and `reddit.html` deletes that
-  table in thread view, so picture and text vanished. `showPostMedia()` moves them (plus
-  a full-size picture link, which the app turns into an `<img>`) before the table.
-- When RSS stops (2026-11-13), a failed `.rss` request (not 429/5xx) returns an empty Atom
-  feed with `Cache-Control: no-store`, which makes the app fall back to `.json`.
-  `workers-host.js` doesn't keep `no-store` responses as the "last good" copy.
-
-Redlib was tried and dropped (too slow, and it got 429s from Reddit too).
+- Logged-out RSS: `x-ratelimit-remaining: 0.0` after ONE request (reset ~60 s) per
+  address. RSS ends 2026-11-13; the public API in 2027-03; new API apps need approval
+  (Responsible Builder Policy); Devvit cannot send data to outside servers.
+- `www.reddit.com/*.json`: 403 "blocked by network security" from datacenter addresses
+  (the Zeabur server, the owner's UK proxy) while RSS still answered.
+- old.reddit.com redirects every logged-out request to `/login/?reason=lor2` from
+  datacenter AND home addresses. The login page is the modern one with Google reCAPTCHA,
+  which only works on reddit.com, so signing in through a ReKindle proxy cannot work; a
+  proxy would need the owner's `reddit_session` cookie as a secret (account risk). The
+  owner chose to turn Reddit off instead (and does not want Redlib: too slow).
+- Image hosts (i.redd.it, preview.redd.it) answer browser page-load headers with a 307
+  to an HTML viewer; fetch them with an image `Accept` header. `preview.redd.it/<id>`
+  is signed, `i.redd.it/<id>` serves the original.
+- The website's `/svc/shreddit/...` HTML partials answered from servers (200 requests per
+  10 min): `community-more-posts/hot/?name=<sub>&after=base64(t3_id)` lists posts;
+  `comments/r/<sub>/t3_<id>` has comments but not the post; full pages sit behind a JS
+  challenge (don't solve it).
 
 ## Page buttons (`selfhost/site/js/rk-pager.js`)
 
