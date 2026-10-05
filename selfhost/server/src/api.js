@@ -10,6 +10,7 @@ import { currentSeq, waitForChanges } from './events.js';
 import { invokeCallable, errorStatus } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
+import * as mangaState from './manga-state.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { Readable } from 'node:stream';
 
@@ -261,6 +262,14 @@ async function handleManga(req, res, url, parts) {
         });
         Readable.fromWeb(r.body).on('error', () => res.destroy()).pipe(res);
         return;
+    }
+    if (parts[2] === 'state') {
+        // The signed-in reader's library and progress (manga-state.js).
+        const me = bearer(req);
+        if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle to keep your Manga library.' } });
+        if (req.method === 'GET') return send(res, 200, mangaState.getState(me.uid));
+        if (req.method === 'PUT') return send(res, 200, mangaState.putState(me.uid, await readJson(req)));
+        return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET or PUT' } });
     }
     if (!bearer(req)) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle to browse Manhuagui.' } });
     const p = url.searchParams;

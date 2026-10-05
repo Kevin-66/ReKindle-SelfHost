@@ -716,6 +716,152 @@
         };
     }
 
+    // ------------------------------------------------------------ library in the database
+    //
+    // manga.html keeps the library and reading progress only in the browser
+    // (localforage: manga_library, manga_progress), which the Kindle can wipe. When
+    // signed in, the account's copy on this server (GET/PUT /__rk/manga/state,
+    // server/src/manga-state.js) is the master: opening Manga replaces the browser's
+    // copy with it before the library is drawn, and every change is sent at once.
+    // Changes that could not be sent (offline) wait in localStorage rk_manga_pending,
+    // tagged with the account, and go first next time. Progress entries get a time (t)
+    // so the newest wins per manga. Signed out, everything stays local as before.
+    // Libraries kept only in the browser before this are not uploaded (owner's choice).
+
+    var PENDING_KEY = 'rk_manga_pending';
+    var SYNC_TIMEOUT_MS = 5000;
+
+    function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+    function lsSet(key, value) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) { } }
+
+    function currentUid() {
+        try {
+            var s = JSON.parse(lsGet('rk_auth:[DEFAULT]') || 'null');
+            return (s && s.refreshToken && s.user && s.user.uid) || null;
+        } catch (e) { return null; }
+    }
+
+    function withTimeout(promise) {
+        return new Promise(function (resolve, reject) {
+            var timer = setTimeout(function () { reject(new Error('timeout')); }, SYNC_TIMEOUT_MS);
+            promise.then(function (v) { clearTimeout(timer); resolve(v); }, function (e) { clearTimeout(timer); reject(e); });
+        });
+    }
+
+    function stateApi(method, body) {
+        return getToken().then(function (token) {
+            if (!token) throw new Error('signed out');
+            var init = { method: method, headers: { Authorization: 'Bearer ' + token } };
+            if (body) {
+                init.headers['Content-Type'] = 'application/json';
+                init.body = JSON.stringify(body);
+            }
+            return fetch('/__rk/manga/state', init);
+        }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        });
+    }
+
+    // { owner, library: true (send the current library), progress: { id: entry } }
+    function readPending() {
+        try { return JSON.parse(lsGet(PENDING_KEY) || 'null') || {}; } catch (e) { return {}; }
+    }
+    function writePending(p) {
+        var empty = !p.library && !(p.progress && Object.keys(p.progress).length);
+        lsSet(PENDING_KEY, empty ? null : JSON.stringify(p));
+    }
+
+    var flushTimer = null, flushing = false;
+
+    function queueChange(kind, id, entry) {
+        var uid = currentUid();
+        if (!uid) return;  // signed out: local only
+        var p = readPending();
+        if (p.owner && p.owner !== uid) p = {};
+        p.owner = uid;
+        if (kind === 'library') p.library = true;
+        else {
+            p.progress = p.progress || {};
+            p.progress[id] = entry;
+        }
+        writePending(p);
+        if (!flushTimer) flushTimer = setTimeout(function () { flushTimer = null; flushPending(); }, 800);
+    }
+
+    function flushPending() {
+        var p = readPending();
+        var uid = currentUid();
+        if (!p.owner || !uid || p.owner !== uid) { if (p.owner && uid && p.owner !== uid) writePending({}); return Promise.resolve(); }
+        if (flushing) return Promise.resolve();
+        var body = {};
+        if (p.library) body.library = library;
+        if (p.progress && Object.keys(p.progress).length) body.progress = p.progress;
+        if (!body.library && !body.progress) return Promise.resolve();
+        flushing = true;
+        return withTimeout(stateApi('PUT', body)).then(function () {
+            // Keep anything that changed while this was being sent.
+            var now = readPending();
+            if (body.library && now.library) delete now.library;
+            if (body.progress && now.progress) {
+                Object.keys(body.progress).forEach(function (id) {
+                    if (now.progress[id] && now.progress[id].t === body.progress[id].t) delete now.progress[id];
+                });
+            }
+            writePending(now);
+        }, function () { /* offline or signed out: stays pending */ }).then(function () { flushing = false; });
+    }
+
+    // Before manga.html draws the library: send what is pending, then replace the
+    // browser's copy with the account's.
+    function syncFromServer() {
+        if (!currentUid()) return Promise.resolve();
+        return flushPending().then(function () {
+            return withTimeout(stateApi('GET'));
+        }).then(function (state) {
+            return Promise.all([
+                localforage.setItem('manga_library', state.library || []),
+                localforage.setItem('manga_progress', state.progress || {})
+            ]);
+        })['catch'](function () { /* offline: use this device's copy */ });
+    }
+
+    if (typeof loadLibrary === 'function' && typeof saveLibrary === 'function' && typeof saveProgress === 'function' && window.localforage) {
+        var originalLoadLibrary = loadLibrary;
+        loadLibrary = function () {
+            var self = this, args = arguments;
+            return syncFromServer().then(function () { return originalLoadLibrary.apply(self, args); });
+        };
+
+        var originalSaveLibrary = saveLibrary;
+        saveLibrary = function () {
+            return Promise.resolve(originalSaveLibrary.apply(this, arguments)).then(function (v) {
+                queueChange('library');
+                return v;
+            });
+        };
+
+        // Same entry manga.html saves, plus the time (t).
+        saveProgress = function (mangaId, chapterIdx, pageIdx, chapterNum) {
+            var entry = {
+                chapter: chapterIdx,
+                page: pageIdx,
+                chapterNum: chapterNum || '',
+                language: (typeof currentReadingLanguage !== 'undefined' && currentReadingLanguage) || 'en',
+                t: Date.now()
+            };
+            return localforage.getItem('manga_progress').then(function (progress) {
+                progress = progress || {};
+                progress[mangaId] = entry;
+                return localforage.setItem('manga_progress', progress);
+            }).then(function () {
+                queueChange('progress', mangaId, entry);
+            })['catch'](function (e) {
+                if (window.console) console.error('Failed to save progress:', e);
+            });
+        };
+    }
+
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildControls);
     else buildControls();
 })();

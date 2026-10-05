@@ -268,5 +268,16 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   64 MB, and cached pages (MangaDex@Home sent 14-day caching, up to 2.4 MB a page) did
   that; the owner saw it as "logged out and library gone after a deploy" (they reopened
   the browser after deploys). Server data on Zeabur was intact (`/data` is a mounted volume).
+- Library and reading progress live in the database per account (`manga_state` table,
+  `server/src/manga-state.js`, `GET/PUT /__rk/manga/state`). manga.html still reads its
+  localforage copy (`manga_library`, `manga_progress`); the add-on wraps `loadLibrary`
+  to replace that copy with the account's before the library is drawn (5 s timeout,
+  then the device copy), wraps `saveLibrary` and replaces `saveProgress` (same entry plus
+  `t`, a time in ms) to send each change. Library PUTs replace the list; progress is
+  merged per manga, newest `t` wins. Unsent changes wait in `localStorage.rk_manga_pending`
+  tagged with the account's uid and are sent first on the next open. Signed out, the
+  app is local only. Libraries that existed only in a browser before this were not
+  uploaded: the owner asked for no backward compatibility. `auth.deleteUser` removes
+  the row.
 - A page that fails to load is retried once after 1.5 s (MangaDex@Home nodes sometimes
   404 a page once).

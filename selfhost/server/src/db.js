@@ -87,6 +87,15 @@ CREATE TABLE IF NOT EXISTS kv (
     expires INTEGER,
     PRIMARY KEY (ns, key)
 );
+
+-- The Manga app's library and reading progress per account (manga-state.js).
+CREATE TABLE IF NOT EXISTS manga_state (
+    uid TEXT PRIMARY KEY,
+    library TEXT,
+    progress TEXT NOT NULL DEFAULT '{}',
+    library_updated INTEGER,
+    updated INTEGER NOT NULL
+);
 `);
 
 export function metaGet(key) {
