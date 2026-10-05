@@ -2,6 +2,8 @@
 <html lang="en">
 
 <head>
+<!-- Dark mode before the first paint: same as transform.js DARK_HEAD (pages here are not transformed). -->
+<script>(function(){try{var m=localStorage.getItem("rekindle_theme_mode")||"light",d=m==="dark";if(m==="auto"){var n=new Date(),h=n.getHours(),o=parseFloat(localStorage.getItem("rekindle_timezone_offset"));if(!isNaN(o))h=Math.floor((((n.getUTCHours()+n.getUTCMinutes()/60+o)%24)+24)%24);d=h>=18||h<6||!!(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);}if(!d)return;var r=document.documentElement;r.style.colorScheme="light";r.setAttribute("data-theme","dark");var s=document.createElement("style");s.id="rekindle-dark-theme";s.appendChild(document.createTextNode(":root[data-theme=\"dark\"]{background-color:#ffffff;background-image:var(--rk-wallpaper,none);background-size:var(--rk-wallpaper-size,auto);color:#000000;min-height:100%;filter:invert(1) hue-rotate(180deg);}:root[data-theme=\"dark\"] img,:root[data-theme=\"dark\"] video,:root[data-theme=\"dark\"] canvas,:root[data-theme=\"dark\"] .no-invert{filter:invert(1) hue-rotate(180deg);}:root[data-theme=\"dark\"] img.keep-white{filter:none;}"));(document.head||r).appendChild(s);}catch(e){}})();</script>
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <meta charset="UTF-8">
