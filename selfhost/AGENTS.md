@@ -169,24 +169,19 @@ With the box held non-scrollable there is no drawn-ahead area: every jump redraw
 whole visible box, top down. Only hiding the box while it draws (then showing it whole)
 or smaller steps could avoid the split.
 
-The owner first chose hiding the box while it draws (a white cover for 700 ms), then
-disliked the delay. Now, on Substack only (`BUFFER_PAGES`, box `#reader-content`; other
-apps draw fast enough), Page Down is double-buffered: `setupBuffer()` (from `refresh()`)
-puts a `cloneNode` copy right after the real box, absolutely positioned on it (its
-offsetTop/Left/Width/Height, `box-sizing: border-box`, `max-width: none`, so the lines
-wrap the same), and pre-scrolls it one step ahead. Both boxes get `will-change:
-transform` (own composited layers) and `rgba(255,255,255,0.996)`: a fully opaque front
-would let cc skip drawing the box behind, and 1/255 bleed is invisible on e-ink. Page Down
-swaps their z-index (front 2, back 1; `scroller` follows the front), which needs no
-drawing, then `syncBack()` moves the new back box one step past the front, 50 ms later,
-so it is drawn while the reader reads. Page Up and swipes scroll the front box directly
-(the back follows 300 ms after the scroll settles). The copy keeps the id so the
-`#reader-content` styles apply, but comes second in the DOM, so the app's getElementById
-gets the real box; `data-rk-cjk="off"` stops rk-cjk.js re-wrapping it. A
-MutationObserver on the real box (new article, rk-cjk wrapping) brings the real box to
-the front and re-copies its innerHTML after 600 ms; until then Page Down scrolls directly.
-Holds a second copy of the article in memory; if the Kindle can't keep both layers drawn,
-Page Down just shows the old top-first drawing.
+Also tried on Substack and removed (2026-10-05), so don't repeat them without new
+information from the device:
+- A white cover (its own composited layer, 254/255 opaque) over the box for 700 ms around
+  each jump, uncovered when the screen should be drawn: the owner disliked the delay and
+  saw no improvement.
+- Double buffering: a `cloneNode` copy of `#reader-content` behind it (both
+  `will-change: transform`, 254/255 white), pre-scrolled one step ahead, swapped by
+  z-index on Page Down: "not working" on the Kindle, so it evidently can't keep a second
+  full screen drawn (tile memory?) or redraws on the swap.
+What is left is the hold above plus eager Substack images: each screen is complete
+within ~0.5 s, top first. The one thing the device has shown it draws instantly is
+roughly half a screen below the view (the original top-half-at-once behaviour of a
+composited box), so half-screen steps would be the remaining option.
 
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
