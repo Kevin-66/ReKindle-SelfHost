@@ -171,8 +171,10 @@ function downloadFailed(status = 502, message) {
     });
 }
 
-// Each download step goes to the service log (book page only, never the cookie).
-const log = (...parts) => console.log('[zlibrary download]', ...parts);
+// Each download step is logged when run locally (book page only, never the cookie).
+// Never on the deployed server (owner's rule: logging only locally); the Docker images
+// set NODE_ENV=production.
+const log = process.env.NODE_ENV === 'production' ? () => {} : (...parts) => console.log('[zlibrary download]', ...parts);
 
 // Z-Library's script (jQuery 2.2.4) attaches its click handlers once the page has
 // loaded: "Convert to" is delegated on document (selector .converterLink), "other

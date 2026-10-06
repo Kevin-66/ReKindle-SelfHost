@@ -50,6 +50,16 @@ as possible so `git merge upstream/main` stays clean.
   copy of the snippet. Modern desktop browsers hold the old page during loads, so
   the flash only reproduces on the device.
 
+## Logging: locally only
+
+The owner wants logging only when running locally, never on the deployed server
+(2026-10-06). The Docker images set `NODE_ENV=production`; local runs (Deno, `npm start`)
+don't. So the request log (`LOG_REQUESTS`, default on locally and off in production)
+and debugging output such as `[zlibrary download]` steps are tied to
+`NODE_ENV !== 'production'`. When adding diagnostics, follow that, and for device
+measurements use a local server: e.g. a page can report timings as
+`GET /__rk/health?<values>`, which the local request log prints.
+
 ## Server gotchas
 
 - `rk-backend.js` replaces the Firebase SDK. When swapping the `<script>` tag, the
@@ -487,8 +497,13 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
 - Page display (`updateMangaPage` is replaced, not wrapped, so pages can come from
   `pageSrc()` and preloaded `<img>` elements): page turns work as in manga.html. The
   reader goes blank (white) at once with "Loading N / M...", and the page appears when
-  loaded. A preloaded page is appended two animation frames later so the blank still
-  reaches the screen. Tried and rejected by the owner on 2026-10-05: swapping straight
+  loaded. A preloaded page is appended in a task queued from the next animation frame,
+  i.e. right after the blank has been painted (2026-10-06: two frames cost ~0.4 s per
+  turn on the Kindle, where a frame takes ~300 ms; the owner confirmed the blank still
+  shows every turn). Measured that day with a local timing log: decoding preloaded pages
+  ahead (`img.decode()`) made no difference (~1.6 s from tap to the frame with the page
+  either way), so it isn't done; most of the remaining ~1.1 s is the Kindle drawing the
+  page. Tried and rejected by the owner on 2026-10-05: swapping straight
   from page to page in one redraw, and keeping the old page until the next was ready
   then blanking and drawing in back-to-back frames. Keep the original.
 - `pageSrc()` turns page links into `/__rk/img?url=...&page=1` (MangaDex, was
