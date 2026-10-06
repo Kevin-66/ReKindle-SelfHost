@@ -446,6 +446,14 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   (`WORKER_CACHE_MS`), keyed by path, query, `X-Substack-Target` and a hash of the cookie,
   because the app re-requests every publication each time a view opens. The Refresh
   button therefore shows answers up to an hour old (owner's choice).
+- Page Down flashed the lower part of the screen only in Substack (owner, 2026-10-05):
+  `body_html` images are `loading="lazy"` (12 of 14 in a sample post), so they were
+  fetched only when scrolled near, and Chromium 75 reserves no space for an image
+  before it arrives (width/height attributes give no aspect ratio until Chrome 88): the
+  image loaded after the jump, pushed the text below it down, and the lower part
+  redrew. `rkFixImages` (which edits every API answer's JSON text) now drops
+  `loading="lazy"` and adds `decoding="sync"` to every `<img`, so images load with the
+  article and each picture is drawn in the same frame as its surroundings.
 - The cookie is sent exactly as pasted. The owner asked NOT to add parsing of a whole
   Cookie line; the settings text says to copy only the `substack.sid` value.
 - Article view font and formatting: `selfhost/site/css/rk-substack.css` (Georgia, heading
