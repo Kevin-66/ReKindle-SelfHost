@@ -208,13 +208,7 @@ export function transformHtml(html, fileName) {
             'function rkAbsUrl(u) { return /^https?:\\/\\//i.test(u) ? u : \'https://\' + u; }\n' +
             // Older images point at Heroku "bucketeer" S3 buckets that now answer 403 (e.g.
             // Noahpinion's logo); the same files are on substack-post-media.
-            // Article images are loading="lazy": fetched only when scrolled near, and
-            // Chromium 75 keeps no room for an image until it arrives, so after Page Down
-            // an image loaded, pushed the text below it down and the lower part of the
-            // screen redrew (a second e-ink flash). They now load with the article, and
-            // decoding="sync" draws each picture in the same frame as the text around it.
-            // (Edits the API's JSON text, where quotes are escaped: \".)
-            '        function rkFixImages(text) { return text.replace(/https:\\/\\/bucketeer-[a-z0-9-]+\\.s3\\.amazonaws\\.com\\//g, \'https://substack-post-media.s3.amazonaws.com/\').replace(/ loading=\\\\"lazy\\\\"/g, \'\').replace(/<img /g, \'<img decoding=\\\\"sync\\\\" \'); }\n' +
+            '        function rkFixImages(text) { return text.replace(/https:\\/\\/bucketeer-[a-z0-9-]+\\.s3\\.amazonaws\\.com\\//g, \'https://substack-post-media.s3.amazonaws.com/\'); }\n' +
             // rss_icon.png does not exist in ReKindle; a missing icon becomes an outlined square, once.
             '        function rkNoIcon(img) { img.onerror = null; img.src = \'data:image/svg+xml;charset=utf-8,\' + encodeURIComponent(\'<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect x="1" y="1" width="30" height="30" fill="#fff" stroke="#000" stroke-width="2"/></svg>\'); }\n\n' +
             '        async function apiCall(endpoint, options = {}) {');

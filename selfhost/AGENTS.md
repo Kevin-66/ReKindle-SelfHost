@@ -144,44 +144,18 @@ switched off. The switch is injected into Settings > Accessibility ("Page Button
 their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
 opaque (grey arrow), or the page shows through them.
 
-Lower half white after Page Down (owner, 2026-10-05, Substack and other apps): on the
-Kindle's high-density screen Chromium scrolls an `overflow: auto` box as its own
-composited layer and draws only about half a screen ahead, so a jump of almost a screen
-showed the top half at once and the lower half a moment later (white until then, a
-second e-ink refresh). `jump()` sets `overflow-y: hidden` on the box for the jump (not
-composited, so the jump is an ordinary repaint shown only when complete; `scrollTop`
-still works) and keeps a classic scrollbar's width as extra `padding-right` so nothing
-reflows. The box STAYS non-scrollable after the jump: the first version restored it
-400 ms later, and the owner's video (frames every 0.25 s) showed that restore re-create
-the layer and redraw the whole box, leaving the lower part white for another ~1.25 s,
-a second flash after the jump's own (0.25-0.5 s) one. Scrolling is given back on a
-`touchmove` or `wheel` inside the box, or when the pager moves to another box
-(`release()`; `findScroller` still counts the held box). Document-level scrolling is
-unchanged (the root scroller is always composited). On this Kindle the compositor shows
-frames before every tile is drawn, so a slow-to-draw screen (images, CJK glyphs in STSong)
-can still appear top first; desktop Chrome draws too fast to ever show it.
-
-Tried and removed (2026-10-05): decoding the new screen's pictures with `img.decode()`
-before moving (pictures and the text below them came last in the second video). The
-third video showed the same top-first drawing (~0.5 s for a dense Substack screen with
-pictures and CJK text), so decoding was not the cause; it only added a pause per tap.
-With the box held non-scrollable there is no drawn-ahead area: every jump redraws the
-whole visible box, top down. Only hiding the box while it draws (then showing it whole)
-or smaller steps could avoid the split.
-
-Also tried on Substack and removed (2026-10-05), so don't repeat them without new
-information from the device:
-- A white cover (its own composited layer, 254/255 opaque) over the box for 700 ms around
-  each jump, uncovered when the screen should be drawn: the owner disliked the delay and
-  saw no improvement.
-- Double buffering: a `cloneNode` copy of `#reader-content` behind it (both
-  `will-change: transform`, 254/255 white), pre-scrolled one step ahead, swapped by
-  z-index on Page Down: "not working" on the Kindle, so it evidently can't keep a second
-  full screen drawn (tile memory?) or redraws on the swap.
-What is left is the hold above plus eager Substack images: each screen is complete
-within ~0.5 s, top first. The one thing the device has shown it draws instantly is
-roughly half a screen below the view (the original top-half-at-once behaviour of a
-composited box), so half-screen steps would be the remaining option.
+Page Down on the Kindle (2026-10-05, owner's videos of a Substack article): a jump of
+almost a screen shows the top part at once and the rest 0.5-1 s later, because the
+Kindle's Chromium shows a screen before it has finished drawing it and draws only about
+half a screen ahead of the view. Dense Substack screens (pictures, Chinese text) make it
+visible; lighter apps draw fast enough. The owner asked to revert all attempts, so
+`page()` is the plain `scrollTop` jump. Tried that day and removed, none fixed it on
+the device: `overflow-y: hidden` during the jump (and restoring it 400 ms later caused a
+second, longer redraw), keeping the box non-scrollable until a swipe, `img.decode()` of
+the next screen's pictures before moving, a white cover (own composited layer) for
+700 ms, double buffering with a copy of the box behind it, and loading Substack
+images eagerly with `decoding="sync"`. The untried option with evidence behind it is
+half-screen steps (the half already drawn ahead appears at once).
 
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
@@ -474,14 +448,6 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   (`WORKER_CACHE_MS`), keyed by path, query, `X-Substack-Target` and a hash of the cookie,
   because the app re-requests every publication each time a view opens. The Refresh
   button therefore shows answers up to an hour old (owner's choice).
-- Page Down flashed the lower part of the screen only in Substack (owner, 2026-10-05):
-  `body_html` images are `loading="lazy"` (12 of 14 in a sample post), so they were
-  fetched only when scrolled near, and Chromium 75 reserves no space for an image
-  before it arrives (width/height attributes give no aspect ratio until Chrome 88): the
-  image loaded after the jump, pushed the text below it down, and the lower part
-  redrew. `rkFixImages` (which edits every API answer's JSON text) now drops
-  `loading="lazy"` and adds `decoding="sync"` to every `<img`, so images load with the
-  article and each picture is drawn in the same frame as its surroundings.
 - The cookie is sent exactly as pasted. The owner asked NOT to add parsing of a whole
   Cookie line; the settings text says to copy only the `substack.sid` value.
 - Article view font and formatting: `selfhost/site/css/rk-substack.css` (Georgia, heading
