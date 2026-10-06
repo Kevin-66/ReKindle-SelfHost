@@ -174,70 +174,16 @@
         s.scrollTop = top;
     }
 
-    // Pictures are decoded only when first drawn, and the Kindle shows a screen before
-    // it is fully drawn: after a jump the part above a picture appeared at once and the
-    // picture, with everything below it, 0.5-1 s later (owner's video of a Substack
-    // article with photos and maps). So the pictures of the new screen are decoded first
-    // (img.decode(), at most DECODE_WAIT ms) while the current screen stays up, and the
-    // page moves when they are ready. After each move the next screen's pictures are
-    // decoded in the background, so the wait is usually short.
-    var DECODE_WAIT = 1000;
-    var waiting = false;
-
-    function stepOf(s) {
-        var h = s.clientHeight;
-        // Overlap covers the buttons' corner, so nothing stays hidden under them.
-        return Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
-    }
-
-    // Loaded pictures in the box that would be (partly) on screen at scrollTop `top`.
-    function picturesAt(s, top) {
-        var imgs = s.getElementsByTagName('img'), out = [];
-        if (!imgs.length || !imgs[0].decode) return out;
-        var h = s.clientHeight, box = s.getBoundingClientRect();
-        var k = box.height ? s.offsetHeight / box.height : 1;   // theme.js CSS zoom
-        var origin = isDocScroller(scroller) ? 0 : box.top;
-        for (var i = 0; i < imgs.length; i++) {
-            var img = imgs[i];
-            if (!img.complete || !img.naturalWidth || !img.offsetParent) continue;
-            var r = img.getBoundingClientRect();
-            if (!r.height) continue;
-            var y = (r.top - origin) * k + s.scrollTop;
-            if (y < top + h && y + r.height * k > top) out.push(img);
-        }
-        return out;
-    }
-
-    function decodeAll(imgs) {
-        return Promise.all(imgs.map(function (img) { return img.decode()['catch'](function () { }); }));
-    }
-
     function page(dir) {
-        if (waiting) return;
         if (!scroller || !document.body.contains(scroller)) refresh();
         if (!scroller) return;
         var s = target();
-        var step = stepOf(s);
-        var top = Math.max(0, Math.min(s.scrollTop + dir * step, s.scrollHeight - s.clientHeight));
-        var moved = false;
-        var move = function () {
-            if (moved) return;
-            moved = true;
-            waiting = false;
-            jump(s, top);
-            place();
-            updateButtons();
-            // Get the following screen's pictures ready while this one is read.
-            setTimeout(function () {
-                var next = picturesAt(s, s.scrollTop + dir * step);
-                if (next.length) decodeAll(next);
-            }, 600);
-        };
-        var pictures = picturesAt(s, top);
-        if (!pictures.length) return move();
-        waiting = true;
-        decodeAll(pictures).then(move);
-        setTimeout(move, DECODE_WAIT);
+        var h = s.clientHeight;
+        // Overlap covers the buttons' corner, so nothing stays hidden under them.
+        var step = Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
+        jump(s, Math.max(0, s.scrollTop + dir * step));
+        place();
+        updateButtons();
     }
 
     function refresh() {
