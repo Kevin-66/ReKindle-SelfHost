@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-ink Preview</title>
+<!--
+  E-ink preview (a desktop tool for working on ReKindle, not a Kindle app; see
+  selfhost/AGENTS.md "E-ink preview"). Shows an app in a Kindle-sized frame:
+  1. How it looks: a filter on the frame. Kindle grey = 16 grey levels; Scribe Colorsoft =
+     muted colour at half the sharpness (its colour layer is 150 ppi, black and white
+     300 ppi); both with paper white and ink black instead of pure white and black.
+  2. How it redraws (approximate, from what the Kindle has shown, see the AGENTS notes):
+     the app's animation frames run every ~300 ms, and each frame is classed. Anything
+     grey that changes (text, pictures, grey canvas pixels, scrolling, a page load, which
+     starts with a white page) makes the Kindle redraw the whole screen with a flash; a
+     pure black-and-white change is a quiet partial update. Animations ghost.
+  The app is on the same server, so the page reaches into the frame to watch it; the
+  app's own code is not changed.
+-->
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px -apple-system, "Segoe UI", sans-serif; background: #3a3a3a; color: #eee; display: flex; height: 100vh; overflow: hidden; }
+#side { width: 300px; flex: none; display: flex; flex-direction: column; border-right: 1px solid #222; background: #2b2b2b; }
+#side h1 { font-size: 15px; margin: 12px 12px 4px; }
+#side .hint { margin: 0 12px 10px; color: #aaa; font-size: 12px; line-height: 1.4; }
+.row { display: flex; align-items: center; margin: 0 12px 8px; }
+.row label { width: 74px; flex: none; color: #bbb; }
+.row input, .row select { flex: 1; min-width: 0; background: #1e1e1e; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 5px 6px; font: inherit; }
+.row button { margin-left: 6px; background: #4a6; color: #fff; border: 0; border-radius: 4px; padding: 6px 10px; font: inherit; cursor: pointer; }
+#stats { margin: 4px 12px 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+#stats div { background: #1e1e1e; border-radius: 4px; padding: 6px; text-align: center; }
+#stats b { display: block; font-size: 18px; }
+#log { flex: 1; overflow-y: auto; margin: 0 12px 12px; background: #1e1e1e; border-radius: 4px; padding: 6px; font: 12px ui-monospace, Menlo, monospace; }
+#log div { padding: 2px 0; border-bottom: 1px solid #2a2a2a; }
+#log .full { color: #ff9c6e; }
+#log .fast { color: #8fd18f; }
+#log .warn { color: #ffd166; }
+#log .nav { color: #9ec5ff; }
+#stage { flex: 1; position: relative; overflow: hidden; }
+#device { position: absolute; left: 50%; top: 50%; background: #111; border-radius: 28px; padding: 36px 28px 54px; box-shadow: 0 10px 40px rgba(0,0,0,.6); transform-origin: 50% 50%; }
+#screen { position: relative; overflow: hidden; background: #e8e7e3; }
+#screen iframe { display: block; border: 0; background: #fff; }
+#flash { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: none; pointer-events: none; }
+#here { margin: auto 12px 10px; color: #888; font-size: 11px; }
+#check-frames { position: absolute; left: 0; top: 0; right: 0; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; }
+#check-frames .cell { overflow: hidden; background: #fff; }
+#report { position: absolute; left: 0; right: 0; top: 420px; bottom: 0; overflow: auto; padding: 8px 12px; }
+#report h2 { font-size: 14px; margin: 4px 0 8px; }
+#report table { border-collapse: collapse; width: 100%; font-size: 12px; }
+#report th, #report td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #555; vertical-align: top; }
+#report tr.bad td { color: #ff9c6e; }
+</style>
+</head>
+<body>
+<div id="side">
+  <h1>E-ink preview</h1>
+  <p class="hint">An app in a Kindle-sized frame, filtered to look like e-ink, with full-screen flashes where the Kindle would redraw everything. The redraw rules are an approximation.</p>
+  <div class="row"><label for="app">App</label><input id="app" value="index" spellcheck="false"><button id="go">Open</button></div>
+  <div class="row"><label for="look">Look</label>
+    <select id="look">
+      <option value="colorsoft">Scribe Colorsoft</option>
+      <option value="grey">Kindle grey (16 levels)</option>
+      <option value="off">Off (screen colours)</option>
+    </select></div>
+  <div class="row"><label for="redraws">Redraws</label>
+    <select id="redraws">
+      <option value="on">Simulate (300 ms frames, flashes)</option>
+      <option value="off">Off</option>
+    </select></div>
+  <div class="row"><label for="size">Screen</label>
+    <select id="size">
+      <option value="1860x2400">Kindle Scribe, about 1860 x 2400</option>
+      <option value="1236x1600">Paperwhite, about 1236 x 1600</option>
+      <option value="custom">Custom...</option>
+    </select></div>
+  <div class="row" id="custom-row" style="display:none"><label for="custom">Size</label><input id="custom" placeholder="1860x2400"></div>
+  <div class="row"><button id="check" style="margin-left:0;flex:1;background:#557">Check all apps</button></div>
+  <div id="stats">
+    <div><b id="n-full">0</b>full</div>
+    <div><b id="n-fast">0</b>quiet</div>
+    <div><b id="n-warn">0</b>warnings</div>
+  </div>
+  <div id="log"></div>
+  <div id="here"></div>
+</div>
+<div id="stage">
+  <div id="device"><div id="screen"><iframe id="frame" title="App"></iframe><div id="flash"></div></div></div>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- 16 grey levels on paper -->
+    <filter id="eink-grey" color-interpolation-filters="sRGB">
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncR type="discrete" tableValues="0 .0667 .1333 .2 .2667 .3333 .4 .4667 .5333 .6 .6667 .7333 .8 .8667 .9333 1"/>
+        <feFuncG type="discrete" tableValues="0 .0667 .1333 .2 .2667 .3333 .4 .4667 .5333 .6 .6667 .7333 .8 .8667 .9333 1"/>
+        <feFuncB type="discrete" tableValues="0 .0667 .1333 .2 .2667 .3333 .4 .4667 .5333 .6 .6667 .7333 .8 .8667 .9333 1"/>
+      </feComponentTransfer>
+      <feComponentTransfer>
+        <feFuncR type="linear" slope=".81" intercept=".1"/>
+        <feFuncG type="linear" slope=".81" intercept=".1"/>
+        <feFuncB type="linear" slope=".79" intercept=".1"/>
+      </feComponentTransfer>
+    </filter>
+    <!-- Colorsoft: brightness from the sharp 16-level layer, muted colour from a softer layer -->
+    <filter id="eink-colorsoft" color-interpolation-filters="sRGB">
+      <feColorMatrix in="SourceGraphic" type="saturate" values="0" result="lum"/>
+      <feComponentTransfer in="lum" result="lum16">
+        <feFuncR type="discrete" tableValues="0 .0667 .1333 .2 .2667 .3333 .4 .4667 .5333 .6 .6667 .7333 .8 .8667 .9333 1"/>
+        <feFuncG type="discrete" tableValues="0 .0667 .1333 .2 .2667 .3333 .4 .4667 .5333 .6 .6667 .7333 .8 .8667 .9333 1"/>
+        <feFuncB type="discrete" tableValues="0 .0667 .1333 .2 .2667 .3333 .4 .4667 .5333 .6 .6667 .7333 .8 .8667 .9333 1"/>
+      </feComponentTransfer>
+      <feColorMatrix in="SourceGraphic" type="saturate" values=".45" result="col"/>
+      <feGaussianBlur in="col" stdDeviation=".8" result="soft"/>
+      <feBlend in="lum16" in2="soft" mode="luminosity" result="mix"/>
+      <feComponentTransfer in="mix">
+        <feFuncR type="linear" slope=".8" intercept=".1"/>
+        <feFuncG type="linear" slope=".79" intercept=".1"/>
+        <feFuncB type="linear" slope=".76" intercept=".1"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+</svg>
+
+<script src="/icons.js"></script>
+<script>
+(function () {
+    'use strict';
+    var FRAME_MS = 300;          // a frame on the Kindle (measured on the owner's Scribe)
+    var frame = document.getElementById('frame');
+    var screenEl = document.getElementById('screen');
+    var device = document.getElementById('device');
+    var flashEl = document.getElementById('flash');
+    var logEl = document.getElementById('log');
+    var counts = { full: 0, fast: 0, warn: 0 };
+    var started = Date.now();
+    var opts = {};
+
+    function $(id) { return document.getElementById(id); }
+    function now() { return ((Date.now() - started) / 1000).toFixed(1) + 's'; }
+    function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function log(kind, text) {
+        if (kind !== 'nav') { counts[kind] = (counts[kind] || 0) + 1; $('n-' + kind).textContent = counts[kind]; }
+        var d = document.createElement('div');
+        d.className = kind;
+        d.textContent = now() + '  ' + text;
+        logEl.insertBefore(d, logEl.firstChild);
+        while (logEl.childNodes.length > 200) logEl.removeChild(logEl.lastChild);
+    }
+
+    // ------------------------------------------------------------- watching an app
+    // A Watcher follows one iframe: after each load it reaches into the page (same
+    // origin) and, once per Kindle frame, reports a full refresh (something grey changed)
+    // or a quiet update (black and white only) to onFrame(kind, causes).
+
+    function describe(el) {
+        if (!el || el.nodeType !== 1) el = el && el.parentElement;
+        if (!el) return 'page';
+        var s = el.tagName.toLowerCase();
+        if (el.id) s += '#' + el.id;
+        else if (typeof el.className === 'string' && el.className.trim()) s += '.' + el.className.trim().split(/\s+/)[0];
+        return s;
+    }
+
+    function visible(win, el) {
+        if (!el || el.nodeType !== 1) el = el && el.parentElement;
+        if (!el || !el.getClientRects().length) return false;
+        var r = el.getBoundingClientRect();
+        return r.bottom > 0 && r.right > 0 && r.top < win.innerHeight && r.left < win.innerWidth && r.width > 0 && r.height > 0;
+    }
+
+    function hasInk(node) {
+        if (node.nodeType === 3) return /\S/.test(node.nodeValue);
+        if (node.nodeType !== 1) return false;
+        return /\S/.test(node.textContent || '') || !!(node.matches && node.matches('img,svg,canvas,video')) || !!node.querySelector('img,svg,canvas,video');
+    }
+
+    function Watcher(iframe, hooks) {
+        var self = this;
+        this.iframe = iframe;
+        this.hooks = hooks;           // { onFrame(kind, causes), onWarn(text), onLeave(), onLoad(path) }
+        this.pending = null;
+        this.loading = false;
+        iframe.addEventListener('load', function () {
+            var path = '';
+            try { path = iframe.contentWindow.location.pathname; } catch (e) { }
+            self.pending = null;
+            self.instrument();
+            var was = self.loading;
+            self.loading = false;
+            if (hooks.onLoad) hooks.onLoad(path, was);
+        });
+    }
+
+    Watcher.prototype.note = function (kind, why) {
+        if (!this.pending) this.pending = { grey: [], bw: [] };
+        var list = kind === 'grey' ? this.pending.grey : this.pending.bw;
+        if (list.length < 3 && list.indexOf(why) < 0) list.push(why);
+    };
+
+    Watcher.prototype.instrument = function () {
+        var self = this, win, doc;
+        try { win = this.iframe.contentWindow; doc = win.document; } catch (e) { if (this.hooks.onWarn) this.hooks.onWarn('cannot watch this page (another site)'); return; }
+        if (!doc || win.__rkEink) return;
+        win.__rkEink = true;
+        var note = function (kind, why) { self.note(kind, why); };
+
+        // Frames every ~300 ms, like the Kindle: requestAnimationFrame callbacks wait
+        // for the next 300 ms tick.
+        var raf = win.requestAnimationFrame.bind(win);
+        var queue = {}, nextId = 1, timer = null;
+        var run = function () {
+            timer = null;
+            var q = queue; queue = {};
+            raf(function (t) { Object.keys(q).forEach(function (k) { try { q[k](t); } catch (e) { setTimeout(function () { throw e; }); } }); });
+        };
+        win.requestAnimationFrame = function (cb) {
+            var id = nextId++;
+            queue[id] = cb;
+            if (!timer) timer = win.setTimeout(run, FRAME_MS - (Date.now() % FRAME_MS));
+            return id;
+        };
+        win.cancelAnimationFrame = function (id) { delete queue[id]; };
+
+        // Canvas drawing: checked for grey pixels on the next frame.
+        var dirty = [];
+        var proto = win.CanvasRenderingContext2D && win.CanvasRenderingContext2D.prototype;
+        if (proto && !proto.__rkWrapped) {
+            proto.__rkWrapped = true;
+            ['fillRect', 'strokeRect', 'clearRect', 'fill', 'stroke', 'fillText', 'strokeText', 'drawImage', 'putImageData'].forEach(function (name) {
+                var orig = proto[name];
+                if (typeof orig !== 'function') return;
+                proto[name] = function () {
+                    if (this.canvas && dirty.indexOf(this.canvas) < 0) dirty.push(this.canvas);
+                    return orig.apply(this, arguments);
+                };
+            });
+        }
+        // What decides a full refresh is what CHANGED since the last frame, and how much:
+        // Snake changes ~140-190 grey (anti-aliased) pixels a frame on its 300x300 canvas
+        // and the owner saw no flashes; Surfer, before its 1-bit rewrite, had grey edges
+        // across the whole moving scene and flashed every frame. So a full refresh needs at
+        // least 1% of the canvas (and 1000 pixels) changing to or from grey (an estimate
+        // between the two); smaller changes are quiet.
+        var last = new win.WeakMap();
+        var isBW = function (d, i) {
+            if (d[i + 3] < 16) return true;
+            var r = d[i], g = d[i + 1], b = d[i + 2];
+            return d[i + 3] >= 240 && ((r < 25 && g < 25 && b < 25) || (r > 230 && g > 230 && b > 230));
+        };
+        win.__rkCanvasCheck = function () {
+            var list = dirty; dirty = [];
+            list.forEach(function (c) {
+                if (!visible(win, c) || !c.width || !c.height) return;
+                var data;
+                try { data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; }
+                catch (e) { note('grey', 'picture from another site on ' + describe(c)); return; }
+                var prev = last.get(c);
+                last.set(c, data);
+                var step = Math.max(1, Math.floor(data.length / 4 / 2000000)) * 4;
+                var greyChanged = 0, bwChanged = 0;
+                for (var i = 0; i < data.length; i += step) {
+                    if (prev && prev.length === data.length &&
+                        prev[i] === data[i] && prev[i + 1] === data[i + 1] && prev[i + 2] === data[i + 2] && prev[i + 3] === data[i + 3]) continue;
+                    if (isBW(data, i) && (!prev || prev.length !== data.length || isBW(prev, i))) bwChanged++;
+                    else greyChanged++;
+                }
+                var sampled = data.length / step;
+                if (greyChanged >= Math.max(1000 / (step / 4), sampled * 0.01)) note('grey', greyChanged * (step / 4) + ' grey pixels changed on ' + describe(c));
+                else if (bwChanged || greyChanged) note('bw', describe(c) + ' (black and white change)');
+            });
+        };
+
+        // Only changes that show: text rewritten with the same words, or an attribute set
+        // to the value it already had, changes nothing on the screen (Mario's buttons and
+        // Pet's title are re-set every second).
+        var textOf = function (nodes) { return nodes.map(function (n) { return n.textContent || ''; }).join(''); };
+        var media = function (nodes) { return nodes.some(function (n) { return n.nodeType === 1 && (n.matches('img,svg,canvas,video') || n.querySelector('img,svg,canvas,video')); }); };
+        var sameClass = function (a, b) { return (a || '').trim().split(/\s+/).sort().join(' ') === (b || '').trim().split(/\s+/).sort().join(' '); };
+        new win.MutationObserver(function (records) {
+            records.forEach(function (r) {
+                var target = r.target;
+                if (r.type === 'characterData') {
+                    if (r.oldValue !== target.nodeValue && visible(win, target)) note('grey', 'text changed in ' + describe(target));
+                } else if (r.type === 'childList') {
+                    var added = [].slice.call(r.addedNodes), removed = [].slice.call(r.removedNodes);
+                    if (!added.concat(removed).some(hasInk)) return;
+                    if (textOf(added) === textOf(removed) && !media(added) && !media(removed)) return;   // same text again
+                    if (visible(win, target)) note('grey', 'content changed in ' + describe(target));
+                } else if (r.type === 'attributes') {
+                    var now = target.getAttribute(r.attributeName);
+                    if (r.oldValue === now || (r.attributeName === 'class' && sameClass(r.oldValue, now))) return;
+                    if (r.attributeName === 'src' && target.tagName === 'IMG') { note('grey', 'picture changed: ' + describe(target)); return; }
+                    if (!visible(win, target) && !(r.attributeName === 'style' || r.attributeName === 'class' || r.attributeName === 'hidden')) return;
+                    if (hasInk(target)) note('grey', describe(target) + ' shown/changed (' + r.attributeName + ')');
+                    else note('bw', describe(target) + ' (' + r.attributeName + ')');
+                }
+            });
+        }).observe(doc.documentElement, { subtree: true, childList: true, characterData: true, characterDataOldValue: true, attributes: true, attributeOldValue: true, attributeFilter: ['style', 'class', 'hidden', 'src', 'open', 'checked', 'disabled'] });
+
+        doc.addEventListener('input', function (e) { note('grey', 'typing in ' + describe(e.target)); }, true);
+        doc.addEventListener('scroll', function (e) { note('grey', 'scrolled ' + describe(e.target === doc ? doc.scrollingElement : e.target)); }, true);
+        doc.addEventListener('load', function (e) { if (e.target && e.target.tagName === 'IMG' && visible(win, e.target)) note('grey', 'picture loaded: ' + describe(e.target)); }, true);
+        ['animationstart', 'transitionrun'].forEach(function (type) {
+            doc.addEventListener(type, function (e) {
+                if (self.hooks.onWarn) self.hooks.onWarn((type === 'animationstart' ? 'animation' : 'transition') + ' on ' + describe(e.target) + ': ghosts on e-ink');
+            }, true);
+        });
+        var leave = function () { self.loading = true; if (self.hooks.onLeave) self.hooks.onLeave(); };
+        win.addEventListener('pagehide', leave);
+        win.addEventListener('beforeunload', leave);
+    };
+
+    // Once per Kindle frame.
+    Watcher.prototype.tick = function () {
+        try { if (this.iframe.contentWindow && this.iframe.contentWindow.__rkCanvasCheck) this.iframe.contentWindow.__rkCanvasCheck(); } catch (e) { }
+        if (!this.pending || this.loading) return;
+        var p = this.pending; this.pending = null;
+        if (p.grey.length) this.hooks.onFrame('full', p.grey);
+        else if (p.bw.length) this.hooks.onFrame('fast', p.bw);
+    };
+
+    var watchers = [];
+    setInterval(function () { watchers.forEach(function (w) { w.tick(); }); }, FRAME_MS);
+
+    // ------------------------------------------------------------- the preview
+
+    function flash() {
+        flashEl.style.display = 'block';
+        flashEl.style.background = '#111';
+        setTimeout(function () { flashEl.style.background = '#e8e7e3'; }, 140);
+        setTimeout(function () { if (!main.loading) flashEl.style.display = 'none'; }, 280);
+    }
+
+    var main = new Watcher(frame, {
+        onFrame: function (kind, causes) {
+            if (!opts.redraws) return;
+            if (kind === 'full') { flash(); log('full', 'full refresh: ' + causes.join('; ')); }
+            else log('fast', 'quiet update: ' + causes.join('; '));
+        },
+        onWarn: function (text) { if (opts.redraws) log('warn', text); },
+        // No "paint holding" on the Kindle: a page load shows a white page until the new one draws.
+        onLeave: function () { if (opts.redraws) { flashEl.style.display = 'block'; flashEl.style.background = '#e8e7e3'; } },
+        onLoad: function (path, wasLoading) {
+            if (path && path !== '/' + opts.app) { opts.app = path.replace(/^\//, ''); $('app').value = opts.app; }
+            log('nav', 'loaded ' + (path || 'page'));
+            if (wasLoading && opts.redraws) { flash(); log('full', 'full refresh: new page'); }
+            else flashEl.style.display = 'none';
+        }
+    });
+    watchers.push(main);
+
+    function readSettings() {
+        var q = new URLSearchParams(location.search);
+        var s = {};
+        try { s = JSON.parse(localStorage.getItem('rk_eink_preview') || '{}'); } catch (e) { }
+        $('app').value = q.get('app') || s.app || 'index';
+        $('look').value = q.get('look') || s.look || 'colorsoft';
+        $('redraws').value = q.get('redraws') || s.redraws || 'on';
+        var size = q.get('size') || s.size || '1860x2400';
+        if ([].some.call($('size').options, function (o) { return o.value === size; })) $('size').value = size;
+        else { $('size').value = 'custom'; $('custom').value = size; }
+    }
+
+    function applySettings() {
+        $('custom-row').style.display = $('size').value === 'custom' ? '' : 'none';
+        var sizeText = $('size').value === 'custom' ? $('custom').value : $('size').value;
+        var m = /^(\d{3,5})\s*[x×]\s*(\d{3,5})$/.exec(sizeText.trim());
+        opts = {
+            app: $('app').value.trim().replace(/^\//, '') || 'index',
+            look: $('look').value,
+            redraws: $('redraws').value === 'on',
+            w: m ? +m[1] : 1860,
+            h: m ? +m[2] : 2400
+        };
+        try { localStorage.setItem('rk_eink_preview', JSON.stringify({ app: opts.app, look: $('look').value, redraws: $('redraws').value, size: sizeText })); } catch (e) { }
+        frame.style.width = opts.w + 'px';
+        frame.style.height = opts.h + 'px';
+        screenEl.style.width = opts.w + 'px';
+        screenEl.style.height = opts.h + 'px';
+        frame.style.filter = opts.look === 'off' ? 'none' : 'url(#eink-' + opts.look + ')';
+        fit();
+    }
+
+    // The device, scaled to fit the stage.
+    function fit() {
+        var stage = $('stage');
+        var k = Math.min((stage.clientWidth - 40) / (opts.w + 56), (stage.clientHeight - 40) / (opts.h + 90), 1);
+        device.style.transform = 'translate(-50%, -50%) scale(' + k + ')';
+    }
+
+    function open() {
+        applySettings();
+        frame.src = '/' + opts.app;
+        log('nav', 'open /' + opts.app + ' at ' + opts.w + ' x ' + opts.h);
+    }
+
+    // ------------------------------------------------------------- check all apps
+    // Runs every app (icons.js APPS) four at a time, each for: the page settling after it
+    // loads (2.5 s), 4 s idle, then 5 s after pressing its Start/Play button if it has one.
+    // Results: a table in the stage, worst first, and window.rkEinkReport.
+
+    var START_BUTTON = /^(start|play|start game|new game|play solo vs bots|begin|spin!?|easy|classic)$/i;
+
+    function appIds() {
+        var list = (typeof APPS !== 'undefined' ? APPS : []).filter(function (a) { return a && a.id && a.id !== 'discord' && !a.url && !a.href; });
+        return list.map(function (a) { return a.id; }).concat(['manga', 'hackernews', 'zlibrary', 'settings']);
+    }
+
+    function loaded(w, timeout) {
+        return new Promise(function (resolve) {
+            var done = false, t = setTimeout(function () { if (!done) { done = true; resolve(false); } }, timeout);
+            w.iframe.addEventListener('load', function once() { w.iframe.removeEventListener('load', once); if (!done) { done = true; clearTimeout(t); resolve(true); } });
+        });
+    }
+
+    async function checkApp(slot, id) {
+        var rec = { app: id, load: [], idle: [], play: [], warnings: [], started: '', ok: true };
+        var phase = 'load';
+        slot.hooks.onFrame = function (kind, causes) { rec[phase].push({ kind: kind, causes: causes }); };
+        slot.hooks.onWarn = function (text) { if (rec.warnings.indexOf(text) < 0 && rec.warnings.length < 5) rec.warnings.push(text); };
+        var wait = loaded(slot, 15000);
+        slot.iframe.src = '/' + id;
+        rec.ok = await wait;
+        await sleep(2500);
+        phase = 'idle';
+        await sleep(4000);
+        try {
+            var doc = slot.iframe.contentDocument, win = slot.iframe.contentWindow;
+            var btn = [].find.call(doc.querySelectorAll('button, .btn, .sys-btn, [onclick]'), function (b) {
+                return START_BUTTON.test((b.textContent || '').trim()) && visible(win, b);
+            });
+            if (btn) {
+                phase = 'play';
+                rec.started = (btn.textContent || '').trim();
+                btn.click();
+                await sleep(5000);
+            }
+        } catch (e) { }
+        slot.hooks.onFrame = function () { };
+        return rec;
+    }
+
+    function summarize(rec) {
+        var full = function (list) { return list.filter(function (x) { return x.kind === 'full'; }); };
+        var causes = {};
+        ['idle', 'play'].forEach(function (ph) {
+            full(rec[ph]).forEach(function (x) { x.causes.forEach(function (c) { var k = c.replace(/\d+/g, '#'); causes[k] = (causes[k] || 0) + 1; }); });
+        });
+        var top = Object.keys(causes).sort(function (a, b) { return causes[b] - causes[a]; }).slice(0, 3);
+        return {
+            app: rec.app, ok: rec.ok,
+            loadFull: full(rec.load).length,
+            idleFull: full(rec.idle).length,
+            playFull: full(rec.play).length,
+            playQuiet: rec.play.length - full(rec.play).length,
+            started: rec.started,
+            causes: top.map(function (k) { return k + ' x' + causes[k]; }),
+            warnings: rec.warnings
+        };
+    }
+
+    function renderReport(rows, total) {
+        var stage = $('stage');
+        var box = $('report');
+        if (!box) { box = document.createElement('div'); box.id = 'report'; stage.appendChild(box); }
+        rows = rows.slice().sort(function (a, b) { return (b.idleFull + b.playFull) - (a.idleFull + a.playFull) || b.loadFull - a.loadFull; });
+        var esc = function (t) { return String(t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+        box.innerHTML = '<h2>Check all apps: ' + rows.length + ' / ' + total + '</h2><table><tr><th>App</th><th>After load</th><th>Idle 4 s</th><th>Playing 5 s</th><th>Causes (idle and playing)</th><th>Warnings</th></tr>' +
+            rows.map(function (r) {
+                return '<tr' + ((r.idleFull + r.playFull) >= 3 ? ' class="bad"' : '') + '><td>' + esc(r.app) + (r.ok ? '' : ' (no load)') + '</td><td>' + r.loadFull + '</td><td>' + r.idleFull + '</td><td>' +
+                    (r.started ? r.playFull + ' full, ' + r.playQuiet + ' quiet' : '-') + '</td><td>' + esc(r.causes.join('; ')) + '</td><td>' + esc(r.warnings.join('; ')) + '</td></tr>';
+            }).join('') + '</table>';
+        window.rkEinkReport = rows;
+    }
+
+    async function checkAll(only) {
+        var ids = Array.isArray(only) ? only : appIds();
+        var area = document.createElement('div');
+        area.id = 'check-frames';
+        $('stage').appendChild(area);
+        var slots = [0, 1, 2, 3].map(function () {
+            var f = document.createElement('iframe');
+            f.style.cssText = 'width:' + opts.w + 'px;height:' + opts.h + 'px;border:0;background:#fff;';
+            var cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.appendChild(f);
+            area.appendChild(cell);
+            var w = new Watcher(f, { onFrame: function () { }, onWarn: function () { } });
+            watchers.push(w);
+            return w;
+        });
+        var k = Math.min(1, 300 / opts.w);
+        [].forEach.call(area.querySelectorAll('iframe'), function (f) { f.style.transform = 'scale(' + k + ')'; f.style.transformOrigin = '0 0'; });
+        [].forEach.call(area.querySelectorAll('.cell'), function (c) { c.style.width = (opts.w * k) + 'px'; c.style.height = (opts.h * k) + 'px'; });
+        device.style.display = 'none';
+        var queue = ids.slice(), results = [];
+        log('nav', 'checking ' + ids.length + ' apps');
+        await Promise.all(slots.map(async function (slot) {
+            while (queue.length) {
+                var id = queue.shift();
+                results.push(summarize(await checkApp(slot, id)));
+                renderReport(results, ids.length);
+            }
+        }));
+        slots.forEach(function (w) { watchers.splice(watchers.indexOf(w), 1); });
+        area.remove();
+        log('nav', 'check finished');
+        window.rkEinkDone = true;
+        return results;
+    }
+
+    // ------------------------------------------------------------- controls
+
+    $('go').onclick = open;
+    $('check').onclick = function () { $('check').disabled = true; window.rkEinkDone = false; checkAll(); };
+    window.rkEinkCheck = function (ids) { window.rkEinkDone = false; return checkAll(ids); };
+    $('app').addEventListener('keydown', function (e) { if (e.key === 'Enter') open(); });
+    ['look', 'redraws', 'size'].forEach(function (id) { $(id).addEventListener('change', function () { applySettings(); if (id !== 'look') open(); }); });
+    $('custom').addEventListener('change', open);
+    window.addEventListener('resize', fit);
+
+    // On the Kindle itself this line gives its real screen size for the Screen setting.
+    $('here').textContent = 'This browser: ' + window.innerWidth + ' x ' + window.innerHeight + ' CSS px, pixel ratio ' + (window.devicePixelRatio || 1);
+
+    readSettings();
+    open();
+    window.rkEinkCheckAll = checkAll;
+})();
+</script>
+</body>
+</html>
