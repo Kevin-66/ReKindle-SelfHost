@@ -219,6 +219,22 @@
             if (bar) refresh();
             else if (box.checked) init();
         };
+
+        // The Manga reader's white page between pages (rk-manga-sources.js reads
+        // localStorage rk_manga_blank, '0' = off), kept with the account like the rest.
+        var manga = document.createElement('div');
+        manga.className = 'setting-row';
+        manga.innerHTML =
+            '<div class="setting-text"><strong>Manga: White Page Between Pages</strong>' +
+            '<div class="setting-desc">Clear the screen before each new page. Off: go straight from page to page.</div></div>' +
+            '<input type="checkbox" id="toggle-manga-blank" class="toggle-switch">';
+        mine.parentNode.insertBefore(manga, mine.nextSibling);
+        var blank = document.getElementById('toggle-manga-blank');
+        try { blank.checked = localStorage.getItem('rk_manga_blank') !== '0'; } catch (e) { blank.checked = true; }
+        blank.onchange = function () {
+            try { localStorage.setItem('rk_manga_blank', blank.checked ? '1' : '0'); } catch (e) { }
+            saveToAccount('rkMangaBlank', blank.checked ? '1' : '0');
+        };
     }
 
     window.rkPagerRefresh = refresh;

@@ -177,6 +177,7 @@ export function transformHtml(html, fileName) {
             "                    if (data.timezoneOffset !== undefined && data.timezoneOffset !== null) localStorage.setItem('rekindle_timezone_offset', data.timezoneOffset);\n" +
             "                    if (data.rkTextSize) localStorage.setItem('rk_text_size', data.rkTextSize);\n" +
             "                    if (data.rkPageButtons) localStorage.setItem('rk_page_buttons', data.rkPageButtons);\n" +
+            "                    if (data.rkMangaBlank) localStorage.setItem('rk_manga_blank', data.rkMangaBlank);\n" +
             "                    if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());");
     }
     if (base === 'notes.html') {

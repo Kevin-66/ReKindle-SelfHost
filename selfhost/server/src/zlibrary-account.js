@@ -91,8 +91,11 @@ async function browserError(res, fallback) {
     return userError(text && text.length < 400 && !/^\s*</.test(text) ? text : fallback, 502, 'zlibrary/download-failed');
 }
 
+// The file's name without Z-Library's " (Z-Library)" tag: "Title (Author).epub".
 function fileName(res, fallback) {
-    try { return decodeURIComponent(res.headers.get('x-file-name') || fallback); } catch { return fallback; }
+    let name;
+    try { name = decodeURIComponent(res.headers.get('x-file-name') || fallback); } catch { name = fallback; }
+    return name.replace(/\s*\(Z-Library\)(?=\.[^.]+$)/i, '');
 }
 
 const extOf = (name) => (String(name).split('.').pop() || '').toLowerCase();
