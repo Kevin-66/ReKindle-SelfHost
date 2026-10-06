@@ -6,6 +6,7 @@
 
 import sharp from 'sharp';
 import { withPublicNetworkOnly } from './netguard.js';
+import { readPage, writePage } from './page-cache.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 // E-reader screens are ~1072-1448 px wide. REDDIT_IMAGE_MAX_WIDTH is an old name.
@@ -79,15 +80,21 @@ const imageCache = new Map(); // key -> { body, type }
 let imageCacheBytes = 0;
 
 // A Response with the shrunk image (or, with opts from pageOptions, the original
-// manga page), cached under `key`.
+// manga page), cached under `key`: in memory (IMAGE_CACHE_MAX), and manga pages also on
+// disk (page-cache.js, 1 GB).
 export async function serveImage(key, sources, opts) {
+    const pageKey = opts ? key : null;
     if (opts) key = `${key}|${opts.key}`;
     let hit = imageCache.get(key);
     if (hit) {
         imageCache.delete(key);
         imageCache.set(key, hit);
     } else {
-        hit = await fetchImage(sources, opts);
+        hit = pageKey ? await readPage(pageKey) : null;
+        if (!hit) {
+            hit = await fetchImage(sources, opts);
+            if (pageKey) writePage(pageKey, hit);
+        }
         imageCache.set(key, hit);
         imageCacheBytes += hit.body.length;
         for (const [k, v] of imageCache) {
