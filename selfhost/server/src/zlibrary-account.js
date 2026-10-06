@@ -4,7 +4,8 @@
 // Z-Library browser service, whose Chromium downloads the book (downloadBook in
 // zlibrary-browser.js) so Z-Library's verification still passes. The Kindle browser
 // downloads only MOBI, AZW, PRC and TXT (AZW3 is kept too), so any other book becomes
-// MOBI: Z-Library's own converter first, Calibre (POST /convert) when that fails.
+// Z-Library's MOBI (a MOBI file of the book, or Z-Library's own converter) or, when
+// neither works, AZW3 made by Calibre (POST /convert).
 // Downloads run as jobs (file-jobs.js); the finished file is fetched through a
 // short-lived signed link (sendDownload), since a plain link cannot carry the ReKindle
 // sign-in.
@@ -101,11 +102,11 @@ async function download(job, dir, cookie) {
         method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(name) },
         body: Readable.toWeb(fs.createReadStream(original)), duplex: 'half', signal: AbortSignal.timeout(400000)
     }, 'The converter could not be reached. Try again in a moment.');
-    if (!res.ok) throw userError(await serviceMessage(res, 'This book could not be converted to MOBI.'), 502, 'zlibrary/download-failed');
-    name = fileName(res, name.replace(/\.[^.]*$/, '') + '.mobi');
-    const mobi = await saveBody(res, path.join(dir, 'book.mobi'));
+    if (!res.ok) throw userError(await serviceMessage(res, 'This book could not be converted to AZW3.'), 502, 'zlibrary/download-failed');
+    name = fileName(res, name.replace(/\.[^.]*$/, '') + '.azw3');
+    const converted = await saveBody(res, path.join(dir, 'book.azw3'));
     fs.rmSync(original, { force: true });
-    return { file: mobi, name };
+    return { file: converted, name };
 }
 
 // Starts downloading (and converting) a book for this reader; returns { id }.

@@ -140,8 +140,9 @@ export function loadBrowserCatalogue(url) {
 //    /papi/book/<id>/file-conversion/jobs every 10 s and, when the job is "ok", open
 //    its downloadUrl, which we catch as the download. A failed job shows
 //    #converterCurrentStatusesBox .status-error. (Read from book-details.min.js, 2026-10.)
-// 3. when that fails or takes too long, the book's own file, which the browser service
-//    converts with Calibre (POST /convert).
+// 3. when neither is offered, or Z-Library's conversion fails or takes too long, the
+//    book's own file, which the browser service converts to AZW3 with Calibre (POST
+//    /convert; owner, 2026-10-06: Z-Library's MOBI first, our conversions give AZW3).
 // Subresources are limited to Z-Library and its assets; page navigations (download
 // links redirect to download hosts we can't list in advance) may go to any https host.
 const MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024;

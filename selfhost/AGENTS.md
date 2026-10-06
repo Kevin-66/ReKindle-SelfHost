@@ -53,7 +53,7 @@ as possible so `git merge upstream/main` stays clean.
 ## Download jobs and the browser service
 
 `file-jobs.js` runs jobs that end in a file for the Kindle (Z-Library books in
-`zlibrary-account.js`, Manga chapters as MOBI in `manga-mobi.js`): `jobStore().start()`
+`zlibrary-account.js`, Manga chapters as AZW3 in `manga-azw3.js`): `jobStore().start()`
 gives each job a temp folder, keeps a finished file 30 min, and `sendJobFile` sends it as an
 attachment (UTF-8 `filename*`). `browser-service.js` is the one place that calls the
 Z-Library browser service (`ZLIBRARY_BROWSER_ENDPOINT`, private hosts only, bearer token,
@@ -316,8 +316,9 @@ the display scale.
   3. The book's own file, converted by the browser service's POST `/convert` (body =
      file, name in
   `X-File-Name`): Calibre's `ebook-convert` (Debian `calibre` package in
-  `Dockerfile.zlibrary-browser`) with `--output-profile kindle_pw3 --mobi-file-type
-  both` (old MOBI + KF8 in one file), `QT_QPA_PLATFORM=offscreen`, one at a time, 5 min
+  `Dockerfile.zlibrary-browser`) writing `book.azw3` (Calibre's AZW3/KF8 writer; owner,
+  2026-10-06: Z-Library's MOBI first, our own conversions give AZW3; it used to be MOBI
+  "both") with `--output-profile kindle_pw3`, `QT_QPA_PLATFORM=offscreen`, one at a time, 5 min
   limit; Calibre's input formats only (`CONVERTIBLE`, plus `cbz` for Manga chapters with
   `COMIC_ARGS`), others get 415. Calibre is the fallback for when Z-Library's converter
   fails.
@@ -560,33 +561,70 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   the row.
 - A page that fails to load is retried once after 1.5 s (MangaDex@Home nodes sometimes
   404 a page once).
-- MOBI button (`#rk-mobi-btn`, next to `#rk-ch-btn`): the Kindle browser downloads only
-  MOBI, AZW, PRC and TXT (a PDF version was built first and dropped: the Kindle won't
-  take PDF). POST `/__rk/manga/mobi` `{title, pages}` (the chapter's raw page list,
-  `/api/proxy?url=<MangaDex page>` or signed `/__rk/manga/img?u=&k=`; MangaDex hosts
-  only, public network) starts a job (`server/src/manga-mobi.js`): pages come through
-  `serveImage` (same cache as the reader) into a stored CBZ (`ZipWriter`, own CRC-32),
-  JPEG/PNG unchanged, WebP/GIF as JPEG q90 (Kindle books can't show WebP), a failed page
-  is left out (`missing`); then the converter service's POST `/convert` (Calibre in the
-  Z-Library browser service, `ZLIBRARY_BROWSER_ENDPOINT`) makes a MOBI with
-  `--no-process --mobi-keep-original-images` (no greyscale/resizing: colour Kindle).
-  GET `/__rk/manga/mobi/<id>` -> working (step `pages`/`convert`) | failed | ready
-  (`href` = `/__rk/manga/mobi/<id>/file`, 30 min, the random id is the permission). The
-  page polls every 3 s and only changes its status text when the step changes. Checked
-  on the live service: a 3-page test CBZ became a valid MOBI in 2 s.
-  Pages are sized to fill the Kindle Scribe screen (1860x2480, `SCREEN`; Calibre's
-  `kindle_scribe` profile for comics): the Kindle shows a book's pictures at their own
-  size and never enlarges them, so 850x1200 originals sat small on the screen (owner:
-  "not zoomed in properly"). `comicImage` resizes with sharp (Lanczos, fit inside, aspect
-  kept, JPEG q92 4:4:4); a JPEG page already within 2% of fitting stays unchanged.
-  That alone still didn't fill the screen ("page zoom did not work"): Calibre's comic
-  page HTML is `<div><img class="calibre2"></div>` with `width/height: auto`, i.e. the
-  picture's own size. The converter now uses `--mobi-file-type new` (KF8 only) and
-  `--extra-css "img { width: 100% !important; height: auto !important; }"`, checked in the
-  decompiled KF8 flow. Pages are always JPEG: Calibre stored PNG pages as GIF87a (256
-  colours) in both "both" and "new" files, while a JPEG is kept byte for byte (checked
-  with `calibre-debug --inspect-mobi`). Calibre 6.13 can't write Amazon's fixed-layout
-  EXTH metadata (only its debug reader knows it).
+- AZW3 button (`#rk-azw3-btn`, next to `#rk-ch-btn`): the Kindle browser downloads only
+  Kindle books and TXT (a PDF version was built first and dropped: the Kindle won't take
+  PDF; then MOBI, see below). POST `/__rk/manga/azw3` `{title, pages}` (the chapter's raw
+  page list, `/api/proxy?url=<MangaDex page>` or signed `/__rk/manga/img?u=&k=`; MangaDex
+  hosts only, public network) starts a job (`server/src/manga-azw3.js`): pages come
+  through `serveImage` (same cache as the reader), `comicImage` (below) into a stored
+  CBZ (`ZipWriter`, own CRC-32), a failed page is left out
+  (`missing`); then the converter service's POST `/convert` (Calibre in the Z-Library
+  browser service, `ZLIBRARY_BROWSER_ENDPOINT`) makes an AZW3 (KF8) with `COMIC_ARGS`
+  (`--no-process`: no greyscale/resizing, colour Kindle; `--output-profile
+  kindle_scribe`), and the server marks it fixed-layout. GET `/__rk/manga/azw3/<id>` ->
+  working (step `pages`/`convert`) | failed | ready (`href` =
+  `/__rk/manga/azw3/<id>/file`, 30 min, the random id is the permission). The page polls
+  every 3 s and only changes its status text when the step changes. Timing on the live
+  service, 54-page chapter (before pages were kept as originals): pages 12.6 s (fetch +
+  resize), Calibre 7.6 s; the page work alone is now ~3.6 s for 54 pages.
+  How the pages came to fill the screen (each step was needed; owner's reports in quotes):
+  1. "not zoomed in properly": in a reflowable book the Kindle shows pictures at their
+     own size, so 850x1200 originals sat small. Pages were enlarged to the Kindle
+     Scribe's 1860x2480 (`SCREEN`) for a while; since the book is fixed-layout (3.) the
+     Kindle enlarges them itself, so pages now keep their own size (6.).
+  2. "page zoom did not work": Calibre's comic page HTML is `<div><img class="calibre2">`
+     with `width/height: auto`; `--extra-css "img { width: 100% !important; height: auto
+     !important; }"` (checked in the decompiled KF8 flow; `@page`/body margins are 0).
+  3. "still not filled": the book was reflowable, and the Kindle puts a reflowable book's
+     pictures inside its margins, title above and progress line below. Comics that fill
+     the screen (Amazon's tools, Kindle Comic Converter) are fixed-layout, which Calibre
+     6.13 can't write: `server/src/azw3-fixed-layout.js` `setExth()` rewrites record 0 of
+     the finished file with EXTH 122 fixed-layout=true, 123 book-type=comic, 124
+     portrait, 126 original-resolution=1860x2480, 127/128 zero gutter/margin, 132
+     region-mag=false, 525 horizontal-lr, 527 ltr (codes from KindleUnpack's
+     `mobi_header.py`; only record 0 grows, the PDB record offsets shift, everything else
+     refers to records by number). With fixed layout `width: 100%` must not overflow the
+     page, so every page has the screen's 3:4 shape: centred, each gap black or white to
+     match the picture's edge on that side (`fillPage`/`edgeBrightness`; one averaged
+     colour gave white bars beside dark pages).
+  4. "it can't be opened": the converter had switched to `--mobi-file-type new` (KF8
+     only) but the file was still named .mobi; the Kindle doesn't open that. KF8-only is
+     AZW3, so the converter now writes `.azw3` (Calibre's AZW3 writer; same bytes as MOBI
+     "new") and the download is `<chapter>.azw3` (owner: "just give me azw3"; checked on
+     the Kindle with a fixed-layout test file: opens).
+  5. Calibre re-saves every JPEG without a JFIF header at quality 75 (its
+     `process_jpegs_for_amazon`: "Amazon's renderer can't show JPEGs without JFIF"), and
+     sharp writes none, so pages lost quality (a 1070 KB page came out 365 KB). `withJfif`
+     adds the APP0 segment; a JPEG with JFIF and no EXIF is kept byte for byte.
+  6. Size ("why so big?"): enlarged 1860x2480 JPEG q92 pages made a 54-page chapter
+     ~48 MB (MangaDex's own PNGs: 27-31 MB; screentone barely compresses). Owner: no
+     enlarging, originals ("why not just use the original png??", "the original could
+     have color!!"). `comicImage` now keeps each page's own size (only a page larger
+     than the screen shrinks) and format: PNG stays PNG (padded ones re-saved losslessly,
+     grey stays 1-channel: set `toColourspace('b-w')` on the raw output or sharp writes
+     RGB), JPEG stays JPEG (re-encoded q92 only when padded), WebP etc. become JPEG; a
+     page already 3:4 goes in unchanged. Calibre's AZW3 writer keeps PNG pages byte for
+     byte (checked on the live service; the 256-colour GIFs came from the MOBI writer's
+     `mobify_image`). That 54-page chapter is now 28.6 MB of pages, colour untouched.
+  7. "i get a table of content": Calibre's AZW3 writer adds an inline contents page
+     ("Page 1", "Page 2", ... from the comic input); `--no-inline-toc` in `COMIC_ARGS`
+     leaves it out (checked on the live service). Z-Library books keep theirs.
+  Checking without a Kindle: Kindle Previewer (the only Amazon renderer for Mac) is
+  x86_64-only and needs Rosetta, which this Mac doesn't have. Instead the real KF8 pages
+  were unpacked (skeleton + fragment, FDST CSS flows, `kindle:embed` base-32 resource ids
+  from the MOBI header at 0x5C) and drawn in a 1860x2480 frame. For a file made by the
+  live Calibre, Zeabur `executeCommand` on the browser service (upload base64 in ~100 KB
+  arguments, 4 per call; larger calls fail) and `cut -c` the base64 result back.
 - Titles inside converted MOBIs: the converter saved uploads as `book.<ext>`, and the
   Kindle library showed every Manga chapter (and PDFs etc.) as "book" by "Unknown"
   (checked with `ebook-meta`). service.mjs now saves the upload under its own name
@@ -604,7 +642,7 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   (inward corners, with a larger invisible tap area) and `closeReader` leave it.
 - Title-bar controls share one style (owner: "all the buttons are different style and
   size"): Back, the language dropdown's trigger, the chapter button, the page-only icon,
-  MOBI and manga.html's full-screen `.icon-btn` are all 22 px high with a 2 px border and
+  AZW3 and manga.html's full-screen `.icon-btn` are all 22 px high with a 2 px border and
   2 px shadow, bold 0.7rem sans-serif; icon buttons are 22 px square. Keep new controls
   on that rule (see `addStyle`).
 - White page between pages, optional (owner's request 2026-10-06, "put it in the
