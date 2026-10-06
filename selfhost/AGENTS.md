@@ -169,6 +169,15 @@ With the box held non-scrollable there is no drawn-ahead area: every jump redraw
 whole visible box, top down. Only hiding the box while it draws (then showing it whole)
 or smaller steps could avoid the split.
 
+The owner chose hiding (over half-screen steps), on Substack only (`COVER_PAGES`; other
+apps draw fast enough): `showCover()` puts `#rk-pager-cover` over the box's visible area
+(same positioned ancestor and `offsetWithin` maths as the buttons, z-index just under
+them) for `COVER_MS` (700 ms) around each jump. It is its own composited layer
+(`will-change: transform`) with `rgba(255,255,255,0.996)`: a fully opaque composited
+layer would let cc skip drawing the tiles it hides, and a cover painted into the same
+layer as the box would need the box redrawn when it goes. On e-ink 0.4% is invisible.
+If the Kindle still shows the bottom late, the screen needed longer than COVER_MS.
+
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
 The Kindle browser draws Chinese with its Japanese font (角 in 确 gets the Japanese
