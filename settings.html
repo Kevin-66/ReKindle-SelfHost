@@ -588,12 +588,12 @@
             <div class="setting-row">
                 <div class="setting-text">
                     <strong><span data-i18n="settings.theme">Theme</span> <span class="beta-badge">BETA</span></strong>
-                    <div class="setting-desc" data-i18n="settings.desc.theme">Light, Dark, or Auto (Night).</div>
+                    <div class="setting-desc" data-i18n="settings.desc.theme">Light mode only. Dark mode is temporarily disabled.</div>
                 </div>
-                <select id="theme-select" onchange="saveTheme()">
+                <select id="theme-select" onchange="saveTheme()" disabled>
                     <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="auto">Auto (Night)</option>
+                    <option value="dark" disabled>Dark</option>
+                    <option value="auto" disabled>Auto (Night)</option>
                 </select>
             </div>
 
@@ -1597,7 +1597,9 @@
         }
 
         function saveTheme() {
-            const val = document.getElementById('theme-select').value;
+            var val = document.getElementById('theme-select').value;
+            // Dark mode is temporarily disabled.
+            if (val !== 'light') val = 'light';
             localStorage.setItem('rekindle_theme_mode', val);
             if (window.rekindleApplyTheme) window.rekindleApplyTheme();
 
@@ -1810,13 +1812,8 @@
             }
 
             // Load Theme
-            const theme = localStorage.getItem('rekindle_theme_mode') || 'light';
-            const themeSelect = document.getElementById('theme-select');
-            themeSelect.value = theme;
-            // Refresh the custom dropdown's label without saving again (same as Layout above).
-            const themeOnChange = themeSelect.onchange; themeSelect.onchange = null;
-            themeSelect.dispatchEvent(new Event('change'));
-            themeSelect.onchange = themeOnChange;
+            const theme = 'light'; // Dark mode temporarily disabled
+            document.getElementById('theme-select').value = theme;
 
             // Load Display Mode
             const displayMode = localStorage.getItem('rekindle_display_mode') || 'led';
@@ -1980,12 +1977,10 @@
                     }
 
                     if (data.themeMode) {
-                        localStorage.setItem('rekindle_theme_mode', data.themeMode);
-                        const syncedThemeSelect = document.getElementById('theme-select');
-                        syncedThemeSelect.value = data.themeMode;
-                        const syncedOnChange = syncedThemeSelect.onchange; syncedThemeSelect.onchange = null;
-                        syncedThemeSelect.dispatchEvent(new Event('change'));
-                        syncedThemeSelect.onchange = syncedOnChange;
+                        // Dark mode is temporarily disabled.
+                        var syncedTheme = data.themeMode === 'light' ? 'light' : 'light';
+                        localStorage.setItem('rekindle_theme_mode', syncedTheme);
+                        document.getElementById('theme-select').value = syncedTheme;
                         if (window.rekindleApplyTheme) window.rekindleApplyTheme();
                     }
 
