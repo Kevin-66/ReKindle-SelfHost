@@ -127,8 +127,10 @@ export function loadBrowserCatalogue(url) {
 // shared with the public catalogue session or other readers) opens the book page in
 // the same headed Chromium, so Z-Library's verification passes, and saves the file.
 //
-// The Kindle opens MOBI, PDF, TXT and more, but not EPUB. Only EPUB books are handled
-// (owner's rule); any other book downloads as it is. For an EPUB book, in order:
+// The Kindle browser downloads only MOBI, AZW, PRC and TXT (owner, 2026-10-06; an
+// earlier note said it opened PDF too, which turned out wrong). A book in one of those,
+// or AZW3 (owner: keep it), downloads as it is; any other (EPUB, PDF, FB2, DJVU, ...),
+// in order:
 // 1. a MOBI file of the same book (a /dl/ link whose own text says MOBI, after the
 //    "other formats" button has loaded the book's other files);
 // 2. Z-Library's converter: the "Convert to" menu has
@@ -138,7 +140,7 @@ export function loadBrowserCatalogue(url) {
 //    /papi/book/<id>/file-conversion/jobs every 10 s and, when the job is "ok", open
 //    its downloadUrl, which we catch as the download. A failed job shows
 //    #converterCurrentStatusesBox .status-error. (Read from book-details.min.js, 2026-10.)
-// 3. when that fails or takes too long, the EPUB itself, which the browser service
+// 3. when that fails or takes too long, the book's own file, which the browser service
 //    converts with Calibre (POST /convert).
 // Subresources are limited to Z-Library and its assets; page navigations (download
 // links redirect to download hosts we can't list in advance) may go to any https host.
@@ -250,12 +252,14 @@ async function runDownload(url, cookie) {
         await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
         const main = await page.evaluate(() => {
             const a = document.querySelector('a[href*="/dl/"]');   // the book's own file, e.g. "epub, 649 KB"
-            return a ? { href: a.href, epub: /(^|[^a-z])epub([^a-z]|$)/i.test([a.textContent, a.title, a.getAttribute('data-extension')].join(' ')) } : null;
+            if (!a) return null;
+            const label = [a.textContent, a.getAttribute('data-extension'), a.title].join(' ');
+            return { href: a.href, format: ((/[a-z0-9]+/i.exec(label) || [''])[0] || '').toLowerCase(), kindle: /(^|[^a-z0-9])(mobi|azw3?|prc|txt)([^a-z0-9]|$)/i.test(label) };
         });
         if (!main) throw downloadFailed();
-        log(parsed.pathname, main.epub ? 'is EPUB' : 'is not EPUB: downloading it as it is');
+        log(parsed.pathname, main.kindle ? `is ${main.format}: downloading it as it is` : `is ${main.format || 'unknown'}: getting it as MOBI`);
         let download = null;
-        if (main.epub) {
+        if (!main.kindle) {
             // Other files of the same book (perhaps a MOBI) load into the menu on demand:
             // the "other formats" button fetches /papi/book/<id>/formats.
             if (await handlerReady(page, 'formats')) {

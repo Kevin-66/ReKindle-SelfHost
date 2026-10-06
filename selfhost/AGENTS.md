@@ -269,10 +269,11 @@ the display scale.
   saves the download (300 MB cap, one at a time) and streams it back with `X-File-Name`.
   Subresources stay limited to Z-Library; page navigations may go to any https host
   (download links redirect to hosts we can't list in advance).
-- Only EPUB is handled (owner, 2026-10-05: the Kindle opens MOBI, PDF, TXT and more,
-  but not EPUB; do NOT convert or refuse other formats, they download as they are). For
-  a book whose own file (the first `/dl/` link, text like "epub, 649 KB") is EPUB, in
-  this order (book-details.min.js, read on a signed-out book page 2026-10-05):
+- Formats (owner, 2026-10-06): the Kindle browser downloads only MOBI, AZW, PRC and TXT,
+  and AZW3 is kept too (an earlier rule converted only EPUB, believing the Kindle opened
+  PDF). A book whose own file (the first `/dl/` link, text like "epub, 649 KB") is one of
+  those downloads as it is; any other becomes MOBI, in this order (book-details.min.js,
+  read on a signed-out book page 2026-10-05):
   1. A MOBI file of the same book: clicking `#btnCheckOtherFormats` makes the page
      fetch `/papi/book/<id>/formats` and add the book's other files to the menu; take
      a `/dl/` link whose own text says MOBI (DOM click, the menu is hidden).
@@ -292,13 +293,14 @@ the display scale.
   then `handlerReady()` polls `jQuery._data(document, 'events').click` for the
   `.converterLink` delegate and `jQuery._data(#btnCheckOtherFormats, 'events')`.
   Each step is logged as `[zlibrary download] ...` (book path only, never the cookie).
-  3. The EPUB itself, converted by the browser service's POST `/convert` (body = file,
-     name in
+  3. The book's own file, converted by the browser service's POST `/convert` (body =
+     file, name in
   `X-File-Name`): Calibre's `ebook-convert` (Debian `calibre` package in
   `Dockerfile.zlibrary-browser`) with `--output-profile kindle_pw3 --mobi-file-type
   both` (old MOBI + KF8 in one file), `QT_QPA_PLATFORM=offscreen`, one at a time, 5 min
-  limit; EPUB only (anything else gets 415). Calibre is the fallback for when
-  Z-Library's converter fails.
+  limit; Calibre's input formats only (`CONVERTIBLE`, plus `cbz` for Manga chapters with
+  `COMIC_ARGS`), others get 415. Calibre is the fallback for when Z-Library's converter
+  fails.
 - Download + conversion can take minutes, longer than a page request should hang
   behind Zeabur's proxy, so it is a job (`zlibrary-account.js`): POST
   `/__rk/zlibrary/jobs` {url} -> {id} (same book again returns the running job; another
@@ -519,16 +521,17 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   the row.
 - A page that fails to load is retried once after 1.5 s (MangaDex@Home nodes sometimes
   404 a page once).
-- PDF button (`#rk-pdf-btn`, next to `#rk-ch-btn`): POSTs `{title, pages}` (the chapter's
-  raw page list, `/api/proxy?url=<MangaDex page>` or signed `/__rk/manga/img?u=&k=`) to
-  `/__rk/manga/pdf`, which checks every address (MangaDex hosts only, public network)
-  and answers `{href: /__rk/manga/pdf/<id>}` (30 min); opening it downloads the PDF
-  (`server/src/manga-pdf.js`). Pages come through `serveImage` (same cache as the reader)
-  and the PDF is streamed object by object (offsets counted for the xref), so headers go
-  out at once and the connection never idles behind Zeabur's proxy. JPEG pages are
-  embedded byte for byte (DCTDecode, size/components from the SOF marker); non-interlaced
-  grey/RGB/palette PNGs embed their IDAT data unchanged (FlateDecode with `/Predictor 15`,
-  palette as `/Indexed`); PNGs with alpha/16-bit/interlace are re-saved as PNG by sharp;
-  WebP/GIF become JPEG q90 (lossless would make the PDF several times larger). The
-  first version stored raw pixels with plain Flate: 30 MB for 6 PNG pages. A failed page
-  becomes a text page. A 47-page MangaDex chapter: 31 MB, about 4 s locally.
+- MOBI button (`#rk-mobi-btn`, next to `#rk-ch-btn`): the Kindle browser downloads only
+  MOBI, AZW, PRC and TXT (a PDF version was built first and dropped: the Kindle won't
+  take PDF). POST `/__rk/manga/mobi` `{title, pages}` (the chapter's raw page list,
+  `/api/proxy?url=<MangaDex page>` or signed `/__rk/manga/img?u=&k=`; MangaDex hosts
+  only, public network) starts a job (`server/src/manga-mobi.js`): pages come through
+  `serveImage` (same cache as the reader) into a stored CBZ (`ZipWriter`, own CRC-32),
+  JPEG/PNG unchanged, WebP/GIF as JPEG q90 (Kindle books can't show WebP), a failed page
+  is left out (`missing`); then the converter service's POST `/convert` (Calibre in the
+  Z-Library browser service, `ZLIBRARY_BROWSER_ENDPOINT`) makes a MOBI with
+  `--no-process --mobi-keep-original-images` (no greyscale/resizing: colour Kindle).
+  GET `/__rk/manga/mobi/<id>` -> working (step `pages`/`convert`) | failed | ready
+  (`href` = `/__rk/manga/mobi/<id>/file`, 30 min, the random id is the permission). The
+  page polls every 3 s and only changes its status text when the step changes. Checked
+  on the live service: a 3-page test CBZ became a valid MOBI in 2 s.
