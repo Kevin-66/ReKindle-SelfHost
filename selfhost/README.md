@@ -32,7 +32,9 @@ next to the chapter name downloads the chapter as a MOBI book for the Kindle's o
 reader (made by Calibre in the Chromium service, pages sized to fill a Kindle Scribe's
 screen). It takes a little while; the status line says when it's ready. Settings >
 Accessibility > **Manga: White Page Between Pages** turns the blank screen between pages
-off, to go straight from page to page (kept with your account).
+off, to go straight from page to page (kept with your account). Swipe left or right to
+turn pages; the corners icon next to the chapter name hides the title bar and status
+line so the page uses the whole screen (the icon in the corner brings them back).
 
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.

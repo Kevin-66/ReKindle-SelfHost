@@ -34,7 +34,7 @@ function authorized(req) {
 // The Kindle browser downloads MOBI, AZW, PRC and TXT only, so books in any format
 // Calibre reads (Z-Library) and CBZ comics (Manga chapters, made by the ReKindle server)
 // are converted. PDF and DJVU convert only as well as their text allows.
-const CONVERTIBLE = new Set(['epub', 'azw4', 'kfx', 'fb2', 'fbz', 'pdf', 'djvu', 'docx', 'odt', 'rtf', 'html', 'htm', 'htmlz',
+const CONVERTIBLE = new Set(['epub', 'azw4', 'fb2', 'fbz', 'pdf', 'djvu', 'docx', 'odt', 'rtf', 'html', 'htm', 'htmlz',
     'lit', 'pdb', 'pml', 'rb', 'snb', 'tcr', 'chm', 'lrf', 'txtz', 'cbz', 'cbr', 'cb7', 'cbc']);
 // Comics: no greyscale, resizing or sharpening (the owner reads colour manga on a Kindle
 // Scribe Colorsoft); the ReKindle server already sized the pages as JPEGs for the
