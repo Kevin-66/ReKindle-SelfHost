@@ -13,8 +13,15 @@
     var AUTO_END_HOUR = 6;    // 6 AM
     var ROTATION_KEY = 'rekindle_rotation'; // '0', '90', '180', '270'
 
+    // Temporarily force light mode while dark mode is disabled.
+    var storedMode = localStorage.getItem(THEME_KEY);
+    if (storedMode === 'dark' || storedMode === 'auto') {
+        localStorage.setItem(THEME_KEY, 'light');
+    }
+
     function applyTheme() {
-        var mode = localStorage.getItem(THEME_KEY) || 'light';
+        // Temporarily force light mode regardless of saved preference.
+        var mode = 'light';
         var isDark = false;
 
         if (mode === 'dark') {
@@ -22,11 +29,6 @@
         } else if (mode === 'auto') {
             var now = new Date();
             var hour = now.getHours();
-            // Kindle browsers report UTC; use the saved UTC offset when there is one (time.js).
-            var offset = parseFloat(localStorage.getItem('rekindle_timezone_offset'));
-            if (!isNaN(offset)) {
-                hour = Math.floor((((now.getUTCHours() + now.getUTCMinutes() / 60 + offset) % 24) + 24) % 24);
-            }
             // Check if it's night time (after start hour OR before end hour)
             if (hour >= AUTO_START_HOUR || hour < AUTO_END_HOUR) {
                 isDark = true;
@@ -37,10 +39,7 @@
 
         var doc = document.documentElement;
         if (isDark) {
-            // Keep the browser's own controls in light style: the inversion below
-            // darkens them, and a dark colour-scheme would flip them back (white
-            // text on white buttons).
-            doc.style.colorScheme = 'light';
+            doc.style.colorScheme = 'dark';
             doc.setAttribute('data-theme', 'dark');
             injectDarkStyles();
         } else {
@@ -51,9 +50,13 @@
     }
 
     function injectDarkStyles() {
-        // Dark mode inverts the whole page, so the page's own colour variables must
-        // stay as they are: switching them to dark as well flipped them twice
-        // (e.g. white text on a white button, which then rendered invisible).
+        // 1. Try to set CSS variables if they exist (modern apps)
+        document.documentElement.style.setProperty('--bg-color', '#000000');
+        document.documentElement.style.setProperty('--text-color', '#ffffff');
+        document.documentElement.style.setProperty('--border-color', '#ffffff');
+        // Invert patterns or set to black
+
+        // 2. Inject global override styles for legacy/non-var apps
         var style = document.getElementById('rekindle-dark-theme');
         if (!style) {
             style = document.createElement('style');
@@ -61,26 +64,20 @@
             style.textContent =
                 '/* UNIVERSAL DARK MODE OVERRIDES */\n' +
                 ':root[data-theme="dark"] {\n' +
+                '    --bg-color: #000000;\n' +
+                '    --text-color: #ffffff;\n' +
                 '    background-color: #ffffff;\n' +
-                // The root's own background stops the body's desktop pattern from
-                // reaching past the body on tall pages, so repeat the pattern here.
-                '    background-image: var(--rk-wallpaper, none);\n' +
-                '    background-size: var(--rk-wallpaper-size, auto);\n' +
                 '    color: #000000;\n' +
-                // min-height (not height): the filtered box must grow with tall pages,
-                // or the area below the first screen stays un-inverted.
-                '    min-height: 100%;\n' +
+                '    height: 100%;\n' +
                 '    filter: invert(1) hue-rotate(180deg);\n' +
                 '}\n' +
-                // Pictures keep their real colours; canvases (game boards, drawing
-                // areas) go dark with the page, unless marked .no-invert; map tiles too.
                 ':root[data-theme="dark"] img, \n' +
                 ':root[data-theme="dark"] video, \n' +
+                ':root[data-theme="dark"] canvas,\n' +
                 ':root[data-theme="dark"] .no-invert {\n' +
                 '    filter: invert(1) hue-rotate(180deg);\n' +
                 '}\n' +
-                ':root[data-theme="dark"] img.keep-white,\n' +
-                ':root[data-theme="dark"] img.leaflet-tile {\n' +
+                ':root[data-theme="dark"] img.keep-white {\n' +
                 '    filter: none;\n' +
                 '}\n';
             document.head.appendChild(style);
@@ -561,8 +558,6 @@
                 var safeImg = sanitize(wallpaperImg);
                 if (safeImg) {
                     document.body.style.backgroundImage = safeImg;
-                    // Dark mode paints the root too (see injectDarkStyles).
-                    document.documentElement.style.setProperty('--rk-wallpaper', safeImg);
                 }
             }
 
@@ -579,7 +574,6 @@
                     });
                 }
                 document.body.style.backgroundSize = wallpaperSize;
-                document.documentElement.style.setProperty('--rk-wallpaper-size', wallpaperSize);
             }
 
         } catch (e) {
