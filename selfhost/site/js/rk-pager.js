@@ -174,6 +174,49 @@
         s.scrollTop = top;
     }
 
+    // Substack: this Kindle shows a screen while it is still drawing it, and a dense
+    // Substack screen (pictures, Chinese text) takes about half a second, so after a jump
+    // the top appeared first and the rest later (owner's videos). There the box is
+    // covered with white for the jump and uncovered COVER_MS later, when the new screen
+    // has been drawn, so it appears whole (the owner chose this over half-screen steps).
+    // The cover is its own composited layer (will-change) and not quite opaque, so the
+    // browser still draws the box beneath it, and taking it away needs no drawing.
+    var COVER_PAGES = /(^|\/)substack(\.html)?$/;
+    var COVER_MS = 700;
+    var cover = null, coverTimer = null;
+
+    function showCover() {
+        if (!COVER_PAGES.test(location.pathname)) return false;
+        if (!cover) {
+            cover = document.createElement('div');
+            cover.id = 'rk-pager-cover';
+            cover.style.cssText = 'position:absolute;z-index:899;margin:0;padding:0;border:none;background:rgba(255,255,255,0.996);will-change:transform;';
+        }
+        if (isDocScroller(scroller)) {
+            if (cover.parentNode !== document.body) document.body.insertBefore(cover, bar.parentNode === document.body ? bar : null);
+            var doc = document.scrollingElement || document.documentElement;
+            cover.style.top = doc.scrollTop + 'px';
+            cover.style.left = doc.scrollLeft + 'px';
+            cover.style.width = doc.clientWidth + 'px';
+            cover.style.height = doc.clientHeight + 'px';
+        } else {
+            var anc = bar.parentNode;   // place() put the buttons in the box's positioned ancestor
+            if (!anc) return false;
+            if (cover.parentNode !== anc) anc.insertBefore(cover, bar);
+            var o = offsetWithin(scroller, anc);
+            cover.style.top = (o.y + scroller.clientTop) + 'px';
+            cover.style.left = (o.x + scroller.clientLeft) + 'px';
+            cover.style.width = scroller.clientWidth + 'px';
+            cover.style.height = scroller.clientHeight + 'px';
+        }
+        cover.style.display = 'block';
+        return true;
+    }
+
+    function hideCover() {
+        if (cover) cover.style.display = 'none';
+    }
+
     function page(dir) {
         if (!scroller || !document.body.contains(scroller)) refresh();
         if (!scroller) return;
@@ -181,9 +224,15 @@
         var h = s.clientHeight;
         // Overlap covers the buttons' corner, so nothing stays hidden under them.
         var step = Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
+        var covered = showCover();
         jump(s, Math.max(0, s.scrollTop + dir * step));
         place();
         updateButtons();
+        if (covered) {
+            if (isDocScroller(scroller)) showCover();   // follow the page's new scroll position
+            clearTimeout(coverTimer);
+            coverTimer = setTimeout(hideCover, COVER_MS);
+        }
     }
 
     function refresh() {
