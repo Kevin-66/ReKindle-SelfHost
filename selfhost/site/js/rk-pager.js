@@ -174,65 +174,128 @@
         s.scrollTop = top;
     }
 
-    // Substack: this Kindle shows a screen while it is still drawing it, and a dense
-    // Substack screen (pictures, Chinese text) takes about half a second, so after a jump
-    // the top appeared first and the rest later (owner's videos). There the box is
-    // covered with white for the jump and uncovered COVER_MS later, when the new screen
-    // has been drawn, so it appears whole (the owner chose this over half-screen steps).
-    // The cover is its own composited layer (will-change) and not quite opaque, so the
-    // browser still draws the box beneath it, and taking it away needs no drawing.
-    var COVER_PAGES = /(^|\/)substack(\.html)?$/;
-    var COVER_MS = 700;
-    var cover = null, coverTimer = null;
-
-    function showCover() {
-        if (!COVER_PAGES.test(location.pathname)) return false;
-        if (!cover) {
-            cover = document.createElement('div');
-            cover.id = 'rk-pager-cover';
-            cover.style.cssText = 'position:absolute;z-index:899;margin:0;padding:0;border:none;background:rgba(255,255,255,0.996);will-change:transform;';
-        }
-        if (isDocScroller(scroller)) {
-            if (cover.parentNode !== document.body) document.body.insertBefore(cover, bar.parentNode === document.body ? bar : null);
-            var doc = document.scrollingElement || document.documentElement;
-            cover.style.top = doc.scrollTop + 'px';
-            cover.style.left = doc.scrollLeft + 'px';
-            cover.style.width = doc.clientWidth + 'px';
-            cover.style.height = doc.clientHeight + 'px';
-        } else {
-            var anc = bar.parentNode;   // place() put the buttons in the box's positioned ancestor
-            if (!anc) return false;
-            if (cover.parentNode !== anc) anc.insertBefore(cover, bar);
-            var o = offsetWithin(scroller, anc);
-            cover.style.top = (o.y + scroller.clientTop) + 'px';
-            cover.style.left = (o.x + scroller.clientLeft) + 'px';
-            cover.style.width = scroller.clientWidth + 'px';
-            cover.style.height = scroller.clientHeight + 'px';
-        }
-        cover.style.display = 'block';
-        return true;
+    function stepOf(s) {
+        var h = s.clientHeight;
+        // Overlap covers the buttons' corner, so nothing stays hidden under them.
+        return Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
     }
 
-    function hideCover() {
-        if (cover) cover.style.display = 'none';
+    function maxTop(s) { return Math.max(0, s.scrollHeight - s.clientHeight); }
+
+    // Substack: this Kindle shows a screen while it is still drawing it, and a dense
+    // Substack screen (pictures, Chinese text) takes about half a second, so a jump
+    // showed the top first and the rest later (owner's videos). A white cover during the
+    // jump hid that but added a delay the owner disliked. Instead the next screen is
+    // drawn ahead (double buffering): a copy of the article box sits exactly behind it,
+    // scrolled one step further, and Page Down swaps the two, which only reorders two
+    // composited layers that are already drawn. The box now behind then moves on to the
+    // following screen and is drawn while the reader reads. Both boxes are their own
+    // composited layers (will-change) with an almost opaque white background (254/255):
+    // with a fully opaque front the compositor would skip drawing the box behind it, and
+    // 1/255 of the back box showing through is invisible on e-ink. The copy keeps the
+    // id (for the page's #reader-content styles) but comes after the real box, so the
+    // app's getElementById still finds the real one. Page Up and swipes scroll the front
+    // box directly; the back box catches up afterwards.
+    var BUFFER_PAGES = /(^|\/)substack(\.html)?$/;
+    var BUFFER_BOX = 'reader-content';
+    var BUFFER_BG = 'rgba(255,255,255,0.996)';
+    var buf = null;   // { real, copy, front, back, ready, syncTimer, rebuildTimer }
+
+    function bufferWanted(el) {
+        return !!el && el.id === BUFFER_BOX && BUFFER_PAGES.test(location.pathname) && el.offsetHeight > 0;
+    }
+
+    function placeCopy() {
+        var r = buf.real, c = buf.copy;
+        c.style.top = r.offsetTop + 'px';
+        c.style.left = r.offsetLeft + 'px';
+        c.style.width = r.offsetWidth + 'px';
+        c.style.height = r.offsetHeight + 'px';
+    }
+
+    // The back box goes to the screen after the front one, to be drawn out of sight.
+    function syncBack() {
+        if (!buf) return;
+        clearTimeout(buf.syncTimer);
+        buf.back.scrollTop = Math.min(buf.front.scrollTop + stepOf(buf.front), maxTop(buf.back));
+    }
+
+    function laterSync(ms) {
+        clearTimeout(buf.syncTimer);
+        buf.syncTimer = setTimeout(syncBack, ms);
+    }
+
+    function swap() {
+        var f = buf.front, b = buf.back;
+        b.style.zIndex = '2';
+        f.style.zIndex = '1';
+        b.removeAttribute('aria-hidden');
+        f.setAttribute('aria-hidden', 'true');
+        buf.front = b;
+        buf.back = f;
+        scroller = b;
+    }
+
+    // New content in the real box (another article, or text changed): show the real box
+    // and copy it again.
+    function contentChanged() {
+        if (!buf) return;
+        buf.ready = false;
+        if (buf.front !== buf.real) { swap(); place(); updateButtons(); }
+        clearTimeout(buf.rebuildTimer);
+        buf.rebuildTimer = setTimeout(function () {
+            if (!buf) return;
+            buf.copy.innerHTML = buf.real.innerHTML;
+            placeCopy();
+            syncBack();
+            buf.ready = true;
+        }, 600);
+    }
+
+    function setupBuffer(real) {
+        if (held && held.el === real) release();
+        var copy = real.cloneNode(true);
+        copy.setAttribute('data-rk-cjk', 'off');   // already wrapped by rk-cjk.js
+        copy.setAttribute('aria-hidden', 'true');
+        copy.style.position = 'absolute';
+        copy.style.margin = '0';
+        copy.style.maxWidth = 'none';
+        copy.style.boxSizing = 'border-box';
+        copy.style.flex = 'none';
+        real.style.position = 'relative';
+        real.style.background = copy.style.background = BUFFER_BG;
+        real.style.willChange = copy.style.willChange = 'transform';
+        real.style.zIndex = '2';
+        copy.style.zIndex = '1';
+        real.parentNode.insertBefore(copy, real.nextSibling);
+        buf = { real: real, copy: copy, front: real, back: copy, ready: true, syncTimer: null, rebuildTimer: null };
+        placeCopy();
+        syncBack();
+        if (window.MutationObserver) {
+            new MutationObserver(contentChanged).observe(real, { childList: true, subtree: true, characterData: true });
+        }
+        // A swipe in the front box: the back box follows once it settles.
+        var onScroll = function (e) { if (buf && e.target === buf.front) laterSync(300); };
+        real.addEventListener('scroll', onScroll);
+        copy.addEventListener('scroll', onScroll);
     }
 
     function page(dir) {
         if (!scroller || !document.body.contains(scroller)) refresh();
         if (!scroller) return;
         var s = target();
-        var h = s.clientHeight;
-        // Overlap covers the buttons' corner, so nothing stays hidden under them.
-        var step = Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
-        var covered = showCover();
-        jump(s, Math.max(0, s.scrollTop + dir * step));
+        var top = Math.max(0, Math.min(s.scrollTop + dir * stepOf(s), maxTop(s)));
+        if (buf && s === buf.front) {
+            if (dir > 0 && buf.ready && Math.abs(buf.back.scrollTop - top) <= 1) swap();
+            else s.scrollTop = top;   // Page Up, or the copy is not ready: scroll directly
+            place();
+            updateButtons();
+            laterSync(50);   // let the swap reach the screen, then draw the next screen behind
+            return;
+        }
+        jump(s, top);
         place();
         updateButtons();
-        if (covered) {
-            if (isDocScroller(scroller)) showCover();   // follow the page's new scroll position
-            clearTimeout(coverTimer);
-            coverTimer = setTimeout(hideCover, COVER_MS);
-        }
     }
 
     function refresh() {
@@ -245,6 +308,13 @@
             return;
         }
         scroller = findScroller();
+        if (buf && !document.body.contains(buf.real)) buf = null;
+        if (buf && (scroller === buf.real || scroller === buf.copy)) {
+            scroller = buf.front;
+            placeCopy();
+        } else if (!buf && bufferWanted(scroller)) {
+            setupBuffer(scroller);
+        }
         if (held && held.el !== scroller) release();
         if (!scroller) {
             bar.style.display = 'none';
