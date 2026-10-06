@@ -343,6 +343,19 @@ this server's `rkTextSize` (`rk_text_size`), `rkPageButtons` (`rk_page_buttons`)
 which `rk-textsize.js` and `rk-pager.js` now save to the account with the same signal
 (`saveToAccount`). New per-user settings should follow this pattern.
 
+Changes made while Settings is still loading the account (2026-10-06, owner: Display Mode
+"still not properly saved"): Settings applies the account's `general` document once
+sign-in completes, a second or two on the Kindle, and that overwrote any change made in
+the meantime (saved only locally while `currentUser` was null, or replaced by the older
+copy arriving after the save). `transform.js` puts `SETTINGS_GUARD` in the page's head: a
+capturing `change` listener records changes to `.setting-row` controls until the account's
+settings have been applied (hooked into `loadCloudSettings`'s `get()`; the page's own
+synthetic changes during that apply are ignored via `applying`), then sets each control
+again and dispatches `change`, so the page's own save writes it to the account. Guests:
+finished when "Guest Mode" is shown. Verified locally by requesting the account copy
+(LED) and choosing eInk before it arrived: eInk ended up on screen, on the device and in
+the account.
+
 ## Notes sync (`selfhost/site/js/rk-notes-sync.js`)
 
 notes.html saved the whole note (debounced 1 s) with a plain `set()` and never updated an

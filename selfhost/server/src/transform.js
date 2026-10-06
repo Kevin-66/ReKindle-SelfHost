@@ -152,6 +152,23 @@ export function transformHtml(html, fileName) {
     // Dark mode from the first paint (no white flash): first thing in <head>.
     html = html.replace(/<head(\s[^>]*)?>/i, (m) => `${m}\n${DARK_HEAD}`);
     if (base === 'settings.html') html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-textsize.js"></script>\n</body>');
+    if (base === 'settings.html') {
+        // Settings loads the account's settings once sign-in completes (a second or two on
+        // the Kindle) and applies them over the page. A change made before that was lost:
+        // saved only on the device (no account yet), or overwritten by the older account
+        // copy arriving afterwards; the owner saw Display Mode "not properly saved". Changes
+        // made until the account's settings have been applied are remembered and then made
+        // again through the page's own controls, which saves them to the account.
+        html = html.replace(/<\/head>/i, SETTINGS_GUARD + '</head>');
+        html = html.replace(
+            "function loadCloudSettings() {\n            db.collection('users').doc(currentUser.uid).collection('settings').doc('general').get().then(doc => {",
+            "function loadCloudSettings() {\n            db.collection('users').doc(currentUser.uid).collection('settings').doc('general').get()" +
+            ".then(function (doc) { var g = window.rkSettingsGuard; if (g) { g.applying = true; setTimeout(function () { g.applying = false; g.finish(); }, 0); } return doc; }," +
+            " function (e) { var g = window.rkSettingsGuard; if (g) setTimeout(g.finish, 0); throw e; }).then(doc => {");
+        html = html.replace(
+            `document.getElementById('auth-status').innerText = "Guest Mode";`,
+            `document.getElementById('auth-status').innerText = "Guest Mode"; if (window.rkSettingsGuard) window.rkSettingsGuard.finish();`);
+    }
 
     // Page Up / Page Down buttons on every page that scrolls (selfhost/site/js/rk-pager.js).
     html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-pager.js"></script>\n</body>');
@@ -247,6 +264,33 @@ export function transformHtml(html, fileName) {
     }
     return html;
 }
+
+// Settings page (see transformHtml): remembers setting changes made before the account's
+// settings have been applied, then makes them again through the page's own controls.
+const SETTINGS_GUARD = `<script>
+(function () {
+    var g = window.rkSettingsGuard = { done: false, applying: false, replaying: false, pending: {} };
+    document.addEventListener('change', function (e) {
+        var el = e.target;
+        if (g.done || g.applying || g.replaying || !el || !el.id || !/^(SELECT|INPUT)$/.test(el.tagName)) return;
+        if (!el.closest || !el.closest('.setting-row')) return;
+        g.pending[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+    }, true);
+    g.finish = function () {
+        if (g.done) return;
+        g.done = true;
+        Object.keys(g.pending).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = g.pending[id]; else el.value = g.pending[id];
+            g.replaying = true;
+            try { el.dispatchEvent(new Event('change', { bubbles: true })); } finally { g.replaying = false; }
+        });
+        g.pending = {};
+    };
+})();
+</script>
+`;
 
 const ICONS_FILTER = `
 
