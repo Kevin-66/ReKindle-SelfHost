@@ -538,7 +538,12 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   2026-10-05, don't bring back: resizing/re-encoding pages to the screen (mozjpeg made
   page turns ~1 s slower), whitening the background, grayscale conversion, and a
   dithered black-and-white mode. The owner wants the original images, colour included
-  (Kindle Scribe Colorsoft).
+  (Kindle Scribe Colorsoft). Display size: manga.html's `.reader-page` (`max-width` /
+  `max-height: 100%`) only shrinks, and the server-side fitting that used to enlarge
+  pages went with the originals, so small pages (Manhuagui 650x924) sat small in the
+  middle on the Scribe ("viewer is now zoomed out", 2026-10-06). rk-manga-sources.js
+  adds `#reader-content img.reader-page{width:100%;height:100%;object-fit:contain}`: the
+  browser draws every page as large as the reader allows (the image stays the original).
 - Pages are served with `Cache-Control: no-store` and the preloaded `<img>` elements
   are what gets shown (`takePreloaded`), since no-store images are not reused from
   the browser cache. The last `RECENT_KEEP` (2) pages shown are kept too, so going back
