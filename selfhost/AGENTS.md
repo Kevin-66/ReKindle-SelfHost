@@ -23,46 +23,49 @@ as possible so `git merge upstream/main` stays clean.
 
 - `time.js` – automatic time-zone detection before the city prompt.
 - `js/i18n.js`, `settings.html` – Canada (CA) no longer maps to French.
-- `theme.js`, `settings.html`, `index.html`, `index_old.html` – dark mode re-enabled and
-  fixed. The root AGENTS.md still says dark mode is disabled; that is out of date here.
-  The fix: dark mode is ONLY the root `invert(1) hue-rotate(180deg)` filter. Do not also
-  set dark colour variables or `color-scheme: dark` (both double-invert to invisible
-  text); the root uses `min-height: 100%` and repeats the desktop pattern
-  (`--rk-wallpaper`) so tall pages have no seam.
-- Dark mode white flash (fixed 2026-10-05): theme.js only darkens a page once it has
-  downloaded and run (the server makes browsers revalidate it on every page, and
-  settings.html loads it at the end of the body), and the Kindle's Chromium 75 has no
-  "paint holding", so every page turn showed a white page first, which e-ink redraws
-  in full. `transform.js` puts `DARK_HEAD` first in every `<head>`: an inline script
-  that reads `rekindle_theme_mode` (and the auto rule) and adds the same
-  `#rekindle-dark-theme` style theme.js would. Keep `DARK_CSS` in sync with
-  `injectDarkStyles()` in theme.js. `selfhost/site` pages (not transformed) carry a
-  copy of the snippet. Modern desktop browsers hold the old page during loads, so
-  the flash only reproduces on the device.
-- Dark mode patrol (2026-10-06, all apps in dark mode on the local server with the test
-  account, 12 apps per screenshot as same-origin iframes at 37%; the host page's own
-  dark style removed so frames are not inverted twice). Fixed:
-  - Canvases go dark with the page (`DARK_CSS` / `injectDarkStyles`: no longer inverted
-    back). Game boards and drawing areas (Tetris, Snake, Pool, Maze, Sketchpad, Mind Map,
-    Pet, Crossy, Jumpy, Surfer, ...) were bright white panels, and a transparent canvas
-    (Notes stopwatch) drew black on black. Doom keeps its colours: `DARK_KEEP_COLOURS` in
-    transform.js adds `.no-invert` to its canvas.
-  - Chess, Checkers and Connect 4 boards keep their real colours (`DARK_KEEP_COLOURS`):
-    inverted, White's pieces looked black while the page said "White's turn".
-  - Map tiles (`img.leaflet-tile`) go dark with the page instead of a white map.
-  - `noticePage()` (switched-off apps: chat, live games, Reddit) had no dark mode.
-  - Dialog backdrops: a see-through black backdrop turned into a white fog. `darkBackdrops()`
-    in transform.js adds a dark-mode twin `rgba(255,255,255,a)` (same opacity) for every
-    `<style>` rule with `background: rgba(0,0,0,a)` whose selector names an
-    overlay/modal/backdrop or that is a full-page layer (fixed, or absolute 100% x 100%,
-    e.g. Bluesky's `#login-view`), and for inline full-page layers with an id (Calendar,
-    Settings, Substack). 57 pages. Skips pseudo-elements (checkers' move dots), shadows,
-    and white/grey/transparent backdrops (Pool). Tests: `test/dark-mode.test.js`.
-  Not bugs: icons.js entries `einksites` and `beeper` are commented out, and `discord`
-  opens a modal on the home screen, so `/einksites`, `/beeper`, `/discord` 404 by design.
-  Patrol gotcha: the test account's settings sync back on the home page and can switch
-  dark mode off again; switch it in Settings (saved to the account). The wallpaper looks
-  white/grey/black at 37% only because the checkerboard aliases.
+- Dark mode is OFF, exactly as upstream has it (`theme.js` forces light, Settings greys
+  out Theme); `theme.js`, `index.html`, `index_old.html` are upstream's files again, and
+  `settings.html` differs only by the Canada line. The fork re-enabled dark mode
+  (2d411d7: whole-page `invert(1) hue-rotate(180deg)`, an early `DARK_HEAD` snippet
+  against the white flash) and fixed what a patrol of every app found (1f31ec6: canvases
+  going dark, true-colour chess/checkers/Connect 4 boards, map tiles, notice pages, dark
+  dialog backdrops via `darkBackdrops()`), then the owner switched it off again
+  (2026-10-06, "too troublesome... revert to the author's way") and all of that was
+  removed. Both commits are the place to start if dark mode comes back.
+
+## E-ink preview (`selfhost/site/eink-preview.html`, served at `/eink-preview`)
+
+A desktop tool for working on ReKindle (not linked from the Kindle UI): shows an app in a
+Kindle-sized iframe on the same server and reaches into it (same origin) to watch it; the
+app itself is not changed. Use: `http://127.0.0.1:8788/eink-preview?app=snake&look=grey`
+(`look` = `colorsoft` | `grey` | `off`, `redraws` = `on` | `off`, `size` = `WxH`).
+- Look: an SVG filter on the iframe. `grey` = 16 grey levels; `colorsoft` = brightness
+  from a sharp 16-level layer (`feBlend mode="luminosity"`) with colour at 45% saturation,
+  slightly blurred (the Colorsoft colour layer is 150 ppi, black and white 300 ppi); both
+  map white/black to paper/ink.
+- Redraws (approximate, built from what the Kindle has shown, see the notes above and the
+  root AGENTS.md): `requestAnimationFrame` in the app is held to ~300 ms frames; each
+  frame, anything grey that CHANGED means a full refresh (black-then-white flash over the
+  screen, logged with the cause): text or content changes (anti-aliased text is grey, the
+  stopwatch lesson), pictures, scrolling, typing, canvases where at least 1% of the canvas
+  (and 1000 pixels) changed to or from grey since the last frame (Snake: ~140-190 grey
+  pixels a frame on 300x300, no flash on the device), and page loads (white page first, no paint
+  holding). A change with no text or pictures, or a black-and-white canvas change, is a
+  quiet update. Text rewritten with the same words and attributes set to the value they
+  had are ignored (they change nothing on screen). CSS animations/transitions are logged
+  as ghosting warnings (Display Mode "LED").
+- Calibrated by the owner: Snake does NOT flash on the Kindle, though its canvas has grey
+  (anti-aliased) pixels; they don't change while it plays. The first rule (any grey pixel
+  on the canvas) was wrong for that reason.
+- "Check all apps" runs every app in icons.js `APPS` four at a time (2.5 s settling after
+  load, 4 s idle, 5 s after pressing a Start/Play/Easy/Classic button) and shows a table,
+  worst first; `window.rkEinkReport` has the rows. ~7 minutes for 117 apps; run it signed
+  in with the local test account, or most apps stop at a sign-in screen.
+- Screen size default (1860x2400) is an estimate: earlier Manga requests showed a
+  1860x2300 device-pixel reading area and pixel ratio 1. Opening `/eink-preview` on the
+  Kindle prints its real CSS size and pixel ratio at the bottom of the side panel.
+- Not simulated: the Kindle's slower JavaScript (JIT-less), Chromium 75 compatibility,
+  ghosting after many quiet updates, and top-first tile drawing on dense screens.
 
 ## Download jobs and the browser service
 
@@ -561,7 +564,15 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
 - Pages are served with `Cache-Control: no-store` and the preloaded `<img>` elements
   are what gets shown (`takePreloaded`), since no-store images are not reused from
   the browser cache. The last `RECENT_KEEP` (2) pages shown are kept too, so going back
-  is instant. The server keeps pages in a 64 MB in-memory LRU (`serveImage`).
+  is instant. The server keeps pages in a 64 MB in-memory LRU (`serveImage`), and Manga
+  pages (requests with `page` options) also on disk: `server/src/page-cache.js`,
+  `DATA_DIR/manga-cache`, `MANGA_CACHE_MB` (default 1024, owner 2026-10-06), least
+  recently read evicted down to 90%, order kept across restarts via file mtimes. Keys
+  are made stable (`stableKey`): MangaDex@Home addresses change per node and visit, so a
+  page is `md:data/<chapter hash>/<file>` (uploads.mangadex.org gives the same key);
+  Manhuagui is `mhg:<encoded address>` without the signature. Checked: after a restart,
+  the same page via another MangaDex address came from disk in 4 ms. Zeabur's /data
+  volume had 424 GB free.
   Reason for no-store: the Kindle erases the browser's whole data folder
   (localStorage sign-in, IndexedDB Manga library/progress) at launch once it passes
   64 MB, and cached pages (MangaDex@Home sent 14-day caching, up to 2.4 MB a page) did

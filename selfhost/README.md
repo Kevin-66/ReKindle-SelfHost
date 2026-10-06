@@ -159,6 +159,7 @@ Data (accounts, app data, uploads) lives in `selfhost/data/`. Back that folder u
 | `OPENAI_BASE_URL`, `OPENAI_API_KEY` | – | Use an OpenAI-compatible API for handwriting instead |
 | `GOOGLE_CLIENT_ID` | – | Your own Google sign-in for Tasks / Calendar / Contacts |
 | `IMAGE_MAX_WIDTH` | `1080` | Width Hacker News pictures are scaled down to |
+| `MANGA_CACHE_MB` | `1024` | Disk space for Manga pages kept in `data/manga-cache` (least recently read go first) |
 | `PROXY_URL` | – | HTTP proxy (`http://user:pass@host:port`) for sites that block this server |
 | `PROXY_DOMAINS` | archive.today domains | Sites fetched through `PROXY_URL` (comma-separated) |
 | `ZLIBRARY_BROWSER_ENDPOINT` | – | The Z-Library browser service, e.g. `http://zlibrary-browser:8091` (Compose) or `http://<service>.zeabur.internal:8091` (Zeabur) |
@@ -215,8 +216,9 @@ The only upstream files changed here are:
 
 - `time.js` – automatic time-zone detection
 - `js/i18n.js`, `settings.html` – Canada no longer defaults to French
-- `theme.js`, `settings.html`, `index.html`, `index_old.html` – dark mode re-enabled
-  and fixed (upstream switched it off as buggy on 2026-07-08)
+
+Dark mode stays off, as upstream has it.
+
 The Manga app is re-enabled at build time and gets its Manhuagui source from
 `site/js/rk-manga-sources.js`; `manga.html` itself is untouched.
 
