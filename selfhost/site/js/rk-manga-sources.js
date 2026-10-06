@@ -129,7 +129,12 @@
             '.rk-ch-item{padding:12px 10px;border-bottom:1px solid #000;cursor:pointer;font-size:0.95rem;line-height:1.3;}' +
             '.rk-ch-item.current{background:#000;color:#fff;font-weight:bold;}' +
             // Pure white behind pages.
-            '#reader-content{background:#fff;}';
+            '#reader-content{background:#fff;}' +
+            // The page as large as the reader allows, shape kept: manga.html's max-width/
+            // max-height only shrink, so a small original (Manhuagui's 650x924) sat small in
+            // the middle on the Scribe ("zoomed out"). The image itself is the original;
+            // only the browser draws it larger.
+            '#reader-content img.reader-page{width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;}';
         var style = el('style', { id: 'rk-manga-style' });
         style.appendChild(document.createTextNode(css));
         document.head.appendChild(style);
