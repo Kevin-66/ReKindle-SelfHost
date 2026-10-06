@@ -568,7 +568,15 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   `kindle_scribe` profile for comics): the Kindle shows a book's pictures at their own
   size and never enlarges them, so 850x1200 originals sat small on the screen (owner:
   "not zoomed in properly"). `comicImage` resizes with sharp (Lanczos, fit inside, aspect
-  kept, JPEG q92 4:4:4); a JPEG/PNG page already within 2% of fitting stays unchanged.
+  kept, JPEG q92 4:4:4); a JPEG page already within 2% of fitting stays unchanged.
+  That alone still didn't fill the screen ("page zoom did not work"): Calibre's comic
+  page HTML is `<div><img class="calibre2"></div>` with `width/height: auto`, i.e. the
+  picture's own size. The converter now uses `--mobi-file-type new` (KF8 only) and
+  `--extra-css "img { width: 100% !important; height: auto !important; }"`, checked in the
+  decompiled KF8 flow. Pages are always JPEG: Calibre stored PNG pages as GIF87a (256
+  colours) in both "both" and "new" files, while a JPEG is kept byte for byte (checked
+  with `calibre-debug --inspect-mobi`). Calibre 6.13 can't write Amazon's fixed-layout
+  EXTH metadata (only its debug reader knows it).
 - Titles inside converted MOBIs: the converter saved uploads as `book.<ext>`, and the
   Kindle library showed every Manga chapter (and PDFs etc.) as "book" by "Unknown"
   (checked with `ebook-meta`). service.mjs now saves the upload under its own name

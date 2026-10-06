@@ -37,9 +37,15 @@ function authorized(req) {
 const CONVERTIBLE = new Set(['epub', 'azw4', 'kfx', 'fb2', 'fbz', 'pdf', 'djvu', 'docx', 'odt', 'rtf', 'html', 'htm', 'htmlz',
     'lit', 'pdb', 'pml', 'rb', 'snb', 'tcr', 'chm', 'lrf', 'txtz', 'cbz', 'cbr', 'cb7', 'cbc']);
 // Comics: no greyscale, resizing or sharpening (the owner reads colour manga on a Kindle
-// Scribe Colorsoft); the ReKindle server already sized the pages to the Scribe's screen
-// (manga-mobi.js), and the kindle_scribe profile matches that screen.
-const COMIC_ARGS = ['--no-process', '--mobi-keep-original-images', '--output-profile', 'kindle_scribe'];
+// Scribe Colorsoft); the ReKindle server already sized the pages as JPEGs for the
+// Scribe's screen (manga-mobi.js). KF8 only ("new"): in a joint "both" file Calibre
+// stores PNG pages as 256-colour GIFs (it does so even in KF8, so the server sends JPEG
+// only, which is kept byte for byte). Calibre's page HTML shows each picture at its own
+// size (width/height auto) and the Kindle never enlarges it, so pages didn't fill the
+// screen; width: 100% makes each picture full width, and the Kindle shrinks a taller one
+// to fit the screen height. (Calibre can't write Amazon's fixed-layout metadata.)
+const COMIC_ARGS = ['--no-process', '--mobi-keep-original-images', '--output-profile', 'kindle_scribe', '--mobi-file-type', 'new',
+    '--extra-css', 'img { width: 100% !important; height: auto !important; }'];
 // Formats that usually carry no title or author: those come from the file name, which
 // for Z-Library is "Title (Author) (Z-Library).ext". (Without this the Kindle library
 // showed such books, and every Manga chapter, as "book" by "Unknown": the upload is
@@ -63,7 +69,8 @@ function convertError(res, status, message) {
 // One conversion at a time (it is CPU-heavy). MOBI "both" holds the old MOBI and the
 // newer KF8 version, so any Kindle shows it, newer ones with full formatting.
 function ebookConvert(input, output, extra) {
-    const args = [input, output, '--mobi-file-type', 'both'].concat(extra || []);
+    const args = [input, output].concat(extra || []);
+    if (args.indexOf('--mobi-file-type') < 0) args.push('--mobi-file-type', 'both');
     if (args.indexOf('--output-profile') < 0) args.push('--output-profile', 'kindle_pw3');
     return new Promise((resolve, reject) => {
         execFile('ebook-convert', args, {
