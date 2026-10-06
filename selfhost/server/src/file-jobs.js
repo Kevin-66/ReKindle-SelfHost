@@ -1,5 +1,5 @@
 // Background jobs that end in a file for the Kindle to download: Z-Library books
-// (zlibrary-account.js) and Manga chapters as MOBI (manga-mobi.js). Fetching and
+// (zlibrary-account.js) and Manga chapters as AZW3 (manga-azw3.js). Fetching and
 // converting can take minutes, longer than a page request should wait behind a proxy,
 // so the page starts a job, asks how it is going, and downloads the file when it is
 // ready. Each job works in its own temporary folder; a finished file is kept for

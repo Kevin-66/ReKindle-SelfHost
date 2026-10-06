@@ -3,7 +3,7 @@
 // copy of selfhost/server/src/zlibrary-browser.js) and returns the page HTML.
 // POST /download {url, cookie} downloads one book with the reader's Z-Library cookie
 // and streams the file back (name in X-File-Name). POST /convert takes a book file
-// (body, name in X-File-Name; a book or a CBZ comic) and returns it as MOBI, which the
+// (body, name in X-File-Name; a book or a CBZ comic) and returns it as AZW3, which the
 // Kindle browser can download, made by Calibre's ebook-convert.
 // It listens on ZLIBRARY_BROWSER_HOST:ZLIBRARY_BROWSER_PORT (loopback by default;
 // 0.0.0.0 in its own container, reachable only on the private network). When
@@ -31,20 +31,21 @@ function authorized(req) {
     return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }
 
-// The Kindle browser downloads MOBI, AZW, PRC and TXT only, so books in any format
-// Calibre reads (Z-Library) and CBZ comics (Manga chapters, made by the ReKindle server)
-// are converted. PDF and DJVU convert only as well as their text allows.
+// The Kindle browser downloads Kindle books (MOBI, AZW, AZW3, PRC) and TXT only, so
+// books in any format Calibre reads (Z-Library) and CBZ comics (Manga chapters, made by
+// the ReKindle server) are converted, to AZW3 (KF8; owner, 2026-10-06). PDF and DJVU
+// convert only as well as their text allows.
 const CONVERTIBLE = new Set(['epub', 'azw4', 'fb2', 'fbz', 'pdf', 'djvu', 'docx', 'odt', 'rtf', 'html', 'htm', 'htmlz',
     'lit', 'pdb', 'pml', 'rb', 'snb', 'tcr', 'chm', 'lrf', 'txtz', 'cbz', 'cbr', 'cb7', 'cbc']);
 // Comics: no greyscale, resizing or sharpening (the owner reads colour manga on a Kindle
-// Scribe Colorsoft); the ReKindle server already sized the pages as JPEGs for the
-// Scribe's screen (manga-mobi.js). KF8 only ("new"): in a joint "both" file Calibre
-// stores PNG pages as 256-colour GIFs (it does so even in KF8, so the server sends JPEG
-// only, which is kept byte for byte). Calibre's page HTML shows each picture at its own
-// size (width/height auto) and the Kindle never enlarges it, so pages didn't fill the
-// screen; width: 100% makes each picture full width, and the Kindle shrinks a taller one
-// to fit the screen height. (Calibre can't write Amazon's fixed-layout metadata.)
-const COMIC_ARGS = ['--no-process', '--mobi-keep-original-images', '--output-profile', 'kindle_scribe', '--mobi-file-type', 'new',
+// Scribe Colorsoft): the ReKindle server sends the original PNG/JPEG pages, padded to the
+// screen's shape (manga-azw3.js), and the AZW3 writer keeps them byte for byte (checked
+// on the live service), except a JPEG without a JFIF header, which it re-saves at
+// quality 75 (the server adds JFIF). Calibre's page HTML shows each picture at its own
+// size (width/height auto); width: 100% makes it fill the page. --no-inline-toc: no
+// "Page 1, Page 2, ..." contents page in the book (owner). The server then marks the
+// book fixed-layout (azw3-fixed-layout.js), which Calibre can't.
+const COMIC_ARGS = ['--no-process', '--output-profile', 'kindle_scribe', '--no-inline-toc',
     '--extra-css', 'img { width: 100% !important; height: auto !important; }'];
 // Formats that usually carry no title or author: those come from the file name, which
 // for Z-Library is "Title (Author) (Z-Library).ext". (Without this the Kindle library
@@ -66,11 +67,11 @@ function convertError(res, status, message) {
     res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' }).end(message);
 }
 
-// One conversion at a time (it is CPU-heavy). MOBI "both" holds the old MOBI and the
-// newer KF8 version, so any Kindle shows it, newer ones with full formatting.
+// One conversion at a time (it is CPU-heavy). The output's .azw3 name picks Calibre's
+// AZW3 (KF8 only) writer. (A KF8-only file named .mobi, Calibre's MOBI writer with
+// --mobi-file-type new, would not open on the Kindle.)
 function ebookConvert(input, output, extra) {
     const args = [input, output].concat(extra || []);
-    if (args.indexOf('--mobi-file-type') < 0) args.push('--mobi-file-type', 'both');
     if (args.indexOf('--output-profile') < 0) args.push('--output-profile', 'kindle_pw3');
     return new Promise((resolve, reject) => {
         execFile('ebook-convert', args, {
@@ -84,12 +85,12 @@ async function convert(req, res) {
     try { name = decodeURIComponent(String(req.headers['x-file-name'] || 'book')); } catch { }
     name = name.replace(/[\\/\0\r\n"]/g, '_').slice(0, 200);
     const ext = (path.extname(name).slice(1) || '').toLowerCase();
-    if (!CONVERTIBLE.has(ext)) { req.resume(); return convertError(res, 415, `A .${ext || '?'} file can't be converted to MOBI.`); }
+    if (!CONVERTIBLE.has(ext)) { req.resume(); return convertError(res, 415, `A .${ext || '?'} file can't be converted to AZW3.`); }
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'convert-'));
     const cleanup = () => fs.rmSync(dir, { recursive: true, force: true });
     // The book's own name (without Z-Library's tag), so Calibre has it as a fallback title.
     const base = name.replace(/\.[^.]*$/, '').replace(/\s*\(Z-Library\)\s*$/i, '').replace(/[\x00-\x1f]/g, '').trim().slice(0, 150) || 'book';
-    const input = path.join(dir, base + '.' + ext), output = path.join(dir, 'book.mobi');
+    const input = path.join(dir, base + '.' + ext), output = path.join(dir, 'book.azw3');
     try {
         let size = 0;
         const out = fs.createWriteStream(input);
@@ -102,13 +103,12 @@ async function convert(req, res) {
         const task = converting.then(() => ebookConvert(input, output, (ext === 'cbz' ? COMIC_ARGS : []).concat(metadataArgs(base, ext))));
         converting = task.catch(() => {});
         await task;
-        const mobi = base + '.mobi';
-        res.writeHead(200, { 'Content-Type': 'application/x-mobipocket-ebook', 'Content-Length': fs.statSync(output).size, 'X-File-Name': encodeURIComponent(mobi), 'Cache-Control': 'no-store' });
+        res.writeHead(200, { 'Content-Type': 'application/vnd.amazon.ebook', 'Content-Length': fs.statSync(output).size, 'X-File-Name': encodeURIComponent(base + '.azw3'), 'Cache-Control': 'no-store' });
         fs.createReadStream(output).on('close', cleanup).pipe(res);
     } catch (error) {
         cleanup();
-        if (process.env.NODE_ENV !== 'production') console.warn('MOBI conversion failed:', error && (error.killed ? 'timed out' : error.code || 'error'));   // logged locally only
-        convertError(res, 502, error && error.killed ? 'Converting to MOBI took too long.' : 'This book could not be converted to MOBI.');
+        if (process.env.NODE_ENV !== 'production') console.warn('AZW3 conversion failed:', error && (error.killed ? 'timed out' : error.code || 'error'));   // logged locally only
+        convertError(res, 502, error && error.killed ? 'Converting to AZW3 took too long.' : 'This book could not be converted to AZW3.');
     }
 }
 

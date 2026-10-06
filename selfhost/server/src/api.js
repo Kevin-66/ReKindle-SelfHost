@@ -11,7 +11,7 @@ import { invokeCallable, errorStatus } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
 import * as mangaState from './manga-state.js';
-import * as mangaMobi from './manga-mobi.js';
+import * as mangaAzw3 from './manga-azw3.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { listBooks } from './zlibrary.js';
 import * as zlibAccount from './zlibrary-account.js';
@@ -267,16 +267,16 @@ async function handleManga(req, res, url, parts) {
         Readable.fromWeb(r.body).on('error', () => res.destroy()).pipe(res);
         return;
     }
-    if (parts[2] === 'mobi') {
-        // A chapter as one MOBI file (manga-mobi.js): POST {title, pages} -> {id};
-        // GET /mobi/<id> -> status; GET /mobi/<id>/file downloads it when ready.
+    if (parts[2] === 'azw3') {
+        // A chapter as one Kindle book, AZW3 (manga-azw3.js): POST {title, pages} -> {id};
+        // GET /azw3/<id> -> status; GET /azw3/<id>/file downloads it when ready.
         if (req.method === 'POST' && !parts[3]) {
-            rateLimit(req, 'manga-mobi', 6, 60000);
-            return send(res, 200, mangaMobi.startJob(await readJson(req)));
+            rateLimit(req, 'manga-azw3', 6, 60000);
+            return send(res, 200, mangaAzw3.startJob(await readJson(req)));
         }
-        if (req.method === 'GET' && parts[3] && parts[4] === 'file') return mangaMobi.sendFile(res, parts[3]);
-        if (req.method === 'GET' && parts[3]) return send(res, 200, mangaMobi.jobStatus(parts[3]));
-        return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST /mobi or GET /mobi/<id>' } });
+        if (req.method === 'GET' && parts[3] && parts[4] === 'file') return mangaAzw3.sendFile(res, parts[3]);
+        if (req.method === 'GET' && parts[3]) return send(res, 200, mangaAzw3.jobStatus(parts[3]));
+        return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST /azw3 or GET /azw3/<id>' } });
     }
     if (parts[2] === 'state') {
         // The signed-in reader's library and progress (manga-state.js).
@@ -379,7 +379,7 @@ export async function handleApi(req, res, url) {
                 const me = bearer(req);
                 if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle first.' } });
                 if (parts[2] === 'jobs') {
-                    // POST /jobs {url} starts a download (and MOBI conversion); GET /jobs/<id> reports on it.
+                    // POST /jobs {url} starts a download (and conversion); GET /jobs/<id> reports on it.
                     if (req.method === 'GET' && parts[3]) return send(res, 200, zlibAccount.jobStatus(me.uid, parts[3]));
                     if (req.method !== 'POST' || parts[3]) return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST /jobs or GET /jobs/<id>' } });
                     rateLimit(req, 'zlibrary-download', 20, 60000);

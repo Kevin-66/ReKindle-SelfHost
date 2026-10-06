@@ -94,21 +94,21 @@
             '#chapter-select-wrapper .custom-select-container,#chapter-select-wrapper select{display:none !important;}' +
             // One style for every control in the reader's title bar (manga.html's Back button:
             // 22 px high, 2 px border and shadow, bold small sans-serif), icon buttons square.
-            '#back-btn,#rk-ch-btn,#rk-mobi-btn,#rk-full-btn,.title-bar .icon-btn,#language-select-wrapper .custom-select-trigger,#rk-full-exit{' +
+            '#back-btn,#rk-ch-btn,#rk-azw3-btn,#rk-full-btn,.title-bar .icon-btn,#language-select-wrapper .custom-select-trigger,#rk-full-exit{' +
             'box-sizing:border-box !important;height:22px !important;border:2px solid #000 !important;background:#fff;color:#000;' +
             'box-shadow:2px 2px 0 #000 !important;font-family:sans-serif !important;font-size:0.7rem !important;font-weight:bold !important;' +
             'line-height:18px !important;padding:0 6px !important;margin:0;cursor:pointer;vertical-align:middle;}' +
             '#rk-full-btn,.title-bar .icon-btn,#rk-full-exit{width:22px !important;padding:0 !important;display:inline-flex !important;align-items:center;justify-content:center;}' +
             '#rk-full-btn svg,#rk-full-exit svg{display:block;}' +
-            '#back-btn:active,#rk-ch-btn:active,#rk-mobi-btn:active,#rk-full-btn:active,.title-bar .icon-btn:active,#rk-full-exit:active{' +
+            '#back-btn:active,#rk-ch-btn:active,#rk-azw3-btn:active,#rk-full-btn:active,.title-bar .icon-btn:active,#rk-full-exit:active{' +
             'background:#000 !important;color:#fff !important;box-shadow:none !important;transform:translate(2px,2px);}' +
             '#language-select-wrapper .custom-select-trigger{padding-right:20px !important;}' +
             '#language-select-wrapper .custom-arrow{right:6px;}' +
             '#language-select-wrapper,#chapter-select-wrapper{margin-right:6px !important;}' +
-            '#rk-full-btn,#rk-mobi-btn{margin-left:6px;}' +
+            '#rk-full-btn,#rk-azw3-btn{margin-left:6px;}' +
             '#rk-ch-btn{max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}' +
             '#rk-ch-btn.open{background:#000;color:#fff;}' +
-            '#rk-mobi-btn[disabled]{color:#999;border-color:#999 !important;box-shadow:none !important;cursor:default;}' +
+            '#rk-azw3-btn[disabled]{color:#999;border-color:#999 !important;box-shadow:none !important;cursor:default;}' +
             // Page-only full screen (see enterFullPage): bars hidden, the window covers the screen.
             'html.rk-manga-full .window{position:fixed !important;top:0 !important;left:0 !important;margin:0 !important;' +
             'width:calc(100vw / var(--rekindle-scale, 1)) !important;height:calc(100vh / var(--rekindle-scale, 1)) !important;' +
@@ -412,11 +412,11 @@
             full.onclick = function (e) { e.stopPropagation(); enterFullPage(); };
             wrap.appendChild(full);
         }
-        if (!document.getElementById('rk-mobi-btn')) {
-            var mobi = el('button', { id: 'rk-mobi-btn', type: 'button', title: 'Download this chapter as a MOBI book' });
-            mobi.textContent = 'MOBI';
-            mobi.onclick = function (e) { e.stopPropagation(); downloadMobi(); };
-            wrap.appendChild(mobi);
+        if (!document.getElementById('rk-azw3-btn')) {
+            var azw3 = el('button', { id: 'rk-azw3-btn', type: 'button', title: 'Download this chapter as a Kindle book (AZW3)' });
+            azw3.textContent = 'AZW3';
+            azw3.onclick = function (e) { e.stopPropagation(); downloadAzw3(); };
+            wrap.appendChild(azw3);
         }
         var opts = chapterOptions();
         var cur = null;
@@ -424,25 +424,26 @@
         btn.textContent = cur ? shortName(cur.text) : 'Chapters';
     }
 
-    // The current chapter as one MOBI book: the Kindle browser downloads only MOBI, AZW,
-    // PRC and TXT. The server packs the pages into a comic archive and has Calibre make
-    // the MOBI (selfhost/server/src/manga-mobi.js); that takes a while, so this checks
-    // on the job every few seconds and opens the file when it is ready. The status line
-    // only changes when the step does (changing text redraws the whole e-ink screen).
-    var mobiBusy = false;
+    // The current chapter as one Kindle book (AZW3, fixed-layout comic): the Kindle
+    // browser downloads only Kindle books and TXT. The server packs the pages into a comic
+    // archive and has Calibre make the book (selfhost/server/src/manga-azw3.js); that
+    // takes a while, so this checks on the job every few seconds and opens the file when
+    // it is ready. The status line only changes when the step does (changing text redraws
+    // the whole e-ink screen).
+    var azw3Busy = false;
 
-    function downloadMobi() {
-        if (mobiBusy) return;
+    function downloadAzw3() {
+        if (azw3Busy) return;
         if (!currentReading || !currentReading.pages || !currentReading.pages.length) {
             showStatus('Open a chapter first.');
             return;
         }
-        var btn = document.getElementById('rk-mobi-btn');
+        var btn = document.getElementById('rk-azw3-btn');
         var opts = chapterOptions(), chapter = '';
         for (var i = 0; i < opts.length; i++) if (opts[i].idx === currentChapterIndex) chapter = shortName(opts[i].text);
         var title = (currentReading.title || 'Manga') + (chapter ? ' - ' + chapter : '');
         var done = function (message) {
-            mobiBusy = false;
+            azw3Busy = false;
             if (btn) btn.disabled = false;
             if (message) showStatus(message);
         };
@@ -455,25 +456,25 @@
         var shown = '';
         var say = function (text) { if (text !== shown) { shown = text; showStatus(text); } };
         var follow = function (id) {
-            fetch('/__rk/manga/mobi/' + encodeURIComponent(id)).then(json).then(function (j) {
+            fetch('/__rk/manga/azw3/' + encodeURIComponent(id)).then(json).then(function (j) {
                 if (j.status === 'ready') {
                     done('Downloading ' + j.name + (j.missing ? ' (' + j.missing + ' pages could not be fetched)' : ''));
                     window.location.href = j.href;
                     return;
                 }
                 if (j.status === 'failed') return done(j.message);
-                say(j.step === 'convert' ? 'Making the MOBI...' : 'Getting the pages for the MOBI...');
+                say(j.step === 'convert' ? 'Making the book...' : 'Getting the pages for the book...');
                 setTimeout(function () { follow(id); }, 3000);
-            }, function (e) { done('MOBI failed: ' + e.message); });
+            }, function (e) { done('AZW3 failed: ' + e.message); });
         };
-        mobiBusy = true;
+        azw3Busy = true;
         if (btn) btn.disabled = true;
-        say('Getting the pages for the MOBI...');
-        fetch('/__rk/manga/mobi', {
+        say('Getting the pages for the book...');
+        fetch('/__rk/manga/azw3', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: title, pages: currentReading.pages })
-        }).then(json).then(function (d) { follow(d.id); }, function (e) { done('MOBI failed: ' + e.message); });
+        }).then(json).then(function (d) { follow(d.id); }, function (e) { done('AZW3 failed: ' + e.message); });
     }
 
     function closeChapterPicker() {
