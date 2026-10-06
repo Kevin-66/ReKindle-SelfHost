@@ -123,7 +123,7 @@ export async function handleImage(req, res, url) {
 
 // MangaDex@Home nodes (*.mangadex.network) now and then answer a page with 404;
 // MangaDex's own server has every page at the same path.
-function mangadexOrigin(target) {
+export function mangadexOrigin(target) {
     if (!/\.mangadex\.network$/i.test(target.hostname)) return null;
     const m = target.pathname.match(/\/(data(?:-saver)?\/[0-9a-f]+\/[^/]+)$/i);
     return m ? `https://uploads.mangadex.org/${m[1]}` : null;

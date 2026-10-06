@@ -519,3 +519,16 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   the row.
 - A page that fails to load is retried once after 1.5 s (MangaDex@Home nodes sometimes
   404 a page once).
+- PDF button (`#rk-pdf-btn`, next to `#rk-ch-btn`): POSTs `{title, pages}` (the chapter's
+  raw page list, `/api/proxy?url=<MangaDex page>` or signed `/__rk/manga/img?u=&k=`) to
+  `/__rk/manga/pdf`, which checks every address (MangaDex hosts only, public network)
+  and answers `{href: /__rk/manga/pdf/<id>}` (30 min); opening it downloads the PDF
+  (`server/src/manga-pdf.js`). Pages come through `serveImage` (same cache as the reader)
+  and the PDF is streamed object by object (offsets counted for the xref), so headers go
+  out at once and the connection never idles behind Zeabur's proxy. JPEG pages are
+  embedded byte for byte (DCTDecode, size/components from the SOF marker); non-interlaced
+  grey/RGB/palette PNGs embed their IDAT data unchanged (FlateDecode with `/Predictor 15`,
+  palette as `/Indexed`); PNGs with alpha/16-bit/interlace are re-saved as PNG by sharp;
+  WebP/GIF become JPEG q90 (lossless would make the PDF several times larger). The
+  first version stored raw pixels with plain Flate: 30 MB for 6 PNG pages. A failed page
+  becomes a text page. A 47-page MangaDex chapter: 31 MB, about 4 s locally.

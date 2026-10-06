@@ -27,7 +27,9 @@ pages and the next chapter. When you are signed in, your Manga library and readi
 progress are kept with your account on the server, so they survive the Kindle clearing
 its browser data and follow you to other devices. Pages are shown exactly as the
 sources serve them, but are not kept in the browser cache: the Kindle erases the
-browser's data (sign-in, Manga library) when it grows past 64 MB.
+browser's data (sign-in, Manga library) when it grows past 64 MB. The **PDF** button
+next to the chapter name downloads the chapter as one PDF, which the Kindle opens in
+its own reader (JPEG and plain PNG pages unchanged; other formats as high-quality JPEG).
 
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.

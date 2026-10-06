@@ -96,6 +96,9 @@
             'font-size:0.75rem;font-weight:bold;padding:3px 8px;max-width:180px;overflow:hidden;white-space:nowrap;' +
             'text-overflow:ellipsis;cursor:pointer;vertical-align:middle;}' +
             '#rk-ch-btn.open{background:#000;color:#fff;}' +
+            '#rk-pdf-btn{border:2px solid #000;background:#fff;color:#000;box-shadow:1px 1px 0 #000;font-family:inherit;' +
+            'font-size:0.75rem;font-weight:bold;padding:3px 6px;margin-left:6px;cursor:pointer;vertical-align:middle;}' +
+            '#rk-pdf-btn[disabled]{color:#999;border-color:#999;box-shadow:none;cursor:default;}' +
             '#rk-ch-panel{position:absolute;top:0;left:0;right:0;bottom:0;z-index:50;background:#fff;display:flex;flex-direction:column;}' +
             '#rk-ch-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:2px solid #000;flex-shrink:0;font-weight:bold;}' +
             '#rk-ch-close{min-width:48px;min-height:40px;border:2px solid #000;background:#fff;box-shadow:2px 2px 0 #000;font-family:inherit;font-weight:bold;cursor:pointer;}' +
@@ -384,10 +387,49 @@
             };
             wrap.appendChild(btn);
         }
+        if (!document.getElementById('rk-pdf-btn')) {
+            var pdf = el('button', { id: 'rk-pdf-btn', type: 'button', title: 'Download this chapter as a PDF' });
+            pdf.textContent = 'PDF';
+            pdf.onclick = function (e) { e.stopPropagation(); downloadPdf(); };
+            wrap.appendChild(pdf);
+        }
         var opts = chapterOptions();
         var cur = null;
         for (var i = 0; i < opts.length; i++) if (opts[i].idx === idx) cur = opts[i];
         btn.textContent = cur ? shortName(cur.text) : 'Chapters';
+    }
+
+    // The current chapter as one PDF (the Kindle opens PDFs). The server fetches the
+    // pages through its page cache and streams the PDF (selfhost/server/src/manga-pdf.js);
+    // opening the link makes the browser download it.
+    function downloadPdf() {
+        var btn = document.getElementById('rk-pdf-btn');
+        if (!currentReading || !currentReading.pages || !currentReading.pages.length) {
+            showStatus('Open a chapter first.');
+            return;
+        }
+        var opts = chapterOptions(), chapter = '';
+        for (var i = 0; i < opts.length; i++) if (opts[i].idx === currentChapterIndex) chapter = shortName(opts[i].text);
+        var title = (currentReading.title || 'Manga') + (chapter ? ' - ' + chapter : '');
+        if (btn) btn.disabled = true;
+        showStatus('Making the PDF...');
+        fetch('/__rk/manga/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: title, pages: currentReading.pages })
+        }).then(function (r) {
+            return r.json().then(function (d) {
+                if (!r.ok || !d.href) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+                return d;
+            });
+        }).then(function (d) {
+            if (btn) btn.disabled = false;
+            showStatus('Downloading ' + title + '.pdf');
+            window.location.href = d.href;
+        }, function (e) {
+            if (btn) btn.disabled = false;
+            showStatus('PDF failed: ' + e.message);
+        });
     }
 
     function closeChapterPicker() {
