@@ -92,13 +92,32 @@
             'font-family:inherit;font-size:0.95rem;font-weight:bold;cursor:pointer;padding:6px 8px;}' +
             '.rk-source-btn.active{background:#000;color:#fff;box-shadow:none;}' +
             '#chapter-select-wrapper .custom-select-container,#chapter-select-wrapper select{display:none !important;}' +
-            '#rk-ch-btn{border:2px solid #000;background:#fff;color:#000;box-shadow:1px 1px 0 #000;font-family:inherit;' +
-            'font-size:0.75rem;font-weight:bold;padding:3px 8px;max-width:180px;overflow:hidden;white-space:nowrap;' +
-            'text-overflow:ellipsis;cursor:pointer;vertical-align:middle;}' +
+            // One style for every control in the reader's title bar (manga.html's Back button:
+            // 22 px high, 2 px border and shadow, bold small sans-serif), icon buttons square.
+            '#back-btn,#rk-ch-btn,#rk-mobi-btn,#rk-full-btn,.title-bar .icon-btn,#language-select-wrapper .custom-select-trigger,#rk-full-exit{' +
+            'box-sizing:border-box !important;height:22px !important;border:2px solid #000 !important;background:#fff;color:#000;' +
+            'box-shadow:2px 2px 0 #000 !important;font-family:sans-serif !important;font-size:0.7rem !important;font-weight:bold !important;' +
+            'line-height:18px !important;padding:0 6px !important;margin:0;cursor:pointer;vertical-align:middle;}' +
+            '#rk-full-btn,.title-bar .icon-btn,#rk-full-exit{width:22px !important;padding:0 !important;display:inline-flex !important;align-items:center;justify-content:center;}' +
+            '#rk-full-btn svg,#rk-full-exit svg{display:block;}' +
+            '#back-btn:active,#rk-ch-btn:active,#rk-mobi-btn:active,#rk-full-btn:active,.title-bar .icon-btn:active,#rk-full-exit:active{' +
+            'background:#000 !important;color:#fff !important;box-shadow:none !important;transform:translate(2px,2px);}' +
+            '#language-select-wrapper .custom-select-trigger{padding-right:20px !important;}' +
+            '#language-select-wrapper .custom-arrow{right:6px;}' +
+            '#language-select-wrapper,#chapter-select-wrapper{margin-right:6px !important;}' +
+            '#rk-full-btn,#rk-mobi-btn{margin-left:6px;}' +
+            '#rk-ch-btn{max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}' +
             '#rk-ch-btn.open{background:#000;color:#fff;}' +
-            '#rk-mobi-btn{border:2px solid #000;background:#fff;color:#000;box-shadow:1px 1px 0 #000;font-family:inherit;' +
-            'font-size:0.75rem;font-weight:bold;padding:3px 6px;margin-left:6px;cursor:pointer;vertical-align:middle;}' +
-            '#rk-mobi-btn[disabled]{color:#999;border-color:#999;box-shadow:none;cursor:default;}' +
+            '#rk-mobi-btn[disabled]{color:#999;border-color:#999 !important;box-shadow:none !important;cursor:default;}' +
+            // Page-only full screen (see enterFullPage): bars hidden, the window covers the screen.
+            'html.rk-manga-full .window{position:fixed !important;top:0 !important;left:0 !important;margin:0 !important;' +
+            'width:calc(100vw / var(--rekindle-scale, 1)) !important;height:calc(100vh / var(--rekindle-scale, 1)) !important;' +
+            'max-width:none !important;max-height:none !important;border:none !important;box-shadow:none !important;z-index:2000;}' +
+            'html.rk-manga-full .title-bar,html.rk-manga-full .tabs,html.rk-manga-full #status-bar{display:none !important;}' +
+            '#rk-full-exit{display:none !important;position:fixed;top:8px;right:8px;z-index:2100;}' +
+            // Same look as the others, with a bigger invisible tap area (it is alone on the page).
+            '#rk-full-exit::after{content:"";position:absolute;top:-14px;right:-8px;bottom:-14px;left:-14px;}' +
+            'html.rk-manga-full #rk-full-exit{display:inline-flex !important;}' +
             '#rk-ch-panel{position:absolute;top:0;left:0;right:0;bottom:0;z-index:50;background:#fff;display:flex;flex-direction:column;}' +
             '#rk-ch-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:2px solid #000;flex-shrink:0;font-weight:bold;}' +
             '#rk-ch-close{min-width:48px;min-height:40px;border:2px solid #000;background:#fff;box-shadow:2px 2px 0 #000;font-family:inherit;font-weight:bold;cursor:pointer;}' +
@@ -387,6 +406,12 @@
             };
             wrap.appendChild(btn);
         }
+        if (!document.getElementById('rk-full-btn')) {
+            var full = el('button', { id: 'rk-full-btn', type: 'button', title: 'Page only: hide the title bar and status line' });
+            full.innerHTML = ICON_FULL_PAGE;
+            full.onclick = function (e) { e.stopPropagation(); enterFullPage(); };
+            wrap.appendChild(full);
+        }
         if (!document.getElementById('rk-mobi-btn')) {
             var mobi = el('button', { id: 'rk-mobi-btn', type: 'button', title: 'Download this chapter as a MOBI book' });
             mobi.textContent = 'MOBI';
@@ -513,6 +538,7 @@
         var originalCloseReader = closeReader;
         closeReader = function () {
             closeChapterPicker();
+            exitFullPage();
             return originalCloseReader.apply(this, arguments);
         };
     }
@@ -793,6 +819,62 @@
 
             saveProgressFor(reading, chapterIndex, page);
         };
+    }
+
+    // Swipes turn pages too (owner's request): left = next, right = previous, matching the
+    // tap zones (right side next, left side previous). Only a mostly horizontal move of
+    // at least SWIPE_PX counts, so a tall page still scrolls; swipes in the chapter list
+    // are left alone. The click a swipe may end in is swallowed, so a tap zone doesn't
+    // turn a second page.
+    var SWIPE_PX = 50;
+    (function () {
+        var view = document.getElementById('reader-view');
+        if (!view) return;
+        var x0 = 0, y0 = 0, t0 = 0, tracking = false, swallowUntil = 0;
+        view.addEventListener('touchstart', function (e) {
+            var inList = e.target.closest && e.target.closest('#rk-ch-panel');
+            tracking = e.touches.length === 1 && !inList;
+            if (!tracking) return;
+            x0 = e.touches[0].clientX;
+            y0 = e.touches[0].clientY;
+            t0 = Date.now();
+        }, { passive: true });
+        view.addEventListener('touchend', function (e) {
+            if (!tracking) return;
+            tracking = false;
+            var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+            if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - t0 > 1000) return;
+            swallowUntil = Date.now() + 500;
+            if (dx < 0) nextPage(); else prevPage();
+        }, { passive: true });
+        view.addEventListener('click', function (e) {
+            if (Date.now() < swallowUntil) { e.stopPropagation(); e.preventDefault(); }
+        }, true);
+    })();
+
+    // Corner marks pointing out (enter) and in (exit), drawn like the title bar's icons but
+    // unlike manga.html's own full-screen arrows.
+    var ICON_FULL_PAGE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square">' +
+        '<path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/></svg>';
+    var ICON_EXIT_PAGE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square">' +
+        '<path d="M9 3v6H3M21 9h-6V3M15 21v-6h6M3 15h6v6"/></svg>';
+
+    // Page-only full screen (owner's request): beyond manga.html's own full-screen button,
+    // the title bar and status line are hidden too, so the page uses the whole screen.
+    // A small Exit button in the corner (and leaving the reader) brings them back.
+    function enterFullPage() {
+        var exit = document.getElementById('rk-full-exit');
+        if (!exit) {
+            exit = el('button', { id: 'rk-full-exit', type: 'button', title: 'Show the title bar again' });
+            exit.innerHTML = ICON_EXIT_PAGE;
+            exit.onclick = function (e) { e.stopPropagation(); exitFullPage(); };
+            document.body.appendChild(exit);
+        }
+        document.documentElement.classList.add('rk-manga-full');
+    }
+
+    function exitFullPage() {
+        document.documentElement.classList.remove('rk-manga-full');
     }
 
     // Progress, saved as manga.html saves it.

@@ -205,7 +205,7 @@
         while (have < n) { this.s += '\n'; have++; }
     };
 
-    function textOf(el, out) {
+    function textOf(el) {
         var o = new Out();
         children(el, o);
         return o.s;

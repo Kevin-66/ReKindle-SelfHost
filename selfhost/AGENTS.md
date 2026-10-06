@@ -50,6 +50,16 @@ as possible so `git merge upstream/main` stays clean.
   copy of the snippet. Modern desktop browsers hold the old page during loads, so
   the flash only reproduces on the device.
 
+## Download jobs and the browser service
+
+`file-jobs.js` runs jobs that end in a file for the Kindle (Z-Library books in
+`zlibrary-account.js`, Manga chapters as MOBI in `manga-mobi.js`): `jobStore().start()`
+gives each job a temp folder, keeps a finished file 30 min, and `sendJobFile` sends it as an
+attachment (UTF-8 `filename*`). `browser-service.js` is the one place that calls the
+Z-Library browser service (`ZLIBRARY_BROWSER_ENDPOINT`, private hosts only, bearer token,
+`rawFetch`); `zlibrary-browser.js` imports it on demand because that file is also copied
+into the browser service's image, where it doesn't exist.
+
 ## Logging: locally only
 
 The owner wants logging only when running locally, never on the deployed server
@@ -584,6 +594,19 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   without built-in details (`NAME_METADATA`: PDF, DJVU, RTF, ...), `--title`/`--authors`
   from Z-Library's "Title (Author)" file name. EPUB/FB2/DOCX keep their own. Download
   file names drop the " (Z-Library)" tag too (`fileName` in zlibrary-account.js).
+- Swipes (owner's request 2026-10-06): a mostly horizontal touch move of at least 50 px
+  on `#reader-view` turns the page (left = next, right = previous, like the tap zones);
+  vertical moves still scroll, the chapter list is ignored, and the click a swipe may end
+  in is swallowed (capture phase) so a tap zone doesn't turn a second page.
+- Page-only full screen (`#rk-full-btn`, an icon of outward corners): `html.rk-manga-full`
+  makes `.window` cover the screen (same `--rekindle-scale` maths as manga.html's own full
+  screen) and hides `.title-bar`, `.tabs` and `#status-bar`; a corner `#rk-full-exit` icon
+  (inward corners, with a larger invisible tap area) and `closeReader` leave it.
+- Title-bar controls share one style (owner: "all the buttons are different style and
+  size"): Back, the language dropdown's trigger, the chapter button, the page-only icon,
+  MOBI and manga.html's full-screen `.icon-btn` are all 22 px high with a 2 px border and
+  2 px shadow, bold 0.7rem sans-serif; icon buttons are 22 px square. Keep new controls
+  on that rule (see `addStyle`).
 - White page between pages, optional (owner's request 2026-10-06, "put it in the
   setting"): Settings > Accessibility > "Manga: White Page Between Pages" (added by
   rk-pager.js next to Page Buttons) sets localStorage `rk_manga_blank` ('0' = off) and

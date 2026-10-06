@@ -4,41 +4,25 @@
 // pictures) and the converter service (Calibre in the Z-Library browser service, POST
 // /convert, ZLIBRARY_BROWSER_ENDPOINT) turns it into MOBI with image processing off.
 //
-// That takes a while, so it is a job, like Z-Library downloads: POST /__rk/manga/mobi
-// {title, pages} -> {id}; GET /__rk/manga/mobi/<id> -> working (step "pages" or
-// "convert") | failed (message) | ready (href); the href, /__rk/manga/mobi/<id>/file,
-// downloads the file (kept 30 minutes; the random id is the permission). Pages come
+// That takes a while, so it is a job (file-jobs.js), like Z-Library downloads: POST
+// /__rk/manga/mobi {title, pages} -> {id}; GET /__rk/manga/mobi/<id> -> working (step
+// "pages" or "convert") | failed (message) | ready (href); the href,
+// /__rk/manga/mobi/<id>/file, downloads the file (the random id is the permission). Pages come
 // through the same server cache as the reader's own pages (images.js serveImage), and
 // are sized to fill the Kindle Scribe's screen (see comicImage).
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import sharp from 'sharp';
 import { serveImage, mangadexOrigin } from './images.js';
-import { withPublicNetworkOnly, rawFetch } from './netguard.js';
+import { withPublicNetworkOnly } from './netguard.js';
+import { browserService, browserServiceConfigured, serviceMessage } from './browser-service.js';
+import { jobStore, userError, saveBody, isReady, sendJobFile } from './file-jobs.js';
 import * as manhuagui from './manhuagui.js';
 
 const MAX_PAGES = 400;
-const KEEP_MS = 30 * 60 * 1000;
-const jobs = new Map();   // id -> { id, title, sources, status, step, done, total, started, dir, file, name, size, message, finished }
-
-function fail(message, status = 400, code = 'invalid-argument') {
-    return Object.assign(new Error(message), { status, code, userMessage: message });
-}
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [id, job] of jobs) {
-        if (job.finished && now - job.finished > KEEP_MS) {
-            if (job.dir) fs.rmSync(job.dir, { recursive: true, force: true });
-            jobs.delete(id);
-        }
-    }
-}, 60000).unref();
+const jobs = jobStore();
 
 // ---------------------------------------------------------------- pages
 
@@ -176,91 +160,63 @@ export class ZipWriter {
 
 // ---------------------------------------------------------------- jobs
 
-function converter(pathname, init) {
-    const headers = { ...(init.headers || {}) };
-    if (process.env.ZLIBRARY_BROWSER_TOKEN) headers.Authorization = 'Bearer ' + process.env.ZLIBRARY_BROWSER_TOKEN;
-    return rawFetch(new URL(pathname, process.env.ZLIBRARY_BROWSER_ENDPOINT), { ...init, headers });
-}
-
 const safeName = (title) => title.replace(/[\\/:*?"<>|]+/g, '-');
 
-async function run(job) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rk-manga-'));
-    job.dir = dir;
-    try {
-        const cbz = path.join(dir, 'chapter.cbz');
-        const zip = new ZipWriter(fs.createWriteStream(cbz));
-        let pages = 0;
-        for (let n = 0; n < job.sources.length; n++) {
-            try {
-                const img = await comicImage(await fetchPage(job.sources[n]));
-                await zip.add(String(n + 1).padStart(4, '0') + '.' + img.ext, img.data);
-                pages++;
-            } catch { /* a page that can't be fetched is left out */ }
-            job.done = n + 1;
-        }
-        await zip.finish();
-        if (!pages) throw fail('None of the pages could be fetched. Try again in a moment.', 502);
-        job.step = 'convert';
-        let res;
+async function makeMobi(job, dir) {
+    const cbz = path.join(dir, 'chapter.cbz');
+    const zip = new ZipWriter(fs.createWriteStream(cbz));
+    let pages = 0;
+    for (let n = 0; n < job.sources.length; n++) {
         try {
-            res = await converter('/convert', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(safeName(job.title) + '.cbz') },
-                body: Readable.toWeb(fs.createReadStream(cbz)), duplex: 'half', signal: AbortSignal.timeout(600000)
-            });
-        } catch { throw fail('The converter could not be reached. Try again in a moment.', 502); }
-        if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw fail(text && text.length < 300 && !/^\s*</.test(text) ? text : 'The chapter could not be made into a MOBI.', 502);
-        }
-        const file = path.join(dir, 'chapter.mobi');
-        await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(file));
-        fs.rmSync(cbz, { force: true });
-        Object.assign(job, { status: 'ready', file, name: safeName(job.title) + '.mobi', size: fs.statSync(file).size, missing: job.sources.length - pages, finished: Date.now() });
-    } catch (error) {
-        fs.rmSync(dir, { recursive: true, force: true });
-        Object.assign(job, { status: 'failed', message: error.userMessage || 'Making the MOBI failed. Try again in a moment.', finished: Date.now() });
+            const img = await comicImage(await fetchPage(job.sources[n]));
+            await zip.add(String(n + 1).padStart(4, '0') + '.' + img.ext, img.data);
+            pages++;
+        } catch { /* a page that can't be fetched is left out */ }
     }
+    await zip.finish();
+    if (!pages) throw userError('None of the pages could be fetched. Try again in a moment.', 502);
+    job.missing = job.sources.length - pages;
+    job.step = 'convert';
+    let res;
+    try {
+        res = await browserService('/convert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(safeName(job.title) + '.cbz') },
+            body: Readable.toWeb(fs.createReadStream(cbz)), duplex: 'half', signal: AbortSignal.timeout(600000)
+        });
+    } catch { throw userError('The converter could not be reached. Try again in a moment.', 502); }
+    if (!res.ok) throw userError(await serviceMessage(res, 'The chapter could not be made into a MOBI.'), 502);
+    const file = await saveBody(res, path.join(dir, 'chapter.mobi'));
+    fs.rmSync(cbz, { force: true });
+    return { file, name: safeName(job.title) + '.mobi' };
 }
 
 export function startJob(body) {
-    if (!process.env.ZLIBRARY_BROWSER_ENDPOINT) throw fail('MOBI downloads need the converter service (ZLIBRARY_BROWSER_ENDPOINT).', 503, 'manga/unavailable');
+    if (!browserServiceConfigured()) throw userError('MOBI downloads need the converter service (ZLIBRARY_BROWSER_ENDPOINT).', 503, 'manga/unavailable');
     const pages = Array.isArray(body && body.pages) ? body.pages : [];
-    if (!pages.length) throw fail('No pages to download.');
-    if (pages.length > MAX_PAGES) throw fail(`A chapter can have at most ${MAX_PAGES} pages.`);
+    if (!pages.length) throw userError('No pages to download.');
+    if (pages.length > MAX_PAGES) throw userError(`A chapter can have at most ${MAX_PAGES} pages.`);
     const sources = pages.map(pageSource);
-    if (sources.some((src) => !src)) throw fail('Unknown page address.');
+    if (sources.some((src) => !src)) throw userError('Unknown page address.');
     const title = String((body && body.title) || 'Manga').replace(/\s+/g, ' ').trim().slice(0, 200) || 'Manga';
-    for (const job of jobs.values()) {
-        if (job.status === 'working' && job.title === title) return { id: job.id };   // tapped twice
-    }
-    const job = { id: crypto.randomBytes(16).toString('base64url'), title, sources, status: 'working', step: 'pages', done: 0, total: sources.length, started: Date.now() };
-    jobs.set(job.id, job);
-    run(job);
-    return { id: job.id };
+    const running = jobs.working().find((job) => job.title === title);   // tapped twice
+    if (running) return { id: running.id };
+    return { id: jobs.start({ title, sources, step: 'pages' }, makeMobi, 'Making the MOBI failed. Try again in a moment.').id };
 }
 
 export function jobStatus(id) {
-    const job = jobs.get(String(id || ''));
-    if (!job) throw fail('This download is no longer available. Tap MOBI again.', 404, 'not-found');
+    const job = jobs.get(id);
+    if (!job) throw userError('This download is no longer available. Tap MOBI again.', 404, 'not-found');
     if (job.status === 'failed') return { status: 'failed', message: job.message };
-    if (job.status === 'working') return { status: 'working', step: job.step, done: job.done, total: job.total };
+    if (job.status === 'working') return { status: 'working', step: job.step };
     return { status: 'ready', name: job.name, size: job.size, missing: job.missing, href: `/__rk/manga/mobi/${job.id}/file` };
 }
 
 export function sendFile(res, id) {
-    const job = jobs.get(String(id || ''));
-    if (!job || job.status !== 'ready' || !fs.existsSync(job.file)) {
+    const job = jobs.get(id);
+    if (!isReady(job)) {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('This download is no longer available. Tap MOBI again.');
         return;
     }
-    const ascii = job.name.replace(/[^\x20-\x7e]/g, '_');
-    res.writeHead(200, {
-        'Content-Type': 'application/x-mobipocket-ebook',
-        'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(job.name)}`,
-        'Content-Length': job.size,
-        'Cache-Control': 'no-store'
-    });
-    fs.createReadStream(job.file).on('error', () => res.destroy()).pipe(res);
+    sendJobFile(res, job, 'application/x-mobipocket-ebook');
 }
