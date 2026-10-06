@@ -169,14 +169,24 @@ With the box held non-scrollable there is no drawn-ahead area: every jump redraw
 whole visible box, top down. Only hiding the box while it draws (then showing it whole)
 or smaller steps could avoid the split.
 
-The owner chose hiding (over half-screen steps), on Substack only (`COVER_PAGES`; other
-apps draw fast enough): `showCover()` puts `#rk-pager-cover` over the box's visible area
-(same positioned ancestor and `offsetWithin` maths as the buttons, z-index just under
-them) for `COVER_MS` (700 ms) around each jump. It is its own composited layer
-(`will-change: transform`) with `rgba(255,255,255,0.996)`: a fully opaque composited
-layer would let cc skip drawing the tiles it hides, and a cover painted into the same
-layer as the box would need the box redrawn when it goes. On e-ink 0.4% is invisible.
-If the Kindle still shows the bottom late, the screen needed longer than COVER_MS.
+The owner first chose hiding the box while it draws (a white cover for 700 ms), then
+disliked the delay. Now, on Substack only (`BUFFER_PAGES`, box `#reader-content`; other
+apps draw fast enough), Page Down is double-buffered: `setupBuffer()` (from `refresh()`)
+puts a `cloneNode` copy right after the real box, absolutely positioned on it (its
+offsetTop/Left/Width/Height, `box-sizing: border-box`, `max-width: none`, so the lines
+wrap the same), and pre-scrolls it one step ahead. Both boxes get `will-change:
+transform` (own composited layers) and `rgba(255,255,255,0.996)`: a fully opaque front
+would let cc skip drawing the box behind, and 1/255 bleed is invisible on e-ink. Page Down
+swaps their z-index (front 2, back 1; `scroller` follows the front), which needs no
+drawing, then `syncBack()` moves the new back box one step past the front, 50 ms later,
+so it is drawn while the reader reads. Page Up and swipes scroll the front box directly
+(the back follows 300 ms after the scroll settles). The copy keeps the id so the
+`#reader-content` styles apply, but comes second in the DOM, so the app's getElementById
+gets the real box; `data-rk-cjk="off"` stops rk-cjk.js re-wrapping it. A
+MutationObserver on the real box (new article, rk-cjk wrapping) brings the real box to
+the front and re-copies its innerHTML after 600 ms; until then Page Down scrolls directly.
+Holds a second copy of the article in memory; if the Kindle can't keep both layers drawn,
+Page Down just shows the old top-first drawing.
 
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
