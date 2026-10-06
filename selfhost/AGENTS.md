@@ -158,8 +158,19 @@ a second flash after the jump's own (0.25-0.5 s) one. Scrolling is given back on
 `touchmove` or `wheel` inside the box, or when the pager moves to another box
 (`release()`; `findScroller` still counts the held box). Document-level scrolling is
 unchanged (the root scroller is always composited). On this Kindle the compositor shows
-frames before every tile is drawn, so a slow-to-draw screen (images, CJK glyphs in STSong)
-can still appear top first; desktop Chrome draws too fast to ever show it.
+frames before every tile is drawn, so a slow-to-draw screen can still appear top first;
+desktop Chrome draws too fast to ever show it.
+
+Pictures (second video, same Substack article): with the restore gone, each screen was
+complete within ~0.5 s, but everything from the first picture down (a photo, a map, the
+"SINIFICATION" banner) came 0.5-0.75 s after the rest, text below a picture included:
+pictures are decoded when first drawn, and tiles below wait for them. `page()` now
+finds the loaded `<img>`s that will be on the new screen (`picturesAt`, positions via
+getBoundingClientRect scaled by offsetHeight/rect height for theme.js zoom), calls
+`img.decode()` on them while the current screen stays up, and moves when they resolve or
+after `DECODE_WAIT` (1 s); taps during the wait are ignored. 600 ms after each move the
+next screen's pictures are decoded in the background. In Chromium `decode()` hands the
+decode to the compositor, so the frame after the move has them ready.
 
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
