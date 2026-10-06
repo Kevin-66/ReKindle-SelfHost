@@ -590,7 +590,7 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
      the screen (Amazon's tools, Kindle Comic Converter) are fixed-layout, which Calibre
      6.13 can't write: `server/src/azw3-fixed-layout.js` `setExth()` rewrites record 0 of
      the finished file with EXTH 122 fixed-layout=true, 123 book-type=comic, 124
-     portrait, 126 original-resolution=1860x2480, 127/128 zero gutter/margin, 132
+     portrait, 126 original-resolution (the book's page size, see 8.), 127/128 zero gutter/margin, 132
      region-mag=false, 525 horizontal-lr, 527 ltr (codes from KindleUnpack's
      `mobi_header.py`; only record 0 grows, the PDB record offsets shift, everything else
      refers to records by number). With fixed layout `width: 100%` must not overflow the
@@ -619,6 +619,15 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   7. "i get a table of content": Calibre's AZW3 writer adds an inline contents page
      ("Page 1", "Page 2", ... from the comic input); `--no-inline-toc` in `COMIC_ARGS`
      leaves it out (checked on the live service). Z-Library books keep theirs.
+  8. "viewer is now zoomed out" (Manhuagui chapter, 650x924 WebP pages): with
+     original-resolution 1860x2480 the Kindle drew each picture at its own size inside
+     that page (width: 100% does not enlarge it), so small pages sat at ~37%. The
+     book's page size is now the chapter's most common page size (`bookPageSize`:
+     each page shrunk to the screen if larger, in its 3:4 shape; e.g. 693x924), every
+     other page (a double-page spread) is fitted into it, and `setExth` gets that size;
+     the Kindle scales the whole page to the screen. `makeBook` fetches all pages first
+     (kept as files in the job dir) to find it. CMYK JPEGs pass through: the Kindle
+     shows them (owner checked).
   Checking without a Kindle: Kindle Previewer (the only Amazon renderer for Mac) is
   x86_64-only and needs Rosetta, which this Mac doesn't have. Instead the real KF8 pages
   were unpacked (skeleton + fragment, FDST CSS flows, `kindle:embed` base-32 resource ids

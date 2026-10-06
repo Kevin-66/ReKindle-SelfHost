@@ -60,40 +60,60 @@ async function fetchPage(src) {
     return { body: Buffer.from(await response.arrayBuffer()), type: response.headers.get('content-type') || '' };
 }
 
-// The Kindle Scribe's screen (Calibre's kindle_scribe profile, used for comics). The book
-// is fixed-layout at this size (azw3-fixed-layout.js) and the converter makes each
-// picture full width, so the Kindle enlarges a page to fill the screen.
+// The Kindle Scribe's screen (Calibre's kindle_scribe profile, used for comics): pages
+// larger than this shrink to fit it, and every page has its 3:4 shape.
 export const SCREEN = { width: 1860, height: 2480 };
 
 const OPEN = { failOn: 'none', pages: 1, limitInputPixels: 2e8 };
 
-// The picture to put in the comic: { ext, data }, the original as far as possible:
-// - its own size (the Kindle enlarges it; only a page larger than the screen shrinks),
-//   colour as it is;
-// - in the screen's 3:4 shape, so full width fits without cropping: other pages are
-//   padded, centred, each gap black or white to match the picture's edge beside it
-//   (like Kindle Comic Converter, so a dark page doesn't get white bars);
-// - PNG stays PNG (re-saved losslessly when padded); JPEG stays JPEG, re-encoded
-//   (quality 92) only when padded, CMYK or carrying EXIF; anything else (WebP: the
-//   Kindle can't show it) becomes JPEG. Calibre's AZW3 writer keeps PNG and JPEG as they are, except a JPEG
-//   without a JFIF header or with EXIF, which it re-saves at quality 75 ("Amazon's
-//   renderer can't show JPEGs without JFIF"); sharp writes no JFIF, so withJfif adds it.
-export async function comicImage(img) {
+// The book's page size: a fixed-layout book has one (its original-resolution), and the
+// Kindle scales that page to fill the screen. It does not enlarge a picture beyond its
+// own size within the page, so the page must be the pictures' own size: the chapter's
+// most common page size (each page shrunk to fit the screen if larger, in its 3:4 shape).
+// `pictures`: Buffers or file paths.
+export async function bookPageSize(pictures) {
+    const counts = new Map();
+    for (const picture of pictures) {
+        let meta;
+        try { meta = await sharp(picture, OPEN).metadata(); } catch { continue; }
+        const { width, height } = meta.orientation > 4 ? { width: meta.height, height: meta.width } : meta;
+        if (!width || !height) continue;
+        const scale = Math.min(1, SCREEN.width / width, SCREEN.height / height);
+        const page = pageShape(Math.round(width * scale), Math.round(height * scale));
+        const key = page.width + 'x' + page.height;
+        counts.set(key, { page, n: ((counts.get(key) || {}).n || 0) + 1 });
+    }
+    let best = null;
+    for (const c of counts.values()) if (!best || c.n > best.n || (c.n === best.n && c.page.width > best.page.width)) best = c;
+    return best ? best.page : SCREEN;
+}
+
+// The picture to put in the comic: { ext, data }, the original as far as possible, as a
+// page of `page` size (bookPageSize):
+// - a picture already that size goes in as it is; any other is fitted into the page
+//   (aspect kept), centred, each gap black or white to match the picture's edge beside
+//   it (like Kindle Comic Converter, so a dark page doesn't get white bars);
+// - colour as it is; PNG stays PNG (re-saved losslessly when fitted); JPEG stays JPEG,
+//   re-encoded (quality 92) only when fitted or carrying EXIF; anything else
+//   (WebP: the Kindle can't show it) becomes JPEG. Calibre's AZW3 writer keeps PNG and
+//   JPEG as they are, except a JPEG without a JFIF header or with EXIF, which it re-saves
+//   at quality 75 ("Amazon's renderer can't show JPEGs without JFIF"); sharp writes no
+//   JFIF, so withJfif adds it.
+export async function comicImage(img, page) {
     const b = img.body;
     const meta = await sharp(b, OPEN).metadata();
     const png = meta.format === 'png';
-    const asIs = meta.width <= SCREEN.width && meta.height <= SCREEN.height && sameShape(meta.width, meta.height);
+    const asIs = meta.width === page.width && meta.height === page.height && !(meta.orientation > 1);
     if (asIs && png) return { ext: 'png', data: b };
-    if (asIs && meta.format === 'jpeg' && meta.space !== 'cmyk' && !meta.exif) return { ext: 'jpg', data: withJfif(b) };
+    if (asIs && meta.format === 'jpeg' && !meta.exif) return { ext: 'jpg', data: withJfif(b) };   // CMYK too: the Kindle shows it
     const grey = meta.space === 'b-w' || meta.channels <= 2;   // no colour in the original
     let pipeline = sharp(b, OPEN).rotate();
     if (meta.hasAlpha) pipeline = pipeline.flatten({ background: '#ffffff' });
     const { data: raw, info } = await pipeline
         .toColourspace(grey ? 'b-w' : 'srgb')   // 1 or 3 channels (also from CMYK)
-        .resize({ width: SCREEN.width, height: SCREEN.height, fit: 'inside', withoutEnlargement: true, kernel: 'lanczos3' })
+        .resize({ width: page.width, height: page.height, fit: 'inside', kernel: 'lanczos3' })
         .raw()
         .toBuffer({ resolveWithObject: true });
-    const page = pageShape(info.width, info.height);
     let out = sharp(fillPage(raw, info, page), { raw: { width: page.width, height: page.height, channels: info.channels } });
     if (grey) out = out.toColourspace('b-w');   // else sharp writes a 1-channel picture as RGB
     if (png) return { ext: 'png', data: await out.png({ compressionLevel: 9 }).toBuffer() };
@@ -105,11 +125,6 @@ function pageShape(width, height) {
     return width * SCREEN.height >= height * SCREEN.width
         ? { width, height: Math.round(width * SCREEN.height / SCREEN.width) }
         : { width: Math.round(height * SCREEN.width / SCREEN.height), height };
-}
-
-function sameShape(width, height) {
-    const page = pageShape(width, height);
-    return page.width === width && page.height === height;
 }
 
 // JFIF APP0 segment: version 1.1, no units, 1:1 pixels, no thumbnail.
@@ -238,19 +253,28 @@ export class ZipWriter {
 const safeName = (title) => title.replace(/[\\/:*?"<>|]+/g, '-');
 
 async function makeBook(job, dir) {
-    const cbz = path.join(dir, 'chapter.cbz');
-    const zip = new ZipWriter(fs.createWriteStream(cbz));
-    let pages = 0;
+    // Fetch every page first (kept in dir): the book's page size depends on all of them.
+    const originals = [];
     for (let n = 0; n < job.sources.length; n++) {
         try {
-            const img = await comicImage(await fetchPage(job.sources[n]));
-            await zip.add(String(n + 1).padStart(4, '0') + '.' + img.ext, img.data);
-            pages++;
+            const file = path.join(dir, 'page' + n);
+            fs.writeFileSync(file, (await fetchPage(job.sources[n])).body);
+            originals.push(file);
         } catch { /* a page that can't be fetched is left out */ }
     }
+    if (!originals.length) throw userError('None of the pages could be fetched. Try again in a moment.', 502);
+    job.missing = job.sources.length - originals.length;
+    const page = await bookPageSize(originals);
+    const cbz = path.join(dir, 'chapter.cbz');
+    const zip = new ZipWriter(fs.createWriteStream(cbz));
+    for (let n = 0; n < originals.length; n++) {
+        try {
+            const img = await comicImage({ body: fs.readFileSync(originals[n]) }, page);
+            await zip.add(String(n + 1).padStart(4, '0') + '.' + img.ext, img.data);
+        } catch { job.missing++; }   // a picture sharp can't read
+        fs.rmSync(originals[n], { force: true });
+    }
     await zip.finish();
-    if (!pages) throw userError('None of the pages could be fetched. Try again in a moment.', 502);
-    job.missing = job.sources.length - pages;
     job.step = 'convert';
     let res;
     try {
@@ -263,7 +287,7 @@ async function makeBook(job, dir) {
     if (!res.ok) throw userError(await serviceMessage(res, 'The chapter could not be made into a Kindle book.'), 502);
     const file = await saveBody(res, path.join(dir, 'chapter.azw3'));
     fs.rmSync(cbz, { force: true });
-    fs.writeFileSync(file, setExth(fs.readFileSync(file), fixedLayoutRecords(SCREEN)));
+    fs.writeFileSync(file, setExth(fs.readFileSync(file), fixedLayoutRecords(page)));
     return { file, name: safeName(job.title) + '.azw3' };
 }
 
