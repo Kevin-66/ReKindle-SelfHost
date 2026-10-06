@@ -39,16 +39,30 @@ as possible so `git merge upstream/main` stays clean.
   `injectDarkStyles()` in theme.js. `selfhost/site` pages (not transformed) carry a
   copy of the snippet. Modern desktop browsers hold the old page during loads, so
   the flash only reproduces on the device.
-- Dark mode white flash (fixed 2026-10-05): theme.js only darkens a page once it has
-  downloaded and run (the server makes browsers revalidate it on every page, and
-  settings.html loads it at the end of the body), and the Kindle's Chromium 75 has no
-  "paint holding", so every page turn showed a white page first, which e-ink redraws
-  in full. `transform.js` puts `DARK_HEAD` first in every `<head>`: an inline script
-  that reads `rekindle_theme_mode` (and the auto rule) and adds the same
-  `#rekindle-dark-theme` style theme.js would. Keep `DARK_CSS` in sync with
-  `injectDarkStyles()` in theme.js. `selfhost/site` pages (not transformed) carry a
-  copy of the snippet. Modern desktop browsers hold the old page during loads, so
-  the flash only reproduces on the device.
+- Dark mode patrol (2026-10-06, all apps in dark mode on the local server with the test
+  account, 12 apps per screenshot as same-origin iframes at 37%; the host page's own
+  dark style removed so frames are not inverted twice). Fixed:
+  - Canvases go dark with the page (`DARK_CSS` / `injectDarkStyles`: no longer inverted
+    back). Game boards and drawing areas (Tetris, Snake, Pool, Maze, Sketchpad, Mind Map,
+    Pet, Crossy, Jumpy, Surfer, ...) were bright white panels, and a transparent canvas
+    (Notes stopwatch) drew black on black. Doom keeps its colours: `DARK_KEEP_COLOURS` in
+    transform.js adds `.no-invert` to its canvas.
+  - Chess, Checkers and Connect 4 boards keep their real colours (`DARK_KEEP_COLOURS`):
+    inverted, White's pieces looked black while the page said "White's turn".
+  - Map tiles (`img.leaflet-tile`) go dark with the page instead of a white map.
+  - `noticePage()` (switched-off apps: chat, live games, Reddit) had no dark mode.
+  - Dialog backdrops: a see-through black backdrop turned into a white fog. `darkBackdrops()`
+    in transform.js adds a dark-mode twin `rgba(255,255,255,a)` (same opacity) for every
+    `<style>` rule with `background: rgba(0,0,0,a)` whose selector names an
+    overlay/modal/backdrop or that is a full-page layer (fixed, or absolute 100% x 100%,
+    e.g. Bluesky's `#login-view`), and for inline full-page layers with an id (Calendar,
+    Settings, Substack). 57 pages. Skips pseudo-elements (checkers' move dots), shadows,
+    and white/grey/transparent backdrops (Pool). Tests: `test/dark-mode.test.js`.
+  Not bugs: icons.js entries `einksites` and `beeper` are commented out, and `discord`
+  opens a modal on the home screen, so `/einksites`, `/beeper`, `/discord` 404 by design.
+  Patrol gotcha: the test account's settings sync back on the home page and can switch
+  dark mode off again; switch it in Settings (saved to the account). The wallpaper looks
+  white/grey/black at 37% only because the checkerboard aliases.
 
 ## Download jobs and the browser service
 

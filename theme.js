@@ -72,13 +72,15 @@
                 '    min-height: 100%;\n' +
                 '    filter: invert(1) hue-rotate(180deg);\n' +
                 '}\n' +
+                // Pictures keep their real colours; canvases (game boards, drawing
+                // areas) go dark with the page, unless marked .no-invert; map tiles too.
                 ':root[data-theme="dark"] img, \n' +
                 ':root[data-theme="dark"] video, \n' +
-                ':root[data-theme="dark"] canvas,\n' +
                 ':root[data-theme="dark"] .no-invert {\n' +
                 '    filter: invert(1) hue-rotate(180deg);\n' +
                 '}\n' +
-                ':root[data-theme="dark"] img.keep-white {\n' +
+                ':root[data-theme="dark"] img.keep-white,\n' +
+                ':root[data-theme="dark"] img.leaflet-tile {\n' +
                 '    filter: none;\n' +
                 '}\n';
             document.head.appendChild(style);
