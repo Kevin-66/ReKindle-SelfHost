@@ -33,39 +33,24 @@ as possible so `git merge upstream/main` stays clean.
   (2026-10-06, "too troublesome... revert to the author's way") and all of that was
   removed. Both commits are the place to start if dark mode comes back.
 
-## E-ink preview (`selfhost/site/eink-preview.html`, served at `/eink-preview`)
+## E-ink refresh on the Kindle (measured 2026-10-06)
 
-A desktop tool for working on ReKindle (not linked from the Kindle UI): shows an app in a
-Kindle-sized iframe on the same server and reaches into it (same origin) to watch it; the
-app itself is not changed. Use: `http://127.0.0.1:8788/eink-preview?app=snake&look=grey`
-(`look` = `colorsoft` | `grey` | `off`, `redraws` = `on` | `off`, `size` = `WxH`).
-- Look: an SVG filter on the iframe. `grey` = 16 grey levels; `colorsoft` = brightness
-  from a sharp 16-level layer (`feBlend mode="luminosity"`) with colour at 45% saturation,
-  slightly blurred (the Colorsoft colour layer is 150 ppi, black and white 300 ppi); both
-  map white/black to paper/ink.
-- Redraws (approximate, built from what the Kindle has shown, see the notes above and the
-  root AGENTS.md): `requestAnimationFrame` in the app is held to ~300 ms frames; each
-  frame, anything grey that CHANGED means a full refresh (black-then-white flash over the
-  screen, logged with the cause): text or content changes (anti-aliased text is grey, the
-  stopwatch lesson), pictures, scrolling, typing, canvases where at least 1% of the canvas
-  (and 1000 pixels) changed to or from grey since the last frame (Snake: ~140-190 grey
-  pixels a frame on 300x300, no flash on the device), and page loads (white page first, no paint
-  holding). A change with no text or pictures, or a black-and-white canvas change, is a
-  quiet update. Text rewritten with the same words and attributes set to the value they
-  had are ignored (they change nothing on screen). CSS animations/transitions are logged
-  as ghosting warnings (Display Mode "LED").
-- Calibrated by the owner: Snake does NOT flash on the Kindle, though its canvas has grey
-  (anti-aliased) pixels; they don't change while it plays. The first rule (any grey pixel
-  on the canvas) was wrong for that reason.
-- "Check all apps" runs every app in icons.js `APPS` four at a time (2.5 s settling after
-  load, 4 s idle, 5 s after pressing a Start/Play/Easy/Classic button) and shows a table,
-  worst first; `window.rkEinkReport` has the rows. ~7 minutes for 117 apps; run it signed
-  in with the local test account, or most apps stop at a sign-in screen.
-- Screen size default (1860x2400) is an estimate: earlier Manga requests showed a
-  1860x2300 device-pixel reading area and pixel ratio 1. Opening `/eink-preview` on the
-  Kindle prints its real CSS size and pixel ratio at the bottom of the side panel.
-- Not simulated: the Kindle's slower JavaScript (JIT-less), Chromium 75 compatibility,
-  ghosting after many quiet updates, and top-first tile drawing on dense screens.
+Filmed on the owner's Kindle Scribe Colorsoft (Silk 80.4 = Chromium 80, 993x1216 CSS
+px, pixel ratio 2, light mode) with a page of 24 timed changes; the test tools are kept
+out of this repo. Dip = how much darker the changed area got than both before and after
+(0-255, from the video's brightness):
+- No whole-screen flash for anything: text of any size or colour, a seconds counter,
+  black-and-white shapes and canvas drawing (also at 10 Hz), a small anti-aliased dot
+  (Snake), scrolling a box or the page, dialogs and page reloads are quiet (dip < 2.5).
+- Only the changed area blinks, for: a picture swapped (17-18), a grey square appearing
+  (9), a large anti-aliased canvas drawing (9), a colour square appearing (3-5), a CSS
+  fade (8-9), half the screen turning black (15-17). A grey or colour area disappearing
+  doesn't blink, it lightens slowly.
+- Timing: the first animation frame comes a median 235 ms after a change (90% within
+  420 ms), the next ~470 ms later; the screen starts changing 230-430 ms after the
+  change and has settled by 1-1.5 s.
+- The whole-screen flashes seen before this were most likely dark mode's root
+  `filter: invert` (removed since).
 
 ## Download jobs and the browser service
 
@@ -181,18 +166,27 @@ switched off. The switch is injected into Settings > Accessibility ("Page Button
 their own (Hacker News had one; removed in favour of this). Disabled buttons must stay
 opaque (grey arrow), or the page shows through them.
 
+Two ideas for the buttons appearing were tried and rejected on 2026-10-06; keep the
+original: shown as soon as the page loads, re-checked on DOM changes, hidden where
+nothing scrolls. Rejected: waiting for the page to settle before showing them (no DOM
+changes for 700 ms, 0.8-2.5 s), and keeping them shown with grey arrows once they had
+appeared.
+
 Page Down on the Kindle (2026-10-05, owner's videos of a Substack article): a jump of
 almost a screen shows the top part at once and the rest 0.5-1 s later, because the
 Kindle's Chromium shows a screen before it has finished drawing it and draws only about
 half a screen ahead of the view. Dense Substack screens (pictures, Chinese text) make it
-visible; lighter apps draw fast enough. The owner asked to revert all attempts, so
-`page()` is the plain `scrollTop` jump. Tried that day and removed, none fixed it on
-the device: `overflow-y: hidden` during the jump (and restoring it 400 ms later caused a
-second, longer redraw), keeping the box non-scrollable until a swipe, `img.decode()` of
+visible; lighter apps draw fast enough. The owner asked to revert all attempts, and later
+(2026-10-06) asked for two moves done together: `page()` moves half the step, then the
+rest on the next animation frame (~235 ms on the Kindle); a tap before that is ignored.
+A 700 ms gap between the halves was rejected ("do the two moves together"). Not yet
+checked on the Kindle. Tried on 2026-10-05 and removed, none fixed it on the device:
+`overflow-y: hidden` during the jump (and restoring it 400 ms later caused a second,
+longer redraw), keeping the box non-scrollable until a swipe, `img.decode()` of
 the next screen's pictures before moving, a white cover (own composited layer) for
 700 ms, double buffering with a copy of the box behind it, and loading Substack
-images eagerly with `decoding="sync"`. The untried option with evidence behind it is
-half-screen steps (the half already drawn ahead appears at once).
+images eagerly with `decoding="sync"`. Half-screen steps (the half already drawn ahead
+appears at once) are what `page()` does now, see above.
 
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 

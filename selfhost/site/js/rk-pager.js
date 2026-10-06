@@ -37,6 +37,13 @@
     var scroller = null;
     var timer = null, lastRefresh = 0;
 
+    // A page turn is two half-screen moves, the second on the next frame (owner,
+    // 2026-10-06: "do the two moves together"). The Kindle draws about half a screen
+    // ahead of what it shows; a whole-screen jump showed its top first and the rest
+    // 0.5-1 s later. Both halves in the same instant would be that same jump.
+    var nextFrame = window.requestAnimationFrame ? function (fn) { window.requestAnimationFrame(fn); } : function (fn) { setTimeout(fn, 16); };
+    var moving = false;
+
     var ARROW_UP = '<svg viewBox="0 0 20 16" width="20" height="16"><polygon points="10,1 19,15 1,15" fill="currentColor"/></svg>';
     var ARROW_DOWN = '<svg viewBox="0 0 20 16" width="20" height="16"><polygon points="1,1 19,1 10,15" fill="currentColor"/></svg>';
 
@@ -141,15 +148,25 @@
     }
 
     function page(dir) {
+        if (moving) return;   // the second half of the last turn is still to come
         if (!scroller || !document.body.contains(scroller)) refresh();
         if (!scroller) return;
         var s = target();
         var h = s.clientHeight;
         // Overlap covers the buttons' corner, so nothing stays hidden under them.
         var step = Math.max(60, h - Math.max(BTN + MARGIN * 2, Math.round(h * 0.08)));
-        s.scrollTop = Math.max(0, s.scrollTop + dir * step);
-        place();
-        updateButtons();
+        var first = Math.round(step / 2);
+        var move = function (by) {
+            s.scrollTop = Math.max(0, s.scrollTop + dir * by);
+            place();
+        };
+        move(first);
+        moving = true;
+        nextFrame(function () {
+            moving = false;
+            move(step - first);
+            updateButtons();
+        });
     }
 
     function refresh() {
