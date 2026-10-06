@@ -27,9 +27,10 @@ pages and the next chapter. When you are signed in, your Manga library and readi
 progress are kept with your account on the server, so they survive the Kindle clearing
 its browser data and follow you to other devices. Pages are shown exactly as the
 sources serve them, but are not kept in the browser cache: the Kindle erases the
-browser's data (sign-in, Manga library) when it grows past 64 MB. The **PDF** button
-next to the chapter name downloads the chapter as one PDF, which the Kindle opens in
-its own reader (JPEG and plain PNG pages unchanged; other formats as high-quality JPEG).
+browser's data (sign-in, Manga library) when it grows past 64 MB. The **MOBI** button
+next to the chapter name downloads the chapter as a MOBI book for the Kindle's own
+reader (made by Calibre in the Chromium service; JPEG and PNG pages unchanged, WebP as
+high-quality JPEG). It takes a little while; the status line says when it's ready.
 
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.
@@ -74,10 +75,10 @@ search, result pages, book metadata and up to 200 local saved bookmarks. To down
 paste your Z-Library sign-in cookie under **Account** (copied from a desktop browser
 where you are signed in, like the Substack app's cookie). It is kept with your ReKindle
 account; **Download** then has the Chromium service fetch the book with it. The
-Kindle opens MOBI, PDF, TXT and more but not EPUB, so EPUB books become MOBI: a MOBI
-file of the same book if Z-Library has one, otherwise Z-Library's own "Convert to
-MOBI", and if that fails Calibre (`ebook-convert`, in the Chromium service's image).
-Other formats download as they are. This runs in the background while the page shows the step;
+Kindle browser downloads only MOBI, AZW, PRC and TXT, so books in other formats (EPUB,
+PDF, FB2, ...; AZW3 is kept as it is) become MOBI: a MOBI file of the same book if
+Z-Library has one, otherwise Z-Library's own "Convert to MOBI", and if that fails
+Calibre (`ebook-convert`, in the Chromium service's image). This runs in the background while the page shows the step;
 when the file is ready the Kindle asks where to save it. Reading and sign-in still open on `https://z-lib.sk/`. Saved books are local to
 the browser and are not downloaded files or synced account data. Public catalogue
 requests are cached for five minutes. If Z-Library blocks the server or requires

@@ -96,9 +96,9 @@
             'font-size:0.75rem;font-weight:bold;padding:3px 8px;max-width:180px;overflow:hidden;white-space:nowrap;' +
             'text-overflow:ellipsis;cursor:pointer;vertical-align:middle;}' +
             '#rk-ch-btn.open{background:#000;color:#fff;}' +
-            '#rk-pdf-btn{border:2px solid #000;background:#fff;color:#000;box-shadow:1px 1px 0 #000;font-family:inherit;' +
+            '#rk-mobi-btn{border:2px solid #000;background:#fff;color:#000;box-shadow:1px 1px 0 #000;font-family:inherit;' +
             'font-size:0.75rem;font-weight:bold;padding:3px 6px;margin-left:6px;cursor:pointer;vertical-align:middle;}' +
-            '#rk-pdf-btn[disabled]{color:#999;border-color:#999;box-shadow:none;cursor:default;}' +
+            '#rk-mobi-btn[disabled]{color:#999;border-color:#999;box-shadow:none;cursor:default;}' +
             '#rk-ch-panel{position:absolute;top:0;left:0;right:0;bottom:0;z-index:50;background:#fff;display:flex;flex-direction:column;}' +
             '#rk-ch-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:2px solid #000;flex-shrink:0;font-weight:bold;}' +
             '#rk-ch-close{min-width:48px;min-height:40px;border:2px solid #000;background:#fff;box-shadow:2px 2px 0 #000;font-family:inherit;font-weight:bold;cursor:pointer;}' +
@@ -387,11 +387,11 @@
             };
             wrap.appendChild(btn);
         }
-        if (!document.getElementById('rk-pdf-btn')) {
-            var pdf = el('button', { id: 'rk-pdf-btn', type: 'button', title: 'Download this chapter as a PDF' });
-            pdf.textContent = 'PDF';
-            pdf.onclick = function (e) { e.stopPropagation(); downloadPdf(); };
-            wrap.appendChild(pdf);
+        if (!document.getElementById('rk-mobi-btn')) {
+            var mobi = el('button', { id: 'rk-mobi-btn', type: 'button', title: 'Download this chapter as a MOBI book' });
+            mobi.textContent = 'MOBI';
+            mobi.onclick = function (e) { e.stopPropagation(); downloadMobi(); };
+            wrap.appendChild(mobi);
         }
         var opts = chapterOptions();
         var cur = null;
@@ -399,37 +399,56 @@
         btn.textContent = cur ? shortName(cur.text) : 'Chapters';
     }
 
-    // The current chapter as one PDF (the Kindle opens PDFs). The server fetches the
-    // pages through its page cache and streams the PDF (selfhost/server/src/manga-pdf.js);
-    // opening the link makes the browser download it.
-    function downloadPdf() {
-        var btn = document.getElementById('rk-pdf-btn');
+    // The current chapter as one MOBI book: the Kindle browser downloads only MOBI, AZW,
+    // PRC and TXT. The server packs the pages into a comic archive and has Calibre make
+    // the MOBI (selfhost/server/src/manga-mobi.js); that takes a while, so this checks
+    // on the job every few seconds and opens the file when it is ready. The status line
+    // only changes when the step does (changing text redraws the whole e-ink screen).
+    var mobiBusy = false;
+
+    function downloadMobi() {
+        if (mobiBusy) return;
         if (!currentReading || !currentReading.pages || !currentReading.pages.length) {
             showStatus('Open a chapter first.');
             return;
         }
+        var btn = document.getElementById('rk-mobi-btn');
         var opts = chapterOptions(), chapter = '';
         for (var i = 0; i < opts.length; i++) if (opts[i].idx === currentChapterIndex) chapter = shortName(opts[i].text);
         var title = (currentReading.title || 'Manga') + (chapter ? ' - ' + chapter : '');
+        var done = function (message) {
+            mobiBusy = false;
+            if (btn) btn.disabled = false;
+            if (message) showStatus(message);
+        };
+        var json = function (r) {
+            return r.json().then(function (d) {
+                if (!r.ok || d.error) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+                return d;
+            });
+        };
+        var shown = '';
+        var say = function (text) { if (text !== shown) { shown = text; showStatus(text); } };
+        var follow = function (id) {
+            fetch('/__rk/manga/mobi/' + encodeURIComponent(id)).then(json).then(function (j) {
+                if (j.status === 'ready') {
+                    done('Downloading ' + j.name + (j.missing ? ' (' + j.missing + ' pages could not be fetched)' : ''));
+                    window.location.href = j.href;
+                    return;
+                }
+                if (j.status === 'failed') return done(j.message);
+                say(j.step === 'convert' ? 'Making the MOBI...' : 'Getting the pages for the MOBI...');
+                setTimeout(function () { follow(id); }, 3000);
+            }, function (e) { done('MOBI failed: ' + e.message); });
+        };
+        mobiBusy = true;
         if (btn) btn.disabled = true;
-        showStatus('Making the PDF...');
-        fetch('/__rk/manga/pdf', {
+        say('Getting the pages for the MOBI...');
+        fetch('/__rk/manga/mobi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: title, pages: currentReading.pages })
-        }).then(function (r) {
-            return r.json().then(function (d) {
-                if (!r.ok || !d.href) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
-                return d;
-            });
-        }).then(function (d) {
-            if (btn) btn.disabled = false;
-            showStatus('Downloading ' + title + '.pdf');
-            window.location.href = d.href;
-        }, function (e) {
-            if (btn) btn.disabled = false;
-            showStatus('PDF failed: ' + e.message);
-        });
+        }).then(json).then(function (d) { follow(d.id); }, function (e) { done('MOBI failed: ' + e.message); });
     }
 
     function closeChapterPicker() {
