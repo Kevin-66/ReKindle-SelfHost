@@ -74,18 +74,17 @@ async function fetchPage(src) {
 // The Kindle Scribe's screen (Calibre's kindle_scribe profile, used for comics).
 export const SCREEN = { width: 1860, height: 2480 };
 
-// The picture to put in the comic: { ext, data }. Pages are sized to fill the screen:
-// the Kindle shows a book's pictures at their own size and doesn't enlarge them, so an
-// 850x1200 page sat small in a corner of the Scribe (owner: "not zoomed in properly").
+// The picture to put in the comic: { ext: 'jpg', data }. Pages are sized for the screen
+// (the Kindle doesn't enlarge a book's pictures; the converter also makes them full
+// width), and always JPEG: Calibre stores PNG pages in Kindle books as 256-colour GIFs.
 // Sharp's Lanczos resize to fit 1860x2480 (aspect kept), JPEG quality 92 with full
-// colour detail; a JPEG or PNG page that already fits the screen goes in unchanged.
+// colour detail; a JPEG page that already fits the screen goes in unchanged.
 export async function comicImage(img) {
     const b = img.body;
     const isJpeg = b[0] === 0xff && b[1] === 0xd8;
-    const isPng = b.length > 8 && b.readUInt32BE(0) === 0x89504e47;
     const meta = await sharp(b, { failOn: 'none', pages: 1, limitInputPixels: 2e8 }).metadata();
     const scale = meta.width && meta.height ? Math.min(SCREEN.width / meta.width, SCREEN.height / meta.height) : 1;
-    if ((isJpeg || isPng) && Math.abs(scale - 1) < 0.02) return { ext: isJpeg ? 'jpg' : 'png', data: b };
+    if (isJpeg && Math.abs(scale - 1) < 0.02) return { ext: 'jpg', data: b };
     const data = await sharp(b, { failOn: 'none', pages: 1, limitInputPixels: 2e8 })
         .rotate()
         .flatten({ background: '#ffffff' })

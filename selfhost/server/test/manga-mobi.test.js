@@ -19,11 +19,13 @@ test('pages are sized to fill the Kindle screen, aspect kept', async () => {
     assert.equal(wide.width, SCREEN.width);
 });
 
-test('a JPEG or PNG page that already fits the screen goes in unchanged', async () => {
-    const jpg = await picture(SCREEN.width, SCREEN.height).jpeg().toBuffer();
+test('a JPEG page that already fits goes in unchanged; PNG always becomes JPEG', async () => {
+    const jpg = await picture(1240, SCREEN.height).jpeg().toBuffer();   // height fits exactly
     assert.deepEqual(await comicImage({ body: jpg }), { ext: 'jpg', data: jpg });
-    const png = await picture(1240, SCREEN.height).png().toBuffer();   // height fits exactly
-    assert.deepEqual(await comicImage({ body: png }), { ext: 'png', data: png });
+    const png = await comicImage({ body: await picture(1240, SCREEN.height).png().toBuffer() });
+    assert.equal(png.ext, 'jpg');
+    assert.equal(png.data[0], 0xff);
+    assert.equal((await sharp(png.data).metadata()).height, SCREEN.height);
 });
 
 test('crc32 matches the standard value', () => {
