@@ -82,7 +82,7 @@
             if (el === bar || /^(TEXTAREA|SELECT|INPUT|IFRAME|CANVAS)$/.test(el.tagName)) continue;
             if (!el.offsetParent) continue; // hidden, or fixed (modals)
             var oy = window.getComputedStyle(el).overflowY;
-            if (oy !== 'auto' && oy !== 'scroll') continue;
+            if (oy !== 'auto' && oy !== 'scroll' && !(held && held.el === el)) continue;
             var area = el.clientWidth * el.clientHeight;
             if (area > bestArea) { best = el; bestArea = area; }
         }
@@ -141,31 +141,37 @@
     }
 
     // E-ink: on a high-density screen Chromium scrolls a scrolling box as its own
-    // composited layer and draws only about half a screen ahead, so a jump of almost a
-    // screen showed the part drawn ahead at once and the rest (the lower half) a moment
-    // later, white until then: a second refresh. With overflow-y: hidden the box is not
-    // composited, so the jump is a normal repaint that appears only when the whole view
-    // is ready. Scrolling by touch is given back once that frame is out. A classic
-    // scrollbar's width is kept as padding meanwhile, so the text doesn't reflow.
-    var restore = null, restoreTimer = null;
+    // composited layer and draws only part of the screen ahead, so a jump of almost a
+    // screen showed the top at once and the rest a moment later, white until then: a
+    // second refresh. With overflow-y: hidden the box is not composited, so a jump is a
+    // normal repaint. The box stays that way after a jump: turning scrolling back on
+    // re-creates the layer and redraws the whole box, which on the Kindle left the lower
+    // part white for another second or so (seen in the owner's video when it was given
+    // back 400 ms after each jump). It is given back only when the reader actually
+    // swipes or uses the mouse wheel in it. A classic scrollbar's width is kept as
+    // padding meanwhile, so the text doesn't reflow.
+    var held = null;   // { el, overflow, padding } of the box held non-scrollable
 
-    function jump(s, top) {
-        if (restore) { clearTimeout(restoreTimer); restore(); }
-        if (isDocScroller(scroller)) { s.scrollTop = top; return; }
+    function hold(s) {
+        if (held && held.el === s) return;
+        release();
         var cs = window.getComputedStyle(s);
         var gutter = s.offsetWidth - s.clientWidth - (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0);
-        var oldOverflow = s.style.overflowY, oldPadding = s.style.paddingRight;
+        held = { el: s, overflow: s.style.overflowY, padding: s.style.paddingRight };
         s.style.overflowY = 'hidden';
         if (gutter > 0) s.style.paddingRight = ((parseFloat(cs.paddingRight) || 0) + gutter) + 'px';
+    }
+
+    function release() {
+        if (!held) return;
+        held.el.style.overflowY = held.overflow;
+        held.el.style.paddingRight = held.padding;
+        held = null;
+    }
+
+    function jump(s, top) {
+        if (!isDocScroller(scroller)) hold(s);
         s.scrollTop = top;
-        restore = function () {
-            restore = null;
-            s.style.overflowY = oldOverflow;
-            s.style.paddingRight = oldPadding;
-        };
-        requestAnimationFrame(function () {
-            restoreTimer = setTimeout(function () { if (restore) restore(); }, 400);
-        });
     }
 
     function page(dir) {
@@ -184,11 +190,13 @@
         lastRefresh = Date.now();
         if (!bar) return;
         if (!enabled()) {
+            release();
             scroller = null;
             bar.style.display = 'none';
             return;
         }
         scroller = findScroller();
+        if (held && held.el !== scroller) release();
         if (!scroller) {
             bar.style.display = 'none';
             return;
@@ -223,6 +231,10 @@
             if (e.target === target() || (isDocScroller(scroller) && e.target === document)) updateButtons();
         }, true);
         document.addEventListener('click', scheduleRefresh, true);
+        // A swipe or wheel in the held box gives its scrolling back (see hold()).
+        var giveBack = function (e) { if (held && held.el.contains(e.target)) release(); };
+        document.addEventListener('touchmove', giveBack, true);
+        document.addEventListener('wheel', giveBack, true);
         window.addEventListener('resize', scheduleRefresh);
         setTimeout(refresh, 800); // theme.js may zoom/rescale after first paint
     }

@@ -150,10 +150,16 @@ composited layer and draws only about half a screen ahead, so a jump of almost a
 showed the top half at once and the lower half a moment later (white until then, a
 second e-ink refresh). `jump()` sets `overflow-y: hidden` on the box for the jump (not
 composited, so the jump is an ordinary repaint shown only when complete; `scrollTop`
-still works), keeps a classic scrollbar's width as extra `padding-right` so nothing
-reflows, and restores both 400 ms after the next frame. Document-level scrolling is
-unchanged (the root scroller is always composited). This explanation is a hypothesis
-until confirmed on the device: desktop Chrome draws fast enough to never show it.
+still works) and keeps a classic scrollbar's width as extra `padding-right` so nothing
+reflows. The box STAYS non-scrollable after the jump: the first version restored it
+400 ms later, and the owner's video (frames every 0.25 s) showed that restore re-create
+the layer and redraw the whole box, leaving the lower part white for another ~1.25 s,
+a second flash after the jump's own (0.25-0.5 s) one. Scrolling is given back on a
+`touchmove` or `wheel` inside the box, or when the pager moves to another box
+(`release()`; `findScroller` still counts the held box). Document-level scrolling is
+unchanged (the root scroller is always composited). On this Kindle the compositor shows
+frames before every tile is drawn, so a slow-to-draw screen (images, CJK glyphs in STSong)
+can still appear top first; desktop Chrome draws too fast to ever show it.
 
 ## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
 
