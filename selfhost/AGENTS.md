@@ -338,7 +338,8 @@ than `rekindle_settings_last_sync`, or when that mark is missing (a new device, 
 Kindle that wiped its browser data). It skipped displayMode, opendyslexicFont, scale,
 scaleAuto, homeLayout and timezoneOffset, so those stayed at their defaults outside
 Settings. `transform.js` adds them (applying display mode, font and scale at once) plus
-this server's `rkTextSize` (`rk_text_size`) and `rkPageButtons` (`rk_page_buttons`),
+this server's `rkTextSize` (`rk_text_size`), `rkPageButtons` (`rk_page_buttons`) and
+`rkMangaBlank` (`rk_manga_blank`),
 which `rk-textsize.js` and `rk-pager.js` now save to the account with the same signal
 (`saveToAccount`). New per-user settings should follow this pattern.
 
@@ -550,3 +551,23 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   (`href` = `/__rk/manga/mobi/<id>/file`, 30 min, the random id is the permission). The
   page polls every 3 s and only changes its status text when the step changes. Checked
   on the live service: a 3-page test CBZ became a valid MOBI in 2 s.
+  Pages are sized to fill the Kindle Scribe screen (1860x2480, `SCREEN`; Calibre's
+  `kindle_scribe` profile for comics): the Kindle shows a book's pictures at their own
+  size and never enlarges them, so 850x1200 originals sat small on the screen (owner:
+  "not zoomed in properly"). `comicImage` resizes with sharp (Lanczos, fit inside, aspect
+  kept, JPEG q92 4:4:4); a JPEG/PNG page already within 2% of fitting stays unchanged.
+- Titles inside converted MOBIs: the converter saved uploads as `book.<ext>`, and the
+  Kindle library showed every Manga chapter (and PDFs etc.) as "book" by "Unknown"
+  (checked with `ebook-meta`). service.mjs now saves the upload under its own name
+  (minus " (Z-Library)") and passes `--title` (comics: the chapter name) and, for formats
+  without built-in details (`NAME_METADATA`: PDF, DJVU, RTF, ...), `--title`/`--authors`
+  from Z-Library's "Title (Author)" file name. EPUB/FB2/DOCX keep their own. Download
+  file names drop the " (Z-Library)" tag too (`fileName` in zlibrary-account.js).
+- White page between pages, optional (owner's request 2026-10-06, "put it in the
+  setting"): Settings > Accessibility > "Manga: White Page Between Pages" (added by
+  rk-pager.js next to Page Buttons) sets localStorage `rk_manga_blank` ('0' = off) and
+  saves `rkMangaBlank` to the account settings document; the home screen copies it back
+  (`syncGeneralSettings` edit in transform.js). Off, `updateMangaPage` swaps straight to
+  the new page in one redraw (the old page stays until the new one has loaded). A
+  version with a Blank button in the reader bar and a Manga-state option was dropped
+  before deploying.

@@ -29,8 +29,10 @@ its browser data and follow you to other devices. Pages are shown exactly as the
 sources serve them, but are not kept in the browser cache: the Kindle erases the
 browser's data (sign-in, Manga library) when it grows past 64 MB. The **MOBI** button
 next to the chapter name downloads the chapter as a MOBI book for the Kindle's own
-reader (made by Calibre in the Chromium service; JPEG and PNG pages unchanged, WebP as
-high-quality JPEG). It takes a little while; the status line says when it's ready.
+reader (made by Calibre in the Chromium service, pages sized to fill a Kindle Scribe's
+screen). It takes a little while; the status line says when it's ready. Settings >
+Accessibility > **Manga: White Page Between Pages** turns the blank screen between pages
+off, to go straight from page to page (kept with your account).
 
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.

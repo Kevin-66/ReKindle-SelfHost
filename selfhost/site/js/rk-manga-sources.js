@@ -723,12 +723,6 @@
                 return seq === showSeq && currentReading === reading && isReaderOpen;
             };
 
-            // As manga.html does it: the reader goes blank at once, the status line
-            // says "Loading", and the page appears when it has loaded.
-            content.innerHTML = '';
-            content.scrollTop = 0;
-            showStatus('Loading ' + label + '...');
-
             var shown = function () {
                 if (!current()) return;
                 showStatus(label);
@@ -752,6 +746,32 @@
                 preloadAhead();
             };
             img.className = 'reader-page';
+            if (!blankTurns()) {
+                // Blank turned off (Settings > Manga: White Page Between Pages): straight
+                // from page to page in one
+                // redraw; the old page stays up until the new one has loaded.
+                var swap = function () {
+                    if (!current()) return;
+                    content.innerHTML = '';
+                    content.scrollTop = 0;
+                    content.appendChild(img);
+                    shown();
+                };
+                if (img.src && img.complete && img.naturalWidth) swap();
+                else {
+                    showStatus('Loading ' + label + '...');
+                    img.onload = swap;
+                    img.onerror = failed;
+                    if (!img.src) img.src = src;
+                }
+                saveProgressFor(reading, chapterIndex, page);
+                return;
+            }
+            // As manga.html does it: the reader goes blank at once, the status line
+            // says "Loading", and the page appears when it has loaded.
+            content.innerHTML = '';
+            content.scrollTop = 0;
+            showStatus('Loading ' + label + '...');
             // A preloaded page is ready at once, so it goes in right after the frame that
             // shows the blank (a task queued from requestAnimationFrame runs once that
             // frame is painted), as the blank appeared when manga.html loaded pages from
@@ -771,14 +791,23 @@
                 }, 0);
             });
 
-            // Progress, saved as manga.html saves it.
-            var chapterNum = '';
-            if (currentChapterList && currentChapterList[chapterIndex]) {
-                chapterNum = currentChapterList[chapterIndex].attributes.chapter || '';
-            }
-            saveProgress(reading.id, chapterIndex, page, chapterNum);
+            saveProgressFor(reading, chapterIndex, page);
         };
     }
+
+    // Progress, saved as manga.html saves it.
+    function saveProgressFor(reading, chapterIndex, page) {
+        var chapterNum = '';
+        if (currentChapterList && currentChapterList[chapterIndex]) {
+            chapterNum = currentChapterList[chapterIndex].attributes.chapter || '';
+        }
+        saveProgress(reading.id, chapterIndex, page, chapterNum);
+    }
+
+    // The white page between pages, on by default. Switched in Settings > Accessibility
+    // ("Manga: White Page Between Pages", rk-pager.js), which keeps it in localStorage
+    // rk_manga_blank ('0' = off) and with the account (settings rkMangaBlank).
+    function blankTurns() { return lsGet('rk_manga_blank') !== '0'; }
 
     // ------------------------------------------------------------ library in the database
     //

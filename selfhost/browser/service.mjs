@@ -36,9 +36,22 @@ function authorized(req) {
 // are converted. PDF and DJVU convert only as well as their text allows.
 const CONVERTIBLE = new Set(['epub', 'azw4', 'kfx', 'fb2', 'fbz', 'pdf', 'djvu', 'docx', 'odt', 'rtf', 'html', 'htm', 'htmlz',
     'lit', 'pdb', 'pml', 'rb', 'snb', 'tcr', 'chm', 'lrf', 'txtz', 'cbz', 'cbr', 'cb7', 'cbc']);
-// Comics: pictures go in as they are (no greyscale, resizing or sharpening; the owner
-// reads colour manga on a Kindle Colorsoft), kept in their own format in the KF8 part.
-const COMIC_ARGS = ['--no-process', '--mobi-keep-original-images'];
+// Comics: no greyscale, resizing or sharpening (the owner reads colour manga on a Kindle
+// Scribe Colorsoft); the ReKindle server already sized the pages to the Scribe's screen
+// (manga-mobi.js), and the kindle_scribe profile matches that screen.
+const COMIC_ARGS = ['--no-process', '--mobi-keep-original-images', '--output-profile', 'kindle_scribe'];
+// Formats that usually carry no title or author: those come from the file name, which
+// for Z-Library is "Title (Author) (Z-Library).ext". (Without this the Kindle library
+// showed such books, and every Manga chapter, as "book" by "Unknown": the upload is
+// saved under a temporary name.) EPUB, FB2, DOCX, ... keep their own details.
+const NAME_METADATA = new Set(['pdf', 'djvu', 'rtf', 'html', 'htm', 'txtz', 'chm', 'cbr', 'cb7', 'cbc', 'lrf', 'pdb', 'pml', 'rb', 'snb', 'tcr']);
+
+function metadataArgs(base, ext) {
+    if (ext === 'cbz') return ['--title', base];   // Manga chapters: "Manga title - Ch 12"
+    if (!NAME_METADATA.has(ext)) return [];
+    const m = /^(.*\S)\s*\(([^()]+)\)$/.exec(base);
+    return m ? ['--title', m[1], '--authors', m[2]] : ['--title', base];
+}
 const MAX_CONVERT_BYTES = 300 * 1024 * 1024;
 const CONVERT_MS = 300000;
 let converting = Promise.resolve();
@@ -50,8 +63,10 @@ function convertError(res, status, message) {
 // One conversion at a time (it is CPU-heavy). MOBI "both" holds the old MOBI and the
 // newer KF8 version, so any Kindle shows it, newer ones with full formatting.
 function ebookConvert(input, output, extra) {
+    const args = [input, output, '--mobi-file-type', 'both'].concat(extra || []);
+    if (args.indexOf('--output-profile') < 0) args.push('--output-profile', 'kindle_pw3');
     return new Promise((resolve, reject) => {
-        execFile('ebook-convert', [input, output, '--output-profile', 'kindle_pw3', '--mobi-file-type', 'both'].concat(extra || []), {
+        execFile('ebook-convert', args, {
             timeout: CONVERT_MS, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, QT_QPA_PLATFORM: 'offscreen' }
         }, (error) => (error ? reject(error) : resolve()));
     });
@@ -65,7 +80,9 @@ async function convert(req, res) {
     if (!CONVERTIBLE.has(ext)) { req.resume(); return convertError(res, 415, `A .${ext || '?'} file can't be converted to MOBI.`); }
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'convert-'));
     const cleanup = () => fs.rmSync(dir, { recursive: true, force: true });
-    const input = path.join(dir, 'book.' + ext), output = path.join(dir, 'book.mobi');
+    // The book's own name (without Z-Library's tag), so Calibre has it as a fallback title.
+    const base = name.replace(/\.[^.]*$/, '').replace(/\s*\(Z-Library\)\s*$/i, '').replace(/[\x00-\x1f]/g, '').trim().slice(0, 150) || 'book';
+    const input = path.join(dir, base + '.' + ext), output = path.join(dir, 'book.mobi');
     try {
         let size = 0;
         const out = fs.createWriteStream(input);
@@ -75,10 +92,10 @@ async function convert(req, res) {
             if (!out.write(chunk)) await new Promise((r) => out.once('drain', r));
         }
         await new Promise((resolve, reject) => out.end((e) => (e ? reject(e) : resolve())));
-        const task = converting.then(() => ebookConvert(input, output, ext === 'cbz' ? COMIC_ARGS : []));
+        const task = converting.then(() => ebookConvert(input, output, (ext === 'cbz' ? COMIC_ARGS : []).concat(metadataArgs(base, ext))));
         converting = task.catch(() => {});
         await task;
-        const mobi = name.replace(/\.[^.]*$/, '') + '.mobi';
+        const mobi = base + '.mobi';
         res.writeHead(200, { 'Content-Type': 'application/x-mobipocket-ebook', 'Content-Length': fs.statSync(output).size, 'X-File-Name': encodeURIComponent(mobi), 'Cache-Control': 'no-store' });
         fs.createReadStream(output).on('close', cleanup).pipe(res);
     } catch (error) {

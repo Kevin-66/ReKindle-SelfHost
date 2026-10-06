@@ -8,9 +8,8 @@
 // {title, pages} -> {id}; GET /__rk/manga/mobi/<id> -> working (step "pages" or
 // "convert") | failed (message) | ready (href); the href, /__rk/manga/mobi/<id>/file,
 // downloads the file (kept 30 minutes; the random id is the permission). Pages come
-// through the same server cache as the reader's own pages (images.js serveImage).
-// Pictures stay the originals (owner's rule): JPEG and PNG pages go in unchanged; WebP
-// and GIF pages (Manhuagui) become JPEG quality 90, since Kindle books can't show WebP.
+// through the same server cache as the reader's own pages (images.js serveImage), and
+// are sized to fill the Kindle Scribe's screen (see comicImage).
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -72,15 +71,26 @@ async function fetchPage(src) {
     return { body: Buffer.from(await response.arrayBuffer()), type: response.headers.get('content-type') || '' };
 }
 
-// The picture to put in the comic: { ext, data }.
+// The Kindle Scribe's screen (Calibre's kindle_scribe profile, used for comics).
+export const SCREEN = { width: 1860, height: 2480 };
+
+// The picture to put in the comic: { ext, data }. Pages are sized to fill the screen:
+// the Kindle shows a book's pictures at their own size and doesn't enlarge them, so an
+// 850x1200 page sat small in a corner of the Scribe (owner: "not zoomed in properly").
+// Sharp's Lanczos resize to fit 1860x2480 (aspect kept), JPEG quality 92 with full
+// colour detail; a JPEG or PNG page that already fits the screen goes in unchanged.
 export async function comicImage(img) {
     const b = img.body;
-    if (b[0] === 0xff && b[1] === 0xd8) return { ext: 'jpg', data: b };
-    if (b.length > 8 && b.readUInt32BE(0) === 0x89504e47) return { ext: 'png', data: b };
+    const isJpeg = b[0] === 0xff && b[1] === 0xd8;
+    const isPng = b.length > 8 && b.readUInt32BE(0) === 0x89504e47;
+    const meta = await sharp(b, { failOn: 'none', pages: 1, limitInputPixels: 2e8 }).metadata();
+    const scale = meta.width && meta.height ? Math.min(SCREEN.width / meta.width, SCREEN.height / meta.height) : 1;
+    if ((isJpeg || isPng) && Math.abs(scale - 1) < 0.02) return { ext: isJpeg ? 'jpg' : 'png', data: b };
     const data = await sharp(b, { failOn: 'none', pages: 1, limitInputPixels: 2e8 })
         .rotate()
         .flatten({ background: '#ffffff' })
-        .jpeg({ quality: 90, chromaSubsampling: '4:4:4' })
+        .resize({ width: SCREEN.width, height: SCREEN.height, fit: 'inside', withoutEnlargement: false, kernel: 'lanczos3' })
+        .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
         .toBuffer();
     return { ext: 'jpg', data };
 }
