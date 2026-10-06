@@ -47,7 +47,9 @@ export const config = {
     // Your own Google OAuth client for Google Tasks / Calendar / Contacts sync.
     googleClientId: (env.GOOGLE_CLIENT_ID || '').trim(),
 
-    logRequests: bool(env.LOG_REQUESTS, false)
+    // Request log: on when run locally, off on the deployed server (owner's rule: logging
+    // only locally; the Docker image sets NODE_ENV=production). LOG_REQUESTS overrides.
+    logRequests: bool(env.LOG_REQUESTS, env.NODE_ENV !== 'production')
 };
 
 // The Firebase project ID baked into the ReKindle pages. Chat and online

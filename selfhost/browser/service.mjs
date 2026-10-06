@@ -83,7 +83,7 @@ async function convert(req, res) {
         fs.createReadStream(output).on('close', cleanup).pipe(res);
     } catch (error) {
         cleanup();
-        console.warn('MOBI conversion failed:', error && (error.killed ? 'timed out' : error.code || 'error'));
+        if (process.env.NODE_ENV !== 'production') console.warn('MOBI conversion failed:', error && (error.killed ? 'timed out' : error.code || 'error'));   // logged locally only
         convertError(res, 502, error && error.killed ? 'Converting to MOBI took too long.' : 'This book could not be converted to MOBI.');
     }
 }

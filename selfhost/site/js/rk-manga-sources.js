@@ -752,10 +752,13 @@
                 preloadAhead();
             };
             img.className = 'reader-page';
-            // A preloaded page is ready at once; two frames let the blank reach the
-            // screen first, as it did when manga.html loaded pages from the cache.
+            // A preloaded page is ready at once, so it goes in right after the frame that
+            // shows the blank (a task queued from requestAnimationFrame runs once that
+            // frame is painted), as the blank appeared when manga.html loaded pages from
+            // the cache. Waiting two frames instead cost ~0.4 s per turn on the Kindle
+            // (frames take ~300 ms there); the blank still shows every time.
             nextFrame(function () {
-                nextFrame(function () {
+                setTimeout(function () {
                     if (!current()) return;
                     content.appendChild(img);
                     if (img.src && img.complete) {
@@ -765,7 +768,7 @@
                     img.onload = shown;
                     img.onerror = failed;
                     if (!img.src) img.src = src;
-                });
+                }, 0);
             });
 
             // Progress, saved as manga.html saves it.
