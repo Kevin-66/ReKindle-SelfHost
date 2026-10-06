@@ -11,6 +11,7 @@ import { invokeCallable, errorStatus } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
 import * as mangaState from './manga-state.js';
+import * as mangaPdf from './manga-pdf.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
 import { listBooks } from './zlibrary.js';
 import * as zlibAccount from './zlibrary-account.js';
@@ -265,6 +266,15 @@ async function handleManga(req, res, url, parts) {
         });
         Readable.fromWeb(r.body).on('error', () => res.destroy()).pipe(res);
         return;
+    }
+    if (parts[2] === 'pdf') {
+        // A chapter as one PDF (manga-pdf.js): POST {title, pages} -> {href}; GET <href> streams it.
+        if (req.method === 'POST' && !parts[3]) {
+            rateLimit(req, 'manga-pdf', 10, 60000);
+            return send(res, 200, mangaPdf.createPdf(await readJson(req)));
+        }
+        if (req.method === 'GET' && parts[3]) return await mangaPdf.sendPdf(res, parts[3]);
+        return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST /pdf or GET /pdf/<id>' } });
     }
     if (parts[2] === 'state') {
         // The signed-in reader's library and progress (manga-state.js).
