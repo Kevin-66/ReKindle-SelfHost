@@ -22,7 +22,9 @@
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    padding: 24px 28px 60px;
+    /* Side margins: Settings > Accessibility, "Substack: Side Margins" (px per side,
+       set by transform.js before the page draws; 28 px when not chosen). */
+    padding: 24px var(--rk-substack-margin, 28px) 60px;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }

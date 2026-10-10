@@ -189,6 +189,7 @@ export function transformHtml(html, fileName) {
             "                    if (data.rkTextSize) localStorage.setItem('rk_text_size', data.rkTextSize);\n" +
             "                    if (data.rkPageButtons) localStorage.setItem('rk_page_buttons', data.rkPageButtons);\n" +
             "                    if (data.rkMangaBlank) localStorage.setItem('rk_manga_blank', data.rkMangaBlank);\n" +
+            "                    if (data.rkSubstackMargin) localStorage.setItem('rk_substack_margin', data.rkSubstackMargin);\n" +
             "                    if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());");
     }
     if (base === 'notes.html') {
@@ -204,7 +205,12 @@ export function transformHtml(html, fileName) {
     if (base === 'substack.html') {
         // Font and formatting of the article view (selfhost/site/css/rk-substack.css).
         // CSS is cached for a day (static.js): bump ?v= whenever that file changes.
-        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css?v=4">\n</head>');
+        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css?v=5">\n</head>');
+        // Side margins of the article (Settings > Accessibility, "Substack: Side Margins",
+        // rk-textsize.js): px per side in localStorage rk_substack_margin, set as
+        // --rk-substack-margin before the page draws; rk-substack.css uses it.
+        html = html.replace(/<\/head>/i, '<script>try{var rkM=localStorage.getItem("rk_substack_margin");' +
+            'if(/^\\d+$/.test(rkM||""))document.documentElement.style.setProperty("--rk-substack-margin",rkM+"px")}catch(e){}</script>\n</head>');
         // Substack's subscriptions API changed (2026-10), which left the app's feed empty:
         // - a signed-in request without ?tvOnly= is rejected (HTTP 400 "Invalid value");
         // - publications the reader follows come back in `publications` while

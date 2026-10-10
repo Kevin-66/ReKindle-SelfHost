@@ -5,12 +5,16 @@
 // apps' own text sizes. Only font sizes change: no CSS zoom, which the Kindle
 // browser mishandles (taps land in the wrong place, page buttons break).
 // Saved in localStorage rk_text_size; every page applies it in <head> (transform.js).
+// Also "Substack: Side Margins" (左右缩进) below it: px per side of the Substack article
+// (localStorage rk_substack_margin; transform.js sets --rk-substack-margin on that page).
 // Plain ES5 for the Kindle browser.
 (function () {
     'use strict';
 
     var KEY = 'rk_text_size';
     var SIZES = [['Small', '0.9'], ['Normal', '1'], ['Large', '1.2'], ['Larger', '1.45'], ['Largest', '1.75']];
+    var MARGIN_KEY = 'rk_substack_margin';
+    var MARGINS = [['None', '12'], ['Small', '28'], ['Medium', '64'], ['Large', '110'], ['X-Large', '160']];
 
     function current() {
         var v = null;
@@ -58,7 +62,10 @@
             'font-family:inherit;font-weight:bold;cursor:pointer;padding:4px 2px;line-height:1.1;}' +
             '.rk-text-opt.active{background:#000;color:#fff;box-shadow:none;}' +
             '#rk-text-sample{width:100%;margin-top:10px;padding:8px 10px;border:1px solid #000;line-height:1.4;' +
-            'font-size:calc(15px * var(--rk-text, 1));}';
+            'font-size:calc(15px * var(--rk-text, 1));}' +
+            '#rk-margin-row{flex-wrap:wrap;}' +
+            '#rk-margin-options{width:100%;display:grid;grid-template-columns:repeat(' + MARGINS.length + ',minmax(0,1fr));gap:6px;margin-top:10px;}' +
+            '#rk-margin-sample{width:100%;box-sizing:border-box;margin-top:10px;padding:8px 28px;border:1px solid #000;line-height:1.4;font-size:15px;}';
         var style = document.createElement('style');
         style.appendChild(document.createTextNode(css));
         document.head.appendChild(style);
@@ -98,6 +105,46 @@
             };
         }
         mark(current());
+        addMarginSetting(row);
+    }
+
+    // The Substack article's side margins, as buttons like Text Size; the sample box
+    // shows the margin at its real size.
+    function addMarginSetting(after) {
+        var row = document.createElement('div');
+        row.className = 'setting-row';
+        row.id = 'rk-margin-row';
+        var html = '<div class="setting-text"><strong>Substack: Side Margins (左右缩进)</strong>' +
+            '<div class="setting-desc">Space on the left and right of Substack articles. Less margin, wider lines.</div></div>' +
+            '<div id="rk-margin-options">';
+        for (var i = 0; i < MARGINS.length; i++) {
+            html += '<button type="button" class="rk-text-opt" data-margin="' + MARGINS[i][1] + '">' + MARGINS[i][0] + '</button>';
+        }
+        html += '</div><div id="rk-margin-sample">The quick brown fox jumps over the lazy dog, again and again. 敏捷的棕色狐狸跳过了懒狗，一次又一次。</div>';
+        row.innerHTML = html;
+        after.parentNode.insertBefore(row, after.nextSibling);
+
+        var sample = document.getElementById('rk-margin-sample');
+        var buttons = row.querySelectorAll('.rk-text-opt');
+        function mark(v) {
+            for (var j = 0; j < buttons.length; j++) {
+                buttons[j].className = 'rk-text-opt' + (buttons[j].getAttribute('data-margin') === v ? ' active' : '');
+            }
+            sample.style.paddingLeft = sample.style.paddingRight = v + 'px';
+        }
+        for (var k = 0; k < buttons.length; k++) {
+            buttons[k].onclick = function () {
+                var v = this.getAttribute('data-margin');
+                try { localStorage.setItem(MARGIN_KEY, v); } catch (e) { }
+                saveToAccount('rkSubstackMargin', v);
+                mark(v);
+            };
+        }
+        var saved = null;
+        try { saved = localStorage.getItem(MARGIN_KEY); } catch (e) { saved = null; }
+        var known = false;
+        for (var m = 0; m < MARGINS.length; m++) if (MARGINS[m][1] === saved) known = true;
+        mark(known ? saved : '28');
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addSetting);

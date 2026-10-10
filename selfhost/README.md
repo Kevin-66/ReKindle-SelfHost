@@ -56,7 +56,9 @@ simplified article view), using the public Hacker News search API.
 The **Substack** app works again: Substack changed its subscriptions API (the feed was
 empty), paid posts now load in full instead of the free preview, old publication
 icons load, articles get a readable font and layout, and Substack's answers are kept
-on the server for an hour so switching views is quick.
+on the server for an hour so switching views is quick. On e-reader screens articles use
+the full width; Settings > Accessibility > **Substack: Side Margins** (左右缩进) sets the
+space on either side (kept with your account).
 
 **Minesweeper**: hold a covered cell to flag it, without switching to FLAG mode.
 

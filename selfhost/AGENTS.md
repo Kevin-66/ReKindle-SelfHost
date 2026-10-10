@@ -384,8 +384,8 @@ than `rekindle_settings_last_sync`, or when that mark is missing (a new device, 
 Kindle that wiped its browser data). It skipped displayMode, opendyslexicFont, scale,
 scaleAuto, homeLayout and timezoneOffset, so those stayed at their defaults outside
 Settings. `transform.js` adds them (applying display mode, font and scale at once) plus
-this server's `rkTextSize` (`rk_text_size`), `rkPageButtons` (`rk_page_buttons`) and
-`rkMangaBlank` (`rk_manga_blank`),
+this server's `rkTextSize` (`rk_text_size`), `rkPageButtons` (`rk_page_buttons`),
+`rkMangaBlank` (`rk_manga_blank`) and `rkSubstackMargin` (`rk_substack_margin`),
 which `rk-textsize.js` and `rk-pager.js` now save to the account with the same signal
 (`saveToAccount`). New per-user settings should follow this pattern.
 
@@ -537,6 +537,13 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   Kindle (Chromium 80, which counts an image's full width there; desktop Chrome doesn't)
   a real post made every line run off the right edge right after the cap was removed
   (owner's photo, 2026-10-10). Reproduce on desktop with a child of fixed width 1456 px.
+- Side margins (owner's request 2026-10-10, "左右缩进"): Settings > Accessibility >
+  "Substack: Side Margins", buttons under Text Size (rk-textsize.js `addMarginSetting`):
+  None 12 / Small 28 (default, the old fixed padding) / Medium 64 / Large 110 / X-Large 160
+  px per side, in localStorage `rk_substack_margin` and the account (`rkSubstackMargin`).
+  transform.js puts a head snippet on substack.html that sets `--rk-substack-margin`
+  before the page draws; rk-substack.css pads `#reader-content` with it. On the
+  Scribe the text column is 965 / 933 / 861 / 769 / 669 px.
 - static.js caches `.css` for a day (HTML/JS/JSON are revalidated), so the link that
   transform.js adds is `css/rk-substack.css?v=N`: bump N whenever the file changes, or
   Kindles keep the old styles for up to a day.
