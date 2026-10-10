@@ -36,6 +36,20 @@ off, to go straight from page to page (kept with your account). Swipe left or ri
 turn pages; the corners icon next to the chapter name hides the title bar and status
 line so the page uses the whole screen (the icon in the corner brings them back).
 
+**Manhuagui bookshelf sync**: under Store > Manhuagui, sign in with your own Manhuagui
+account and its bookshelf (书架) and your Manga library stay the same, both ways:
+titles on the shelf appear in the library, Manhuagui titles you add or remove in the
+app are added to or removed from the shelf, and titles you remove on Manhuagui leave
+the library. Your password goes to Manhuagui once and is not stored; the server keeps
+only Manhuagui's sign-in cookie, with your account. The whole shelf is checked when the
+library opens (at most every 10 minutes) and with **Sync now**; the shelf only ever
+loses a title you removed in the app. The last chapter read is synced too: a chapter
+you open in the app becomes the title's 最近阅读 on Manhuagui, and a chapter you read on
+Manhuagui becomes the title's place in the app (when it is the newer one).
+
+In the Store, tap a title to start reading it without adding it to the library (Back
+returns to the Store). Removing a title from the library asks first.
+
 A **Hacker News** app is added (Top, New, Best, Ask, Show, Jobs, search, threads and a
 simplified article view), using the public Hacker News search API.
 
@@ -228,6 +242,8 @@ The Manga app is re-enabled at build time and gets its Manhuagui source from
   reader, ...) cannot reach private or internal addresses, including through
   redirects, and never receive the browser's cookies.
 - Mail, Manhuagui and server functions require a signed-in account.
+- A reader's Manhuagui sign-in cookie (bookshelf sync) is stored in the database with
+  their account and sent only to Manhuagui; their Manhuagui password is not stored.
 - With a public address, set `ADMIN_USERNAME` (or create your account first) and
   consider `ALLOW_REGISTRATION=false` once everyone who needs an account has one.
 
@@ -259,7 +275,8 @@ not built.
   - `workers-host.js`, `ai.js`, `netguard.js` – run the Cloudflare workers and `/api`
     functions, with outgoing requests limited to public addresses (and `PROXY_DOMAINS`
     sent through `PROXY_URL`)
-  - `manhuagui.js` – Manhuagui source for the Manga app
+  - `manhuagui.js` – Manhuagui source for the Manga app; `manhuagui-account.js` – a
+    reader's Manhuagui sign-in and bookshelf sync
   - `images.js` – picture shrinking for e-readers; `/__rk/img?url=` (Hacker News, Manga pages)
   - `cache.js` – Cache API stand-in for the upstream `/api` functions
   - `transform.js` – the page edits; `static.js` – serves the site

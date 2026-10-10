@@ -583,6 +583,89 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   app is local only. Libraries that existed only in a browser before this were not
   uploaded: the owner asked for no backward compatibility. `auth.deleteUser` removes
   the row.
+- Manhuagui bookshelf sync (owner's request 2026-10-10, "two way"):
+  `server/src/manhuagui-account.js`, table `mhg_accounts` (uid, username, cookie, synced,
+  last_read, last_sync; removed with the account). Routes under
+  `/__rk/manga/manhuagui/account`: GET status, PUT {username, password} (5/min per IP),
+  DELETE, POST `/sync` {library, removed} (full sync), POST `/shelf` {add, remove}
+  (direct changes), POST `/read` {chapter: 'bookId/chapterId'}. The UI is a row
+  under the Manhuagui filters (`#rk-mhg-account`) and a sign-in window on `<body>`
+  (`#rk-mhg-login`); the sync code is the "Manhuagui account" section of
+  rk-manga-sources.js.
+  - Site endpoints (from Manhuagui's own `main_*.js` and `CDFC5756...js`, the login page
+    script; same in other shelf readers: venera-app/venera-configs `manhuagui.js`,
+    RSSHub `manhuagui/subscribe`): POST `/tools/submit_ajax.ashx?action=user_login`
+    form `txtUserName`, `txtPassword`, `chkRemember=checked` -> `{status: 1}` and
+    `Set-Cookie: my=...` (the session); `user_check_login` (POST, empty) -> `{status,
+    username (URI-encoded), shelf: count}`; `user_book_shelf_add`/`_delete` (POST
+    `book_id`) answer `{state: true, msg}` (NOT `status`); `user_book_shelf_check` (GET
+    `?book_id=`) -> `{status: 1 if on the shelf, total}`. No captcha or password hashing
+    (2026-10). Signed out: the shelf answers 302 to `/user/login`, check_login `status:
+    0` with username 匿名用户, the shelf calls `{"status":0,"msg":"对不起，用户尚未登录或已超时！"}`.
+  - Shelf page `/user/book/shelf/<n>` (checked on the owner's account 2026-10-10, 143
+    titles): 20 `.dy_content_li` per page (`.dy_img a[href=/comic/<id>/] img`, title in
+    `.dy_r h3 a`), total in `.flickr.right span` "共143记录", no other `/comic/` links on
+    the page. Covers are the small `/cpic/s/<id>_N.jpg` (88x118); search results use
+    `/cpic/b/`, so parseShelf swaps it. Each entry also has a `.dy_r p` "最近阅读：" with
+    the chapter link (`/comic/<id>/<chapter>.html`, its name) and a time in the last `em`:
+    "0分钟前"/"N小时前"/"N天前" when recent, "2026-05-19" otherwise (`readTime` takes the
+    earliest moment it can mean, China time). The site's own history list is
+    browser-only (`SMH.history`, store key `viewed`, 50 titles).
+  - Sync rules (`planSync`, unit-tested): `synced` = ids on both sides after the last
+    sync. Removed in the app (explicitly, kept in localStorage `rk_mhg_removed` until the
+    server confirms) -> deleted from the shelf; library only + not synced -> added to
+    the shelf; library only + synced -> removed on Manhuagui, dropped from the library;
+    shelf only -> added to the library, even when synced. The shelf never loses a title
+    by inference, because a stale library copy (another device, the Kindle wiping its
+    data) would otherwise empty it. The app applies the library side with its own
+    `saveLibrary`, so changes during a sync are not overwritten. A new sign-in keeps
+    `synced` for the same username only. Removals made while not linked are dropped
+    (a later link must not delete them from the new shelf).
+  - Last read, both ways (owner's request 2026-10-10, "Sync last read"). Manhuagui's
+    reader (`core_*.js`) calls `GET /tools/count.ashx?bookId=&chapterId=` once per
+    chapter on page 1; with the session cookie that sets the title's 最近阅读 (checked on
+    the owner's shelf: re-reporting the chapter already shown moved its date from
+    2026-05-19 to "0分钟前"). The app reports each Manhuagui chapter it shows
+    (`reportRead` in `showChapterPages`, once per chapter; also titles opened from the
+    Store) through POST `/read`, which also records it in `last_read`, so the next sync
+    doesn't hand it back. The full sync returns `lastRead` for library titles whose shelf
+    最近阅读 differs from `last_read` (i.e. read on Manhuagui itself), plus `previousSync`;
+    `adoptLastRead` takes one over when the device has no progress for the title, hasn't
+    changed it since `previousSync`, or has an older `t` than Manhuagui's time. Progress
+    entries for Manhuagui now carry `chapterId` (and the chapter name as `chapterNum`, so
+    the library card shows "Ch 第29话, P 1"); the reader opens the chapter by id
+    (positions shift when Manhuagui adds a volume), falling back to the first chapter
+    if it's gone. Entries taken from the shelf have no position: `chapter: 1` is only
+    there so manga.html's card shows the label (it needs chapter > 0 or page > 0). The
+    page within a chapter is not synced (Manhuagui only knows the chapter).
+  - Cost: every request shares manhuagui.js's `siteSlot` (10 per 10 s) with browsing; a
+    full sync reads one page per 20 titles (8 for 143), so the app runs it when the
+    library opens at most every 10 minutes (`rk_mhg_last_sync`) and from Sync now, and
+    adds/removes go through `/shelf` without a shelf read. At most `OPS_PER_SYNC` (12)
+    shelf changes per call; `more: true` makes the app call again.
+  - Testing: don't add or remove titles on the owner's real shelf. Point a local server
+    at a stand-in with `MANHUAGUI_URL=http://127.0.0.1:<port>` (it replaces the site's
+    base everywhere, covers included when they are relative); the stand-in used on
+    2026-10-10 answered the paths above with the same shapes. Unit tests:
+    `node --test selfhost/server/test/manhuagui-account.test.js` (~10 s: the real rate
+    limiter). The Store's "+ Add" buttons are not redrawn after a sync adds a title.
+    With `MANHUAGUI_URL` on a stand-in, chapter pages load (if the stand-in forwards them
+    to the real site) but page images don't: i.hamreus.com answers 403 to any Referer but
+    manhuagui.com, and the Referer comes from `MANHUAGUI_URL`.
+  - Known, older: switching the Store to Manhuagui while the MangaDex list is still
+    loading appends the MangaDex cards after the Manhuagui ones (manga.html's
+    `loadStore` doesn't check `currentSource()`).
+- Store cards open the reader when tapped (owner's request 2026-10-10), without adding
+  the title; Back returns to the Store (manga.html's `closeReader` restores the active
+  tab). MangaDex cards are built inside manga.html's `loadStore`, so `transform.js` adds
+  `card.onclick = () => openReader({...})` there (same fields + Add uses); Manhuagui
+  cards get it in `renderCards`. The + Add button stops the click from bubbling.
+- Removing from the library asks first (owner's request 2026-10-10): the
+  `removeFromLibrary` wrapper shows `#rk-confirm` (`confirmBox`, same `.rk-overlay`
+  window as the sign-in; the Kindle has no `confirm()`) and only then removes; for a
+  Manhuagui title with a linked account it says the title also leaves the 书架. The X
+  on library cards is its only caller; anything else calling `removeFromLibrary` gets
+  the question too.
 - A page that fails to load is retried once after 1.5 s (MangaDex@Home nodes sometimes
   404 a page once).
 - AZW3 button (`#rk-azw3-btn`, next to `#rk-ch-btn`): the Kindle browser downloads only

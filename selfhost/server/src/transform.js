@@ -237,6 +237,10 @@ export function transformHtml(html, fileName) {
         // Its title key (manga.title) now says "Comics" for upstream's separate Comics
         // app, so both apps looked the same; keep this one's title "Manga".
         html = html.replace(/(<span[^>]*id="app-title")\s+data-i18n="manga\.title"/, '$1');
+        // Store cards open the reader when tapped (only + Add did anything); the add-on
+        // does the same for Manhuagui's cards.
+        html = html.replace(/(const isAdded = library\.some\(libItem => libItem\.id === manga\.id\);\s*const card = document\.createElement\('div'\);\s*card\.className = 'card';)/,
+            "$1\n                    card.onclick = () => openReader({ id: manga.id, title: title, cover: coverUrl, type: 'manga', author: manga.attributes.status });");
     }
     return html;
 }

@@ -6,7 +6,9 @@
  * manga.html itself is unchanged (MangaDex keeps working as before). This script
  * adds a "Source" picker to the Store tab and takes over the store, reader and
  * chapter loading only for Manhuagui titles, using this server's /__rk/manga API
- * (a port of the keiyoushi Mihon extension).
+ * (a port of the keiyoushi Mihon extension). A reader who signs in to their own
+ * Manhuagui account gets its bookshelf (书架) synced with the library, both ways
+ * (see "Manhuagui account").
  *
  * Plain ES5 so the lite/legacy builds can run it.
  */
@@ -134,7 +136,26 @@
             // max-height only shrink, so a small original (Manhuagui's 650x924) sat small in
             // the middle on the Scribe ("zoomed out"). The image itself is the original;
             // only the browser draws it larger.
-            '#reader-content img.reader-page{width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;}';
+            '#reader-content img.reader-page{width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;}' +
+            // Manhuagui account row (Store, Manhuagui).
+            '#rk-mhg-account{display:none;grid-auto-flow:column;grid-template-columns:1fr;grid-auto-columns:auto;gap:8px;align-items:center;border:2px solid #000;padding:6px 8px;}' +
+            '.rk-mhg-acct-text{font-size:0.8rem;line-height:1.3;}' +
+            '.rk-mhg-acct-btn{min-height:44px;}' +
+            // Store cards open the reader when tapped (the + Add button still adds).
+            '#store-results .card{cursor:pointer;}' +
+            // Dialogs (Manhuagui sign-in, remove from library): on <body>, so page styles for
+            // .window etc. don't reach them; no grey backdrop on e-ink.
+            '.rk-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:transparent;display:none;align-items:flex-start;justify-content:center;padding-top:8vh;box-sizing:border-box;}' +
+            '.rk-overlay .rk-box{background:#fff;color:#000;border:2px solid #000;box-shadow:4px 4px 0 #000;width:90%;max-width:420px;font-family:"Geneva","Verdana",sans-serif;}' +
+            '.rk-overlay .rk-head{padding:8px 12px;border-bottom:2px solid #000;font-weight:bold;text-align:center;}' +
+            '.rk-overlay .rk-body{padding:12px;}' +
+            '.rk-overlay p{margin:0 0 12px 0;font-size:0.85rem;line-height:1.4;}' +
+            '.rk-overlay label{display:block;font-weight:bold;font-size:0.85rem;margin:0 0 10px 0;}' +
+            '.rk-overlay input{display:block;width:100%;box-sizing:border-box;margin-top:4px;border:2px solid #000;border-radius:0;padding:10px;' +
+            'font-family:inherit;font-size:1rem;outline:none;background:#fff;color:#000;-webkit-user-select:text;user-select:text;}' +
+            '#rk-mhg-msg{min-height:1.2em;font-size:0.85rem;margin:0 0 10px 0;}' +
+            '.rk-overlay .rk-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
+            '.rk-overlay .rk-actions .btn{min-height:48px;}';
         var style = el('style', { id: 'rk-manga-style' });
         style.appendChild(document.createTextNode(css));
         document.head.appendChild(style);
@@ -170,6 +191,8 @@
         mhgRow.appendChild(genreSel);
         mhgRow.appendChild(sortSel);
         controls.appendChild(mhgRow);
+        // The reader's Manhuagui account (bookshelf sync), below the filters.
+        controls.appendChild(el('div', { id: 'rk-mhg-account' }));
         sortSel.onchange = function () { doStoreSearch(); };
         genreSel.onchange = function () { doStoreSearch(); };
         // The same System 7 drop-downs as the MangaDex row (js/custom-select.js). They
@@ -220,6 +243,8 @@
         mdRow = mdRow ? mdRow.parentNode : null;
         if (mdRow) mdRow.style.display = mhg ? 'none' : 'grid';
         document.getElementById('rk-mhg-filters').style.display = mhg ? 'grid' : 'none';
+        document.getElementById('rk-mhg-account').style.display = mhg ? 'grid' : 'none';
+        if (mhg) loadAccountStatus();
         var search = document.getElementById('store-search');
         if (search) search.placeholder = mhg ? '搜索漫画 / Search manga...' : (window.t ? window.t('manga.store.search', 'Search manga...') : 'Search manga...');
     }
@@ -232,6 +257,8 @@
             var isAdded = library.some(function (it) { return it.id === id; });
             var card = document.createElement('div');
             card.className = 'card';
+            // Tap a title to read it without adding it (Back returns to the Store).
+            card.onclick = function () { openReader(libraryItem(m)); };
             card.innerHTML =
                 '<img src="' + (m.cover || '') + '" class="cover-img">' +
                 '<div class="book-title">' + escapeHtml(m.title) + '</div>' +
@@ -246,7 +273,7 @@
                 btn.innerText = (window.t && window.t('manga.btn.add')) || '+ Add';
                 btn.onclick = function (e) {
                     e.stopPropagation();
-                    addToLibrary({ id: id, source: 'manhuagui', title: m.title, cover: m.cover, type: 'manga', author: '漫画柜' });
+                    addToLibrary(libraryItem(m));
                     btn.innerText = (window.t && window.t('manga.msg.added')) || 'Added';
                     btn.disabled = true;
                 };
@@ -358,10 +385,18 @@
             }
             // Shape chapters like MangaDex ones so manga.html's paging and progress code works unchanged.
             currentChapterList = d.chapters.map(function (c) {
-                return { id: c.id, attributes: { chapter: '', title: (c.section ? c.section + ' ' : '') + c.name, pages: c.pages || 1 } };
+                return { id: c.id, attributes: { chapter: '', name: c.name, title: (c.section ? c.section + ' ' : '') + c.name, pages: c.pages || 1 } };
             });
             return getProgress(item.id).then(function (saved) {
                 currentChapterIndex = (saved && saved.chapter) || 0;
+                // Progress names the chapter by id (positions shift when Manhuagui adds a
+                // volume, and a last read taken from the shelf has no position at all).
+                if (saved && saved.chapterId) {
+                    currentChapterIndex = 0;
+                    for (var i = 0; i < currentChapterList.length; i++) {
+                        if (currentChapterList[i].id === saved.chapterId) { currentChapterIndex = i; break; }
+                    }
+                }
                 if (currentChapterIndex >= currentChapterList.length) currentChapterIndex = 0;
                 populateChapterSelect(currentChapterList);
                 return loadChapter(currentChapterIndex);
@@ -656,6 +691,7 @@
     // Show a chapter whose page list is already known.
     function showChapterPages(chapterIndex, pages) {
         currentReading.pages = pages;
+        if (isMhg(currentReading)) reportRead(currentChapterList[chapterIndex]);
         var finish = function () {
             isLoadingNextChapter = false;
             updateMangaPage();
@@ -885,11 +921,18 @@
 
     // Progress, saved as manga.html saves it.
     function saveProgressFor(reading, chapterIndex, page) {
-        var chapterNum = '';
-        if (currentChapterList && currentChapterList[chapterIndex]) {
-            chapterNum = currentChapterList[chapterIndex].attributes.chapter || '';
+        var chapterNum = '', extra = null;
+        var ch = currentChapterList && currentChapterList[chapterIndex];
+        if (ch) {
+            chapterNum = ch.attributes.chapter || '';
+            // Manhuagui: the chapter's name (the library card shows "Ch <name>") and id
+            // (what the reader opens, and what the shelf's 最近阅读 is compared with).
+            if (isMhg(reading)) {
+                chapterNum = ch.attributes.name || ch.attributes.title || '';
+                extra = { chapterId: ch.id };
+            }
         }
-        saveProgress(reading.id, chapterIndex, page, chapterNum);
+        saveProgress(reading.id, chapterIndex, page, chapterNum, extra);
     }
 
     // The white page between pages, on by default. Switched in Settings > Accessibility
@@ -1007,11 +1050,418 @@
         })['catch'](function () { /* offline: use this device's copy */ });
     }
 
+    // ------------------------------------------------------------ Manhuagui account (书架 sync)
+    //
+    // The reader can link their own Manhuagui account (Store tab, Manhuagui). The server
+    // (server/src/manhuagui-account.js) keeps only the session cookie and syncs the
+    // account's bookshelf (书架) with this library, both ways: POST
+    // /__rk/manga/manhuagui/account/sync {library: the Manhuagui ids in the library,
+    // removed: ids the reader removed here} answers with titles to add to and remove
+    // from the library. They are applied here with the page's own saveLibrary, so the
+    // account's copy follows through the library sync above, and changes made while a
+    // sync runs are kept. A full sync reads the whole shelf, so it runs when the library
+    // has loaded (at most every AUTO_SYNC_MS) and from "Sync now"; a Manhuagui title
+    // added or removed here is changed on the shelf directly (/account/shelf). Removals
+    // wait in localStorage rk_mhg_removed (tagged with the ReKindle account) until the
+    // server has deleted them from the shelf: the shelf only ever loses a title the
+    // reader removed here.
+
+    var REMOVED_KEY = 'rk_mhg_removed';
+    var LAST_SYNC_KEY = 'rk_mhg_last_sync';
+    var AUTO_SYNC_MS = 10 * 60 * 1000;
+    var mhgAccount = null;            // last known { connected, expired, username }
+    var mhgSyncTimer = null, mhgSyncing = false, mhgSyncAgain = false, statusLoading = false;
+
+    function mhgId(item) { return String(item.id).replace(/^mhg:/, ''); }
+
+    function libraryItem(m) {
+        return { id: PREFIX + m.id, source: 'manhuagui', title: m.title, cover: m.cover, type: 'manga', author: '漫画柜' };
+    }
+
+    function accountApi(method, path, body) {
+        return getToken().then(function (token) {
+            if (!token) throw new Error('Sign in to ReKindle first.');
+            var init = { method: method, headers: { Authorization: 'Bearer ' + token } };
+            if (body) {
+                init.headers['Content-Type'] = 'application/json';
+                init.body = JSON.stringify(body);
+            }
+            return fetch('/__rk/manga/manhuagui/account' + path, init);
+        }).then(function (r) {
+            return r.json().then(function (data) {
+                if (!r.ok || data.error) {
+                    var err = new Error((data.error && data.error.message) || ('HTTP ' + r.status));
+                    err.code = data.error && data.error.code;
+                    throw err;
+                }
+                return data;
+            });
+        });
+    }
+
+    // { owner: uid, ids: [...] }: Manhuagui titles removed here, not yet off the shelf.
+    function readRemoved() {
+        var uid = currentUid();
+        var r;
+        try { r = JSON.parse(lsGet(REMOVED_KEY) || 'null'); } catch (e) { r = null; }
+        return (r && r.owner === uid && r.ids) ? r : { owner: uid, ids: [] };
+    }
+    function writeRemoved(r) { lsSet(REMOVED_KEY, r.ids.length ? JSON.stringify(r) : null); }
+
+    function rememberRemoved(id) {
+        // Not linked: nothing to remove later (a link made months later must not delete it).
+        if (!currentUid() || (mhgAccount && !mhgAccount.connected && !mhgAccount.expired)) return;
+        var r = readRemoved();
+        if (r.ids.indexOf(id) < 0) r.ids.push(id);
+        writeRemoved(r);
+    }
+    function forgetRemoved(id) {
+        var r = readRemoved();
+        var i = r.ids.indexOf(id);
+        if (i >= 0) { r.ids.splice(i, 1); writeRemoved(r); }
+    }
+
+    function setMhgAccount(a) {
+        mhgAccount = { connected: !!a.connected, expired: !!a.expired, username: a.username || '' };
+        if (!a.connected && !a.expired) writeRemoved({ owner: currentUid(), ids: [] });
+        renderAccountRow();
+    }
+
+    function loadAccountStatus() {
+        if (!currentUid()) return renderAccountRow();
+        if (mhgAccount || statusLoading) return renderAccountRow();
+        statusLoading = true;
+        renderAccountRow();
+        accountApi('GET', '').then(setMhgAccount, function (e) {
+            renderAccountRow('Manhuagui account: ' + e.message);
+        }).then(function () { statusLoading = false; });
+    }
+
+    function renderAccountRow(problem) {
+        var row = document.getElementById('rk-mhg-account');
+        if (!row) return;
+        var text, buttons = [];
+        if (!currentUid()) text = 'Sign in to ReKindle to link your Manhuagui 书架 (bookshelf).';
+        else if (problem) text = problem;
+        else if (!mhgAccount) text = 'Manhuagui account...';
+        else if (mhgAccount.connected) {
+            text = 'Library and 书架 synced with Manhuagui: ' + mhgAccount.username;
+            buttons.push(['Sync now', function () { runMhgSync(true); }]);
+            buttons.push(['Sign out', signOutMhg]);
+        } else if (mhgAccount.expired) {
+            text = 'Manhuagui signed you out (' + mhgAccount.username + '). Sign in again to keep syncing your 书架.';
+            buttons.push(['Sign in', openLogin]);
+            buttons.push(['Unlink', signOutMhg]);
+        } else {
+            text = 'Sign in to Manhuagui to keep your 书架 (bookshelf) and this library the same.';
+            buttons.push(['Sign in', openLogin]);
+        }
+        row.innerHTML = '';
+        row.appendChild(el('div', { 'class': 'rk-mhg-acct-text' }, text));
+        buttons.forEach(function (b) {
+            var btn = el('button', { type: 'button', 'class': 'btn rk-mhg-acct-btn' }, b[0]);
+            btn.onclick = b[1];
+            row.appendChild(btn);
+        });
+    }
+
+    function openLogin() {
+        addStyle();
+        var overlay = document.getElementById('rk-mhg-login');
+        if (!overlay) {
+            overlay = el('div', { id: 'rk-mhg-login', 'class': 'rk-overlay' });
+            overlay.innerHTML =
+                '<div class="rk-box"><div class="rk-head">漫画柜 Manhuagui</div><div class="rk-body">' +
+                '<p>Sign in with your Manhuagui account to sync its 书架 (bookshelf) with this library. ' +
+                'Your password goes to Manhuagui once and is not kept; this server keeps only the sign-in.</p>' +
+                '<label>Username or email<input id="rk-mhg-user" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"></label>' +
+                '<label>Password<input id="rk-mhg-pass" type="password" autocomplete="current-password"></label>' +
+                '<div id="rk-mhg-msg"></div>' +
+                '<div class="rk-actions"><button type="button" class="btn" id="rk-mhg-cancel">Cancel</button>' +
+                '<button type="button" class="btn" id="rk-mhg-submit">Sign in</button></div>' +
+                '</div></div>';
+            document.body.appendChild(overlay);
+            document.getElementById('rk-mhg-cancel').onclick = closeLogin;
+            document.getElementById('rk-mhg-submit').onclick = submitLogin;
+            document.getElementById('rk-mhg-pass').onkeydown = function (e) { if (e.keyCode === 13) submitLogin(); };
+        }
+        var user = document.getElementById('rk-mhg-user');
+        if (!user.value && mhgAccount && mhgAccount.username) user.value = mhgAccount.username;
+        document.getElementById('rk-mhg-msg').innerText = '';
+        overlay.style.display = 'flex';
+        (user.value ? document.getElementById('rk-mhg-pass') : user).focus();
+    }
+
+    function closeLogin() {
+        var overlay = document.getElementById('rk-mhg-login');
+        if (overlay) overlay.style.display = 'none';
+        var pass = document.getElementById('rk-mhg-pass');
+        if (pass) pass.value = '';
+    }
+
+    var signingIn = false;
+    function submitLogin() {
+        if (signingIn) return;
+        var user = document.getElementById('rk-mhg-user').value.trim();
+        var pass = document.getElementById('rk-mhg-pass').value;
+        var msg = document.getElementById('rk-mhg-msg');
+        if (!user || !pass) { msg.innerText = 'Enter your username and password.'; return; }
+        signingIn = true;
+        msg.innerText = 'Signing in...';
+        accountApi('PUT', '', { username: user, password: pass }).then(function (a) {
+            closeLogin();
+            setMhgAccount(a);
+            return runMhgSync(true);
+        }, function (e) {
+            msg.innerText = e.message;
+        }).then(function () { signingIn = false; });
+    }
+
+    function signOutMhg() {
+        accountApi('DELETE', '').then(function (a) {
+            setMhgAccount(a);
+            showStatus('Unlinked from Manhuagui. Your library is unchanged.');
+        }, function (e) { showStatus('Manhuagui: ' + e.message); });
+    }
+
+    function scheduleMhgSync(delay) {
+        if (!currentUid() || (mhgAccount && !mhgAccount.connected)) return;
+        if (mhgSyncTimer) clearTimeout(mhgSyncTimer);
+        mhgSyncTimer = setTimeout(function () { mhgSyncTimer = null; runMhgSync(false); }, delay || 0);
+    }
+
+    function libraryShown() {
+        var view = document.getElementById('view-library');
+        return !!view && view.style.display !== 'none' && !(typeof isReaderOpen !== 'undefined' && isReaderOpen);
+    }
+
+    // Library side of a sync, applied to the page's library as the reader's own adds and
+    // removes would be. True when something changed.
+    function applyShelfChanges(r) {
+        var changed = false;
+        (r.add || []).forEach(function (m) {
+            var item = libraryItem(m);
+            if (!library.some(function (it) { return it.id === item.id; })) { library.push(item); changed = true; }
+        });
+        var gone = (r.remove || []).map(function (id) { return PREFIX + id; });
+        if (gone.length) {
+            var before = library.length;
+            library = library.filter(function (it) { return gone.indexOf(it.id) < 0; });
+            if (library.length !== before) changed = true;
+        }
+        if (changed) saveLibrary();
+        return changed;
+    }
+
+    // Last read (最近阅读) from the shelf, for titles read on Manhuagui itself since the
+    // last sync. Taken over when this device has no progress for the title, has not read
+    // it since the previous sync, or read it earlier than Manhuagui says (its time is the
+    // earliest it can mean). Resolves to the number of titles updated.
+    function adoptLastRead(list, previousSync) {
+        if (!list || !list.length || !window.localforage) return Promise.resolve(0);
+        return localforage.getItem('manga_progress').then(function (progress) {
+            progress = progress || {};
+            var changed = [];
+            list.forEach(function (p) {
+                var id = PREFIX + p.id;
+                var local = progress[id];
+                if (local && local.chapterId === p.chapter) return;
+                var localT = (local && local.t) || 0;
+                if (local && !(previousSync && localT <= previousSync) && !(p.time && p.time > localT)) return;
+                // chapter is only a position for the library card (its label shows when
+                // chapter > 0); the reader opens chapterId.
+                var entry = { chapter: 1, page: 0, chapterNum: p.name, chapterId: p.chapter, language: 'zh', t: Math.max(p.time || Date.now(), localT + 1) };
+                progress[id] = entry;
+                changed.push([id, entry]);
+            });
+            if (!changed.length) return 0;
+            return localforage.setItem('manga_progress', progress).then(function () {
+                changed.forEach(function (c) { queueChange('progress', c[0], c[1]); });
+                return changed.length;
+            });
+        })['catch'](function () { return 0; });
+    }
+
+    // A Manhuagui chapter shown in the reader becomes the title's 最近阅读 on Manhuagui
+    // (the server makes the request Manhuagui's own reader makes). Once per chapter.
+    var lastReported = null;
+    function reportRead(ch) {
+        if (!ch || ch.id === lastReported || !currentUid() || (mhgAccount && !mhgAccount.connected)) return;
+        lastReported = ch.id;
+        accountApi('POST', '/read', { chapter: ch.id }).then(function (r) {
+            if (!r.connected) setMhgAccount(r);
+        }, function (e) {
+            lastReported = null;
+            if (e.code === 'manhuagui/signed-out') setMhgAccount({ connected: false, expired: true, username: mhgAccount ? mhgAccount.username : '' });
+        });
+    }
+
+    function syncSummary(r, readCount) {
+        var parts = [];
+        if (r.add.length) parts.push(r.add.length + ' added from your 书架');
+        if (r.remove.length) parts.push(r.remove.length + ' removed (no longer on your 书架)');
+        if (r.shelf.added) parts.push(r.shelf.added + ' added to your 书架');
+        if (r.shelf.deleted) parts.push(r.shelf.deleted + ' removed from your 书架');
+        if (r.shelf.failed) parts.push(r.shelf.failed + ' could not be changed on Manhuagui');
+        if (readCount) parts.push(readCount + ' last read from Manhuagui');
+        if (r.more) parts.push('more to come');
+        return parts.length ? 'Manhuagui: ' + parts.join(', ') + '.' : '';
+    }
+
+    // Server messages about the Manhuagui sign-in already start with "Manhuagui".
+    function mhgError(e) {
+        return /^Manhuagui/.test(e.message) ? e.message : 'Manhuagui: ' + e.message;
+    }
+
+    function runMhgSync(manual) {
+        var uid = currentUid();
+        if (!uid) return Promise.resolve();
+        if (mhgSyncing) { mhgSyncAgain = true; return Promise.resolve(); }
+        mhgSyncing = true;
+        if (manual) showStatus('Syncing with your Manhuagui 书架...');
+        var ids = library.filter(isMhg).map(mhgId);
+        return accountApi('POST', '/sync', { library: ids, removed: readRemoved().ids }).then(function (r) {
+            setMhgAccount(r);
+            if (!r.connected) {
+                if (r.expired) showStatus('Manhuagui signed you out. Sign in again under Store, Manhuagui.');
+                return;
+            }
+            lsSet(LAST_SYNC_KEY, String(Date.now()));
+            var left = readRemoved();
+            left.ids = left.ids.filter(function (id) { return r.removedDone.indexOf(id) < 0; });
+            writeRemoved(left);
+            var changed = applyShelfChanges(r);
+            if (r.more) mhgSyncAgain = true;
+            return adoptLastRead(r.lastRead, r.previousSync).then(function (readCount) {
+                // One redraw for both (e-ink).
+                if ((changed || readCount) && libraryShown()) renderLibrary();
+                var text = syncSummary(r, readCount);
+                if (text || manual) showStatus(text || 'Manhuagui: your library and 书架 are the same.');
+            });
+        }, function (e) {
+            if (e.code === 'manhuagui/signed-out') setMhgAccount({ connected: false, expired: true, username: mhgAccount ? mhgAccount.username : '' });
+            if (manual || e.code === 'manhuagui/signed-out') showStatus(mhgError(e));
+        }).then(function () {
+            mhgSyncing = false;
+            if (mhgSyncAgain) { mhgSyncAgain = false; scheduleMhgSync(1000); }
+        });
+    }
+
+    // After the library has loaded: sync, unless one ran a short while ago (then just
+    // learn whether an account is linked, for the remove dialog and reading reports).
+    function syncAfterLoad() {
+        var last = parseInt(lsGet(LAST_SYNC_KEY) || '0', 10) || 0;
+        if (Date.now() - last > AUTO_SYNC_MS) scheduleMhgSync(500);
+        else loadAccountStatus();
+    }
+
+    // Asks before doing something, in the same kind of window as the sign-in (the Kindle
+    // browser has no confirm()).
+    function confirmBox(title, message, okText, onOk, onCancel) {
+        addStyle();
+        var overlay = document.getElementById('rk-confirm');
+        if (!overlay) {
+            overlay = el('div', { id: 'rk-confirm', 'class': 'rk-overlay' });
+            overlay.innerHTML =
+                '<div class="rk-box"><div class="rk-head" id="rk-confirm-title"></div><div class="rk-body">' +
+                '<p id="rk-confirm-msg"></p><div class="rk-actions">' +
+                '<button type="button" class="btn" id="rk-confirm-cancel">Cancel</button>' +
+                '<button type="button" class="btn" id="rk-confirm-ok"></button></div></div></div>';
+            document.body.appendChild(overlay);
+        }
+        document.getElementById('rk-confirm-title').innerText = title;
+        document.getElementById('rk-confirm-msg').innerText = message;
+        var ok = document.getElementById('rk-confirm-ok');
+        ok.innerText = okText;
+        var close = function () { overlay.style.display = 'none'; };
+        document.getElementById('rk-confirm-cancel').onclick = function () { close(); if (onCancel) onCancel(); };
+        ok.onclick = function () { close(); onOk(); };
+        overlay.style.display = 'flex';
+    }
+
+    // Titles added or removed here go to the shelf directly (POST /account/shelf, no
+    // shelf read). Adds that fail are caught by the next full sync; removals stay in
+    // rk_mhg_removed until done.
+    var shelfAdds = [], shelfTimer = null, shelfBusy = false;
+
+    function scheduleShelfChange() {
+        if (!currentUid() || (mhgAccount && !mhgAccount.connected)) { shelfAdds = []; return; }
+        if (shelfTimer) clearTimeout(shelfTimer);
+        shelfTimer = setTimeout(function () { shelfTimer = null; runShelfChange(); }, 1500);
+    }
+
+    function runShelfChange() {
+        if (shelfBusy) { scheduleShelfChange(); return; }
+        var adds = shelfAdds;
+        var removes = readRemoved().ids;
+        shelfAdds = [];
+        if (!adds.length && !removes.length) return;
+        shelfBusy = true;
+        accountApi('POST', '/shelf', { add: adds, remove: removes }).then(function (r) {
+            setMhgAccount(r);
+            if (!r.connected) {
+                if (r.expired) showStatus('Manhuagui signed you out. Sign in again under Store, Manhuagui.');
+                return;
+            }
+            var left = readRemoved();
+            left.ids = left.ids.filter(function (id) { return r.removedDone.indexOf(id) < 0; });
+            writeRemoved(left);
+            var text = syncSummary({ add: [], remove: [], shelf: r.shelf, more: false });
+            if (text) showStatus(text);
+            if (r.more) scheduleShelfChange();
+        }, function (e) {
+            if (e.code === 'manhuagui/signed-out') setMhgAccount({ connected: false, expired: true, username: mhgAccount ? mhgAccount.username : '' });
+            showStatus(mhgError(e));
+        }).then(function () { shelfBusy = false; });
+    }
+
+    if (typeof addToLibrary === 'function' && typeof removeFromLibrary === 'function') {
+        var originalAddToLibrary = addToLibrary;
+        addToLibrary = function (item) {
+            var mhg = isMhg(item);
+            if (mhg) {
+                forgetRemoved(mhgId(item));
+                if (shelfAdds.indexOf(mhgId(item)) < 0) shelfAdds.push(mhgId(item));
+            }
+            return Promise.resolve(originalAddToLibrary.apply(this, arguments)).then(function (v) {
+                if (mhg) scheduleShelfChange();
+                return v;
+            });
+        };
+
+        // The library's X asks first (manga.html removed at once).
+        var originalRemoveFromLibrary = removeFromLibrary;
+        removeFromLibrary = function (id) {
+            var self = this, args = arguments;
+            var item = library.filter(function (it) { return it.id === id; })[0];
+            if (!item) return originalRemoveFromLibrary.apply(self, args);
+            var mhg = isMhg(item);
+            var message = 'Remove "' + item.title + '" from your library?';
+            if (mhg && mhgAccount && mhgAccount.connected) message += ' It will also be removed from your Manhuagui 书架.';
+            return new Promise(function (resolve) {
+                confirmBox('Remove from library', message, 'Remove', function () {
+                    if (mhg) {
+                        rememberRemoved(mhgId(item));
+                        var i = shelfAdds.indexOf(mhgId(item));
+                        if (i >= 0) shelfAdds.splice(i, 1);
+                    }
+                    resolve(Promise.resolve(originalRemoveFromLibrary.apply(self, args)).then(function (v) {
+                        if (mhg) scheduleShelfChange();
+                        return v;
+                    }));
+                }, function () { resolve(); });
+            });
+        };
+    }
+
     if (typeof loadLibrary === 'function' && typeof saveLibrary === 'function' && typeof saveProgress === 'function' && window.localforage) {
         var originalLoadLibrary = loadLibrary;
         loadLibrary = function () {
             var self = this, args = arguments;
-            return syncFromServer().then(function () { return originalLoadLibrary.apply(self, args); });
+            return syncFromServer().then(function () { return originalLoadLibrary.apply(self, args); }).then(function (v) {
+                syncAfterLoad();
+                return v;
+            });
         };
 
         var originalSaveLibrary = saveLibrary;
@@ -1022,8 +1472,9 @@
             });
         };
 
-        // Same entry manga.html saves, plus the time (t).
-        saveProgress = function (mangaId, chapterIdx, pageIdx, chapterNum) {
+        // Same entry manga.html saves, plus the time (t) and any extra fields (Manhuagui:
+        // chapterId).
+        saveProgress = function (mangaId, chapterIdx, pageIdx, chapterNum, extra) {
             var entry = {
                 chapter: chapterIdx,
                 page: pageIdx,
@@ -1031,6 +1482,7 @@
                 language: (typeof currentReadingLanguage !== 'undefined' && currentReadingLanguage) || 'en',
                 t: Date.now()
             };
+            if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) entry[k] = extra[k];
             return localforage.getItem('manga_progress').then(function (progress) {
                 progress = progress || {};
                 progress[mangaId] = entry;

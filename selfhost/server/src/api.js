@@ -10,6 +10,7 @@ import { currentSeq, waitForChanges } from './events.js';
 import { invokeCallable, errorStatus } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
+import * as mhgAccount from './manhuagui-account.js';
 import * as mangaState from './manga-state.js';
 import * as mangaAzw3 from './manga-azw3.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
@@ -286,10 +287,32 @@ async function handleManga(req, res, url, parts) {
         if (req.method === 'PUT') return send(res, 200, mangaState.putState(me.uid, await readJson(req)));
         return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET or PUT' } });
     }
-    if (!bearer(req)) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle to browse Manhuagui.' } });
+    const me = bearer(req);
+    if (!me) return send(res, 401, { error: { code: 'unauthenticated', message: 'Sign in to ReKindle to browse Manhuagui.' } });
     const p = url.searchParams;
     if (parts[2] !== 'manhuagui') return send(res, 404, { error: { code: 'not-found', message: 'Unknown manga source' } });
     switch (parts[3]) {
+        case 'account':
+            // The reader's Manhuagui sign-in and bookshelf sync (manhuagui-account.js):
+            // GET status, PUT {username, password} signs in, DELETE forgets the session,
+            // POST /account/sync {library, removed} syncs the shelf and the library,
+            // POST /account/shelf {add, remove} changes titles on the shelf directly,
+            // POST /account/read {chapter} reports a chapter opened in the reader.
+            if (parts[4] === 'sync' || parts[4] === 'shelf' || parts[4] === 'read') {
+                if (req.method !== 'POST') return send(res, 405, { error: { code: 'invalid-argument', message: 'Use POST' } });
+                rateLimit(req, parts[4] === 'read' ? 'manhuagui-read' : 'manhuagui-sync', parts[4] === 'read' ? 60 : 30, 60000);
+                const body = await readJson(req);
+                const job = { sync: mhgAccount.sync, shelf: mhgAccount.change, read: mhgAccount.read }[parts[4]];
+                return send(res, 200, await job(me.uid, body));
+            }
+            if (req.method === 'GET') return send(res, 200, mhgAccount.accountStatus(me.uid));
+            if (req.method === 'PUT') {
+                rateLimit(req, 'manhuagui-login', 5, 60000);
+                const body = await readJson(req);
+                return send(res, 200, await mhgAccount.signIn(me.uid, body.username, body.password));
+            }
+            if (req.method === 'DELETE') return send(res, 200, mhgAccount.removeAccount(me.uid));
+            return send(res, 405, { error: { code: 'invalid-argument', message: 'Use GET, PUT or DELETE' } });
         case 'filters':
             return send(res, 200, { sorts: manhuagui.SORTS, genres: manhuagui.GENRES });
         case 'list':

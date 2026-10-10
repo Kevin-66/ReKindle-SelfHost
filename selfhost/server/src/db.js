@@ -110,6 +110,20 @@ CREATE TABLE IF NOT EXISTS manga_state (
     library_updated INTEGER,
     updated INTEGER NOT NULL
 );
+
+-- The Manga app's Manhuagui sign-in and bookshelf sync per account (manhuagui-account.js).
+-- cookie is NULL once Manhuagui has signed the session out; synced is the JSON list of
+-- book ids that were both in the library and on the shelf after the last sync;
+-- last_read maps book id -> the chapter Manhuagui last showed (or was told) as last read.
+CREATE TABLE IF NOT EXISTS mhg_accounts (
+    uid TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    cookie TEXT,
+    synced TEXT NOT NULL DEFAULT '[]',
+    last_read TEXT NOT NULL DEFAULT '{}',
+    last_sync INTEGER,
+    updated INTEGER NOT NULL
+);
 `);
 
 export function metaGet(key) {

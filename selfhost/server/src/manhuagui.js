@@ -10,10 +10,10 @@ import { parseHTML } from 'linkedom';
 import LZString from 'lz-string';
 import { metaGet, metaSet } from './db.js';
 
-const BASE = (process.env.MANHUAGUI_URL || 'https://www.manhuagui.com').replace(/\/+$/, '');
+export const BASE = (process.env.MANHUAGUI_URL || 'https://www.manhuagui.com').replace(/\/+$/, '');
 const IMAGE_SERVER = 'https://i.hamreus.com';
 const SHOW_R18 = /^(1|true|yes|on)$/i.test(process.env.MANHUAGUI_SHOW_R18 || '');
-const HEADERS = {
+export const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
     'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
     Referer: `${BASE}/`
@@ -45,7 +45,7 @@ function limiter(count, windowMs) {
         return chain;
     };
 }
-const siteSlot = limiter(10, 10000);
+export const siteSlot = limiter(10, 10000);
 const imageSlot = limiter(4, 1000);
 
 // ---------------------------------------------------------------- fetching
@@ -76,7 +76,7 @@ function doc(html) {
     return parseHTML(html).document;
 }
 
-function absUrl(src) {
+export function absUrl(src) {
     if (!src) return null;
     if (src.startsWith('//')) return 'https:' + src;
     if (src.startsWith('/')) return BASE + src;
