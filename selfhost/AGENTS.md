@@ -188,7 +188,7 @@ the next screen's pictures before moving, a white cover (own composited layer) f
 images eagerly with `decoding="sync"`. Half-screen steps (the half already drawn ahead
 appears at once) are what `page()` does now, see above.
 
-## Chinese text on the Kindle (`selfhost/site/js/rk-cjk.js`)
+## Chinese text on the Kindle (STHeiti in every font list, `transform.js` `addHeiti`)
 
 The Kindle browser draws Chinese with its Japanese font (角 in 确 gets the Japanese
 stroke), and `lang="zh-Hans"` alone changes nothing there (tried 2026-10-05). The device
@@ -197,16 +197,40 @@ page (`selfhost/site/fonttest.html`, removed afterwards; it is in git history) d
 characters in candidate fonts and found them; Noto Sans SC as a web font also worked
 but would cost storage.
 
-`transform.js` adds `rk-cjk.js` to every page (`hackernews.html` includes it). It wraps
-runs of Chinese characters, with the CJK punctuation between them, in
-`<span class="rk-zh-serif|rk-zh-sans">` (no `lang`: it had no effect): STSong when the surrounding
-font list starts with a serif (Georgia, serif, ...), STHeiti otherwise; other devices
-fall back to their own Chinese fonts (Songti/Heiti/PingFang/Noto). English keeps its
-font. Text with kana (Japanese), elements marked `lang="zh..."`/`"ja..."` or
-`data-rk-cjk="off"`, form fields and editable areas are left alone; a MutationObserver
-(250 ms batches) handles text added later. Check changes on the Kindle itself: desktop
-browsers usually pick a Chinese font anyway. The local dev server listens on all
-interfaces, so the Kindle can open it on the home network (http://<Mac's IP>:8787).
+Now (owner 2026-10-10: "everything to heiti", and faster): `addHeiti` appends `, STHeiti`
+to every font list that ends with a generic family (`sans-serif`, `serif`, `monospace`,
+...), in every page and script (`transformHtml`, `transformJs`; `font-family:`, the `font:`
+shorthand and `--*font*:` custom properties). 575 lists in 2026-10; `inherit` (289) needs
+nothing. The insertion sits right after the generic keyword, which is always inside the
+CSS text (style block, style attribute, JS string), so quoting and syntax can't change:
+all 346 inline and file scripts still parse after it (checked by transforming every page
+and script and compiling them with `vm.Script`; do that again when changing the regex).
+Lists that continue after the generic, `inherit` and `var()` are left alone; it is
+idempotent. `HEITI_HEAD` (start of `<head>`) gives unstyled form controls
+`sans-serif, STHeiti`, since controls don't inherit the page font. Pages and scripts in
+`selfhost/site/` are not transformed: their font lists carry `, STHeiti` in the source
+(write new ones that way). Not covered: lists with no generic (AirType's Courier New,
+Dictionary's Helvetica Neue, Pet's pixel font, the OpenDyslexic setting), canvas text,
+the book reader's iframe, and inline fonts in fetched content (articles).
+
+Why the end of the list (test page on the owner's Kindle Scribe, 2026-10-10; it drew 骨直角
+on a canvas per setup, compared pixels with `"STHeiti"` and reported to the local server's
+`/__rk/health` log): the Kindle tries every family in the list, generic ones included,
+before its Japanese fallback, so `"Geneva","Verdana",sans-serif,STHeiti` draws Chinese in
+STHeiti and Latin unchanged. Before the generic (`...,STHeiti,sans-serif`) also gives
+Heiti but changes Latin: the Kindle has neither Geneva nor Verdana, so STHeiti drew the
+Latin too. A Chinese-only `@font-face` (`src: local("STHeiti")` + `unicode-range`) put
+first works as well, but needs the face on every page. The Kindle's UA is "Linux; Android
+9; Kindle Build/1.0".
+
+Until 2026-10-10 a script, `rk-cjk.js` (in git history), wrapped runs of Chinese in
+`<span class="rk-zh-serif|rk-zh-sans">` (STSong under serif text, STHeiti otherwise) after
+load and on every DOM change: a computed-style lookup per text block on the JIT-less
+Kindle, a redraw when text arrived, and nothing in form fields or editable areas.
+
+Check font changes on the Kindle itself: desktop browsers usually pick a Chinese font
+anyway. The local dev server listens on all interfaces, so the Kindle can open it on
+the home network (http://<Mac's IP>:8080).
 
 ## Hacker News (`selfhost/site/hackernews.html`)
 

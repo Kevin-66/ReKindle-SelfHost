@@ -93,6 +93,25 @@ a { color: #000; font-weight: bold; }
 `;
 }
 
+// Chinese text in the Kindle's Chinese font (STHeiti) instead of its Japanese one. The
+// Kindle browser draws Chinese with the Japanese font unless a page names a Chinese font
+// (lang="zh" changes nothing), but it does try every family in a font list before that
+// fallback, generic families included. So STHeiti goes at the END of every font list
+// that ends with a generic family: Latin text keeps its fonts (they come first), and
+// characters none of them has, Chinese, are drawn in STHeiti. Checked on the owner's
+// Kindle Scribe 2026-10-10 (selfhost/AGENTS.md, "Chinese text"). The insertion is right
+// after the generic keyword, which always sits inside the CSS text (a style block, a
+// style attribute or a JS string), so quoting and syntax are unchanged; lists that
+// already go on after the generic, inherit and var() values are left alone. Idempotent.
+const HEITI_RE = /((?<![-\w.$])(?:font-family|font|--[\w-]*font[\w-]*)\s*:\s*[^;{}\n]*?\b(?:sans-serif|serif|monospace|cursive|fantasy|system-ui))(?![-\w])(?=\s*(?:!important\s*)?(?:[;}"'`\n]|$))/gi;
+export function addHeiti(text) {
+    return text.replace(HEITI_RE, '$1, STHeiti');
+}
+
+// Form controls don't inherit the page's font (the browser gives them its own), so a
+// page that doesn't style them gets this; any page rule comes later and wins.
+const HEITI_HEAD = '<style>input,textarea,select,button{font-family:sans-serif, STHeiti}</style>';
+
 export function transformHtml(html, fileName) {
     const base = fileName.split('/').pop();
     if (DISABLED_PAGES.includes(base)) {
@@ -114,6 +133,8 @@ export function transformHtml(html, fileName) {
             .replace(/\s+crossorigin(\s*=\s*(["'])[^"']*\2)?/i, '');
     });
     html = html.replace(COUNTER_TAG, '');
+    html = addHeiti(html);
+    html = html.replace(/<head(\s[^>]*)?>/i, (tag) => tag + HEITI_HEAD);
     html = rewriteWorkerUrls(html);
     html = rewriteTrafficCop(html);
     html = fixTranslationFallbacks(html);
@@ -149,9 +170,6 @@ export function transformHtml(html, fileName) {
     // Page Up / Page Down buttons on every page that scrolls (selfhost/site/js/rk-pager.js).
     html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-pager.js"></script>\n</body>');
 
-    // Chinese text in the Kindle's Chinese fonts, not its Japanese one (selfhost/site/js/rk-cjk.js).
-    html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-cjk.js"></script>\n</body>');
-
     if (base === 'index.html' || base === 'index_old.html') {
         html = html.replace(/<\/head>/i, '<style>#live-games-section{display:none !important}</style>\n</head>');
         // The home screen copies the account's settings (users/{uid}/settings/general)
@@ -186,7 +204,7 @@ export function transformHtml(html, fileName) {
     if (base === 'substack.html') {
         // Font and formatting of the article view (selfhost/site/css/rk-substack.css).
         // CSS is cached for a day (static.js): bump ?v= whenever that file changes.
-        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css?v=2">\n</head>');
+        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css?v=3">\n</head>');
         // Substack's subscriptions API changed (2026-10), which left the app's feed empty:
         // - a signed-in request without ?tvOnly= is rejected (HTTP 400 "Invalid value");
         // - publications the reader follows come back in `publications` while
@@ -321,6 +339,7 @@ export function transformJs(code, fileName) {
     const base = fileName.split('/').pop();
     code = rewriteWorkerUrls(code);
     code = fixTranslationFallbacks(code);
+    code = addHeiti(code);
     if (base === 'icons.js' || base === 'icons-beta.js') code += ICONS_FILTER;
     if (base === 'emoji-render.js') {
         // renderEmojis() scans any text with a character above U+2600 (Chinese text

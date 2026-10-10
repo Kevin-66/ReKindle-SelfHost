@@ -98,7 +98,7 @@
             // 22 px high, 2 px border and shadow, bold small sans-serif), icon buttons square.
             '#back-btn,#rk-ch-btn,#rk-azw3-btn,#rk-full-btn,.title-bar .icon-btn,#language-select-wrapper .custom-select-trigger,#rk-full-exit{' +
             'box-sizing:border-box !important;height:22px !important;border:2px solid #000 !important;background:#fff;color:#000;' +
-            'box-shadow:2px 2px 0 #000 !important;font-family:sans-serif !important;font-size:0.7rem !important;font-weight:bold !important;' +
+            'box-shadow:2px 2px 0 #000 !important;font-family:sans-serif, STHeiti !important;font-size:0.7rem !important;font-weight:bold !important;' +
             'line-height:18px !important;padding:0 6px !important;margin:0;cursor:pointer;vertical-align:middle;}' +
             '#rk-full-btn,.title-bar .icon-btn,#rk-full-exit{width:22px !important;padding:0 !important;display:inline-flex !important;align-items:center;justify-content:center;}' +
             '#rk-full-btn svg,#rk-full-exit svg{display:block;}' +
@@ -146,7 +146,7 @@
             // Dialogs (Manhuagui sign-in, remove from library): on <body>, so page styles for
             // .window etc. don't reach them; no grey backdrop on e-ink.
             '.rk-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:transparent;display:none;align-items:flex-start;justify-content:center;padding-top:8vh;box-sizing:border-box;}' +
-            '.rk-overlay .rk-box{background:#fff;color:#000;border:2px solid #000;box-shadow:4px 4px 0 #000;width:90%;max-width:420px;font-family:"Geneva","Verdana",sans-serif;}' +
+            '.rk-overlay .rk-box{background:#fff;color:#000;border:2px solid #000;box-shadow:4px 4px 0 #000;width:90%;max-width:420px;font-family:"Geneva","Verdana",sans-serif, STHeiti;}' +
             '.rk-overlay .rk-head{padding:8px 12px;border-bottom:2px solid #000;font-weight:bold;text-align:center;}' +
             '.rk-overlay .rk-body{padding:12px;}' +
             '.rk-overlay p{margin:0 0 12px 0;font-size:0.85rem;line-height:1.4;}' +

@@ -30,7 +30,7 @@
         '#note-content blockquote{margin:0 0 0.7em;padding:0 0 0 0.8em;border-left:4px solid #000;}' +
         '#note-content blockquote+blockquote{margin-top:-0.7em;padding-top:0.2em;}' +
         '#note-content pre{margin:0 0 0.7em;padding:0.5em;border:2px solid #000;white-space:pre-wrap;font-size:0.9em;}' +
-        '#note-content code{font-family:"Courier New",Courier,monospace;border:1px solid #000;padding:0 0.2em;}' +
+        '#note-content code{font-family:"Courier New",Courier,monospace, STHeiti;border:1px solid #000;padding:0 0.2em;}' +
         '#note-content pre code{border:none;padding:0;}' +
         '#note-content table{border-collapse:collapse;margin:0 0 0.7em;}' +
         '#note-content th,#note-content td{border:1px solid #000;padding:0.2em 0.5em;text-align:left;vertical-align:top;}' +
@@ -42,7 +42,7 @@
         '#rk-agent-box{background:#fff;border:2px solid #000;box-shadow:8px 8px 0 #000;padding:20px;width:90%;max-width:560px;box-sizing:border-box;text-align:left;font-size:0.9rem;max-height:90vh;overflow-y:auto;}' +
         '#rk-agent-box h3{margin:0 0 10px;font-size:1.1rem;text-align:center;}' +
         '#rk-agent-box p{margin:0 0 10px;line-height:1.4;}' +
-        '#rk-agent-url{width:100%;box-sizing:border-box;border:2px solid #000;border-radius:0;padding:6px;font-family:"Courier New",Courier,monospace;font-size:0.85rem;margin:0 0 10px;-webkit-user-select:text;user-select:text;}' +
+        '#rk-agent-url{width:100%;box-sizing:border-box;border:2px solid #000;border-radius:0;padding:6px;font-family:"Courier New",Courier,monospace, STHeiti;font-size:0.85rem;margin:0 0 10px;-webkit-user-select:text;user-select:text;}' +
         '#rk-agent-box pre{margin:0 0 10px;padding:6px;border:1px solid #000;white-space:pre-wrap;word-break:break-all;font-size:0.75rem;-webkit-user-select:text;user-select:text;}' +
         '#rk-agent-buttons{display:flex;justify-content:center;margin-top:5px;}' +
         '#rk-agent-buttons>*+*{margin-left:10px;}';

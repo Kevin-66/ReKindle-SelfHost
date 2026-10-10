@@ -10,7 +10,7 @@
  */
 
 #reader-content {
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: Georgia, "Times New Roman", serif, STHeiti;
     line-height: 1.55;
     color: #000;
     /* The whole window (upstream caps it at 800 px, centred; this file had 720 px,
@@ -63,7 +63,7 @@
 }
 
 #reader-content pre,
-#reader-content code { font-family: "Courier New", monospace; font-size: 0.9em; }
+#reader-content code { font-family: "Courier New", monospace, STHeiti; font-size: 0.9em; }
 #reader-content pre { white-space: pre-wrap; border: 1px solid #000; padding: 0.6em; }
 #reader-content table { border-collapse: collapse; margin: 1em 0; max-width: 100%; }
 #reader-content th,
