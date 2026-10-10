@@ -501,6 +501,16 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
 - Article view font and formatting: `selfhost/site/css/rk-substack.css` (Georgia, heading
   sizes, quotes/callouts/captions, Substack's expand/restack buttons and subscribe
   widgets hidden). Everything is in `em`, so Text Size still applies.
+- Width (owner, 2026-10-10: "why is the viewport limited in width?"): upstream caps the
+  window at 900 px inside 20 px of body padding and `.reader-content` at 800 px, and
+  rk-substack.css had capped `#reader-content` at 720 px, leaving a ~664 px text column
+  on the Scribe's 993 px. Now `#reader-content` has no cap, and at widths up to 1024 px
+  the body loses its side padding and `.window` its cap (`box-sizing: border-box`, or
+  its 2 px borders fall off screen and the page scrolls sideways): 933 px of text on the
+  Scribe. Wider screens keep upstream's centred window.
+- static.js caches `.css` for a day (HTML/JS/JSON are revalidated), so the link that
+  transform.js adds is `css/rk-substack.css?v=N`: bump N whenever the file changes, or
+  Kindles keep the old styles for up to a day.
 - Debugging: the page hides failed requests behind "No posts found." Temporary logging
   of each worker request's path, status and error message in `handleWorker` found the
   `tvOnly` 400 (removed afterwards at the owner's request; add it back locally when

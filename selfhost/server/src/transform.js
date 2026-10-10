@@ -185,7 +185,8 @@ export function transformHtml(html, fileName) {
     }
     if (base === 'substack.html') {
         // Font and formatting of the article view (selfhost/site/css/rk-substack.css).
-        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css">\n</head>');
+        // CSS is cached for a day (static.js): bump ?v= whenever that file changes.
+        html = html.replace(/<\/head>/i, '<link rel="stylesheet" href="css/rk-substack.css?v=2">\n</head>');
         // Substack's subscriptions API changed (2026-10), which left the app's feed empty:
         // - a signed-in request without ?tvOnly= is rejected (HTTP 400 "Invalid value");
         // - publications the reader follows come back in `publications` while

@@ -4,15 +4,18 @@
  * #reader-content as it comes; these rules give it one readable font, sane heading
  * sizes and spacing, and hide Substack's web-only controls (image expand/restack
  * buttons, subscribe and share widgets) that showed up as stray boxes.
- * Scoped to #reader-content so the rest of the app is untouched. The Text Size
- * setting (css/rk-text.css) still sets the base size: everything here is in em.
+ * Scoped to #reader-content so the rest of the app is untouched (except the window
+ * width on e-reader screens, at the end). The Text Size setting (css/rk-text.css)
+ * still sets the base size: everything here is in em.
  */
 
 #reader-content {
     font-family: Georgia, "Times New Roman", serif;
     line-height: 1.55;
     color: #000;
-    max-width: 720px;
+    /* The whole window (upstream caps it at 800 px, centred; this file had 720 px,
+       which left a ~660 px column on the 993 px-wide Kindle Scribe). */
+    max-width: none;
     padding: 24px 28px 60px;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -79,3 +82,11 @@
 #reader-content .share-dialog,
 #reader-content .post-ufi,
 #reader-content form { display: none !important; }
+
+/* E-reader screens: the window takes the screen's whole width. Upstream caps it at
+   900 px inside 20 px of page padding, a grey band on each side of the Scribe (993 px).
+   Wider (desktop) screens keep upstream's centred window. */
+@media (max-width: 1024px) {
+    body { padding-left: 0; padding-right: 0; }
+    .window { max-width: none; box-sizing: border-box; }   /* borders inside the screen */
+}
