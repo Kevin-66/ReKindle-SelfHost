@@ -531,7 +531,12 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   on the Scribe's 993 px. Now `#reader-content` has no cap, and at widths up to 1024 px
   the body loses its side padding and `.window` its cap (`box-sizing: border-box`, or
   its 2 px borders fall off screen and the page scrolls sideways): 933 px of text on the
-  Scribe. Wider screens keep upstream's centred window.
+  Scribe. Wider screens keep upstream's centred window. `#reader-content` also needs
+  `width: 100%` (+ `min-width: 0`, `border-box`): it is a column-flex item centred with
+  `margin: 0 auto`, so without a cap it is as wide as its widest unbreakable child. On the
+  Kindle (Chromium 80, which counts an image's full width there; desktop Chrome doesn't)
+  a real post made every line run off the right edge right after the cap was removed
+  (owner's photo, 2026-10-10). Reproduce on desktop with a child of fixed width 1456 px.
 - static.js caches `.css` for a day (HTML/JS/JSON are revalidated), so the link that
   transform.js adds is `css/rk-substack.css?v=N`: bump N whenever the file changes, or
   Kindles keep the old styles for up to a day.

@@ -14,8 +14,14 @@
     line-height: 1.55;
     color: #000;
     /* The whole window (upstream caps it at 800 px, centred; this file had 720 px,
-       which left a ~660 px column on the 993 px-wide Kindle Scribe). */
+       which left a ~660 px column on the 993 px-wide Kindle Scribe). The width must be
+       set, not left to the content: the box is a centred flex item, so without a cap
+       it grows to its widest unbreakable child, and on the Kindle (Chromium 80) a
+       post's wide image made every line run off the screen (2026-10-10). */
     max-width: none;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     padding: 24px 28px 60px;
     word-wrap: break-word;
     overflow-wrap: break-word;
