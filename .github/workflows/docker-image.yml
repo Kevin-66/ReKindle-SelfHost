@@ -1,6 +1,6 @@
-# Builds the self-host Docker images on every push to main and publishes them to GHCR:
-#   ghcr.io/kevin-66/rekindle                   (Dockerfile)
-#   ghcr.io/kevin-66/rekindle-zlibrary-browser  (Dockerfile.zlibrary-browser)
+# Builds on every push to main and publishes to GHCR with a date version and latest:
+#   ghcr.io/kevin-66/rekindle (Dockerfile), ghcr.io/kevin-66/rekindle-zlibrary-browser (Dockerfile.zlibrary-browser)
+# Versions look like 2026.10.18 (a second build that day: 2026.10.18.2) and are also pushed as git tags.
 name: Docker images
 
 on:
@@ -8,12 +8,37 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# One run at a time, so two pushes on the same day can't claim the same version.
+concurrency:
+  group: docker-image
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - id: version
+        name: Next date version
+        run: |
+          base=$(date -u +%Y.%m.%d)
+          version=$base n=1
+          while git rev-parse -q --verify "refs/tags/$version" >/dev/null; do
+            n=$((n + 1)); version="$base.$n"
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -36,8 +61,8 @@ jobs:
         with:
           images: ghcr.io/kevin-66/${{ matrix.image }}
           tags: |
+            type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -47,3 +72,15 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  tag:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Record the version as a git tag
+        run: |
+          git tag "${{ needs.version.outputs.version }}" "$GITHUB_SHA"
+          git push origin "refs/tags/${{ needs.version.outputs.version }}"
