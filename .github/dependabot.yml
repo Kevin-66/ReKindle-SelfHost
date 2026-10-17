@@ -1,0 +1,8 @@
+# Opens a PR whenever a GitHub Action used in .github/workflows has a new release,
+# so the workflows stay on the latest versions.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
