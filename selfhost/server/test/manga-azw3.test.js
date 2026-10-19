@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import { comicImage, bookPageSize, ZipWriter, crc32, SCREEN, withJfif } from '../src/manga-azw3.js';
+import { comicImage, bookPageSize, ZipWriter, crc32, SCREEN, withJfif, kccImage } from '../src/manga-azw3.js';
+import { pageOptions } from '../src/images.js';
 
 const picture = (w, h) => sharp({ create: { width: w || 40, height: h || 30, channels: 3, background: { r: 200, g: 10, b: 10 } } });
 
@@ -97,4 +98,23 @@ test('the comic archive is a valid ZIP with stored entries', async () => {
         at += 46 + nameLen;
     }
     fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('KCC gets the original pages, in a format it reads', async () => {
+    const png = await picture(650, 924).png().toBuffer();
+    const webp = await picture(650, 924).webp().toBuffer();
+    const jpg = await picture(650, 924).jpeg().toBuffer();
+    assert.deepEqual(await kccImage(png), { ext: 'png', data: png });   // byte for byte
+    assert.deepEqual(await kccImage(webp), { ext: 'webp', data: webp });
+    assert.deepEqual(await kccImage(jpg), { ext: 'jpg', data: jpg });
+    const tiff = await kccImage(await picture(65, 92).tiff().toBuffer());   // not one KCC reads: JPEG
+    assert.equal(tiff.ext, 'jpg');
+    assert.deepEqual(await size(tiff.data), [65, 92]);
+});
+
+test('reader pages ask for KCC only with &kcc=1', () => {
+    assert.equal(pageOptions(new URLSearchParams('url=x')), null);
+    assert.deepEqual(pageOptions(new URLSearchParams('url=x&page=1')), { key: 'page' });
+    assert.deepEqual(pageOptions(new URLSearchParams('url=x&page=1&kcc=1')), { key: 'page', kcc: true });
+    assert.deepEqual(pageOptions(new URLSearchParams('url=x&page=1&kcc=0')), { key: 'page' });
 });

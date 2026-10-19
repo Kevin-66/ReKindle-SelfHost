@@ -61,6 +61,17 @@ test('adds the fixed-layout records and keeps everything else', () => {
     assert.equal(after.readUInt32BE(82 + 8), before.readUInt32BE(82 + 8));   // record attributes kept
 });
 
+test('a right-to-left book (KCC Manga) turns its pages the other way', () => {
+    const ltr = new Map(fixedLayoutRecords({ width: 1860, height: 2480 }));
+    assert.equal(ltr.get(525), 'horizontal-lr');
+    assert.equal(ltr.get(527), 'ltr');
+    const after = setExth(book('Chapter 1', [[100, 'Author']], [Buffer.from('text')]), fixedLayoutRecords({ width: 1860, height: 2480 }, { rtl: true }));
+    const exth = new Map(readExth(after).map(([code, value]) => [code, value.toString()]));
+    assert.equal(exth.get(525), 'horizontal-rl');
+    assert.equal(exth.get(527), 'rtl');
+    assert.equal(exth.get(122), 'true');
+});
+
 test('refuses files that are not Kindle books', () => {
     assert.throws(() => setExth(Buffer.alloc(100), []), /Not a Kindle book/);
 });

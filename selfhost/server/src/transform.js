@@ -177,7 +177,7 @@ export function transformHtml(html, fileName) {
         // never synced (e.g. after the Kindle wiped its data), but it skipped several
         // of the fields Settings saves, so those stayed at their defaults (Display Mode
         // "Reduce flashing" among them). It now restores all of them, plus this server's
-        // Text Size and Page Buttons.
+        // Text Size, Page Buttons, Substack margins and Manga options (incl. KCC).
         html = html.replace("if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());",
             "if (data.displayMode) { localStorage.setItem('rekindle_display_mode', data.displayMode); if (window.rekindleInjectEInkStyles) window.rekindleInjectEInkStyles(); }\n" +
             "                    if (data.opendyslexicFont !== undefined) { localStorage.setItem('rekindle_font_opendyslexic', data.opendyslexicFont); if (window.rekindleApplyFont) window.rekindleApplyFont(); }\n" +
@@ -189,6 +189,8 @@ export function transformHtml(html, fileName) {
             "                    if (data.rkTextSize) localStorage.setItem('rk_text_size', data.rkTextSize);\n" +
             "                    if (data.rkPageButtons) localStorage.setItem('rk_page_buttons', data.rkPageButtons);\n" +
             "                    if (data.rkMangaBlank) localStorage.setItem('rk_manga_blank', data.rkMangaBlank);\n" +
+            "                    if (data.rkMangaKcc) localStorage.setItem('rk_manga_kcc', data.rkMangaKcc);\n" +
+            "                    if (data.rkMangaAzw3) localStorage.setItem('rk_manga_azw3', data.rkMangaAzw3);\n" +
             "                    if (data.rkSubstackMargin) localStorage.setItem('rk_substack_margin', data.rkSubstackMargin);\n" +
             "                    if (serverTimestamp) localStorage.setItem('rekindle_settings_last_sync', serverTimestamp.toString());");
     }

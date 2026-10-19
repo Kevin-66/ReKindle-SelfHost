@@ -7,6 +7,7 @@
 // Keys are made stable: MangaDex@Home page addresses change with the node and each visit
 // (https://<node>/<token>/data/<chapter hash>/<file>), the chapter hash and file name
 // don't; Manhuagui pages are keyed by the encoded image address, not the signature.
+// Kindle Comic Converter's version of a page (images.js serveKccPage) is 'kcc:' + key.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -17,6 +18,7 @@ const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'im
 const TYPE = Object.fromEntries(Object.entries(EXT).map(([type, ext]) => [ext, type]));
 
 export function stableKey(key) {
+    if (key.startsWith('kcc:')) return 'kcc:' + stableKey(key.slice(4));   // KCC's version of the page
     const md = /\/(data(?:-saver)?)\/([0-9a-f]{16,})\/([^/?#|]+)$/i.exec(key);
     if (md) return `md:${md[1]}/${md[2]}/${md[3]}`;
     const mhg = /^mhg:([^:]+):/.exec(key);

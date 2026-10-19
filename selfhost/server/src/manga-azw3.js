@@ -14,6 +14,12 @@
 // serveImage), go in as the originals as far as possible (see comicImage), and the
 // finished book is marked as a fixed-layout comic (azw3-fixed-layout.js), so each page
 // fills the screen instead of sitting inside the Kindle's page margins.
+//
+// Settings > Accessibility > "Manga: AZW3 Book" (body.style, rk-pager.js) can instead
+// have Kindle Comic Converter prepare the pages ('kcc', or 'kcc-rtl' for manga read
+// right to left): the originals go to the converter as they are, and KCC (in the
+// converter service, service.mjs) crops, tunes, splits and sizes every page to SCREEN
+// before Calibre makes the book.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,6 +33,7 @@ import { setExth, fixedLayoutRecords } from './azw3-fixed-layout.js';
 import * as manhuagui from './manhuagui.js';
 
 const MAX_PAGES = 400;
+const STYLES = new Set(['original', 'kcc', 'kcc-rtl']);
 const jobs = jobStore();
 
 // ---------------------------------------------------------------- pages
@@ -252,7 +259,19 @@ export class ZipWriter {
 
 const safeName = (title) => title.replace(/[\\/:*?"<>|]+/g, '-');
 
+// Picture formats KCC reads (by extension; WebP and GIF it turns into JPEG).
+const KCC_EXT = { jpeg: 'jpg', png: 'png', webp: 'webp', gif: 'gif' };
+
+// The original picture for KCC: { ext, data }, as it is when KCC reads its format,
+// else (AVIF, ...) as a JPEG.
+export async function kccImage(body) {
+    const meta = await sharp(body, OPEN).metadata();
+    if (KCC_EXT[meta.format]) return { ext: KCC_EXT[meta.format], data: body };
+    return { ext: 'jpg', data: await sharp(body, OPEN).rotate().flatten({ background: '#ffffff' }).jpeg({ quality: 92 }).toBuffer() };
+}
+
 async function makeBook(job, dir) {
+    const kcc = job.style !== 'original';
     // Fetch every page first (kept in dir): the book's page size depends on all of them.
     const originals = [];
     for (let n = 0; n < job.sources.length; n++) {
@@ -264,30 +283,33 @@ async function makeBook(job, dir) {
     }
     if (!originals.length) throw userError('None of the pages could be fetched. Try again in a moment.', 502);
     job.missing = job.sources.length - originals.length;
-    const page = await bookPageSize(originals);
+    // KCC makes every page exactly SCREEN (enlarged or padded); else the chapter's own size.
+    const page = kcc ? SCREEN : await bookPageSize(originals);
     const cbz = path.join(dir, 'chapter.cbz');
     const zip = new ZipWriter(fs.createWriteStream(cbz));
     for (let n = 0; n < originals.length; n++) {
         try {
-            const img = await comicImage({ body: fs.readFileSync(originals[n]) }, page);
+            const body = fs.readFileSync(originals[n]);
+            const img = kcc ? await kccImage(body) : await comicImage({ body }, page);
             await zip.add(String(n + 1).padStart(4, '0') + '.' + img.ext, img.data);
         } catch { job.missing++; }   // a picture sharp can't read
         fs.rmSync(originals[n], { force: true });
     }
     await zip.finish();
     job.step = 'convert';
+    const headers = { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(safeName(job.title) + '.cbz') };
+    if (kcc) headers['X-Comic-Style'] = job.style;
     let res;
     try {
         res = await browserService('/convert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(safeName(job.title) + '.cbz') },
+            method: 'POST', headers,
             body: Readable.toWeb(fs.createReadStream(cbz)), duplex: 'half', signal: AbortSignal.timeout(600000)
         });
     } catch { throw userError('The converter could not be reached. Try again in a moment.', 502); }
     if (!res.ok) throw userError(await serviceMessage(res, 'The chapter could not be made into a Kindle book.'), 502);
     const file = await saveBody(res, path.join(dir, 'chapter.azw3'));
     fs.rmSync(cbz, { force: true });
-    fs.writeFileSync(file, setExth(fs.readFileSync(file), fixedLayoutRecords(page)));
+    fs.writeFileSync(file, setExth(fs.readFileSync(file), fixedLayoutRecords(page, { rtl: job.style === 'kcc-rtl' })));
     return { file, name: safeName(job.title) + '.azw3' };
 }
 
@@ -299,9 +321,10 @@ export function startJob(body) {
     const sources = pages.map(pageSource);
     if (sources.some((src) => !src)) throw userError('Unknown page address.');
     const title = String((body && body.title) || 'Manga').replace(/\s+/g, ' ').trim().slice(0, 200) || 'Manga';
-    const running = jobs.working().find((job) => job.title === title);   // tapped twice
+    const style = STYLES.has(body && body.style) ? body.style : 'original';
+    const running = jobs.working().find((job) => job.title === title && job.style === style);   // tapped twice
     if (running) return { id: running.id };
-    return { id: jobs.start({ title, sources, step: 'pages' }, makeBook, 'Making the book failed. Try again in a moment.').id };
+    return { id: jobs.start({ title, sources, style, step: 'pages' }, makeBook, 'Making the book failed. Try again in a moment.').id };
 }
 
 export function jobStatus(id) {

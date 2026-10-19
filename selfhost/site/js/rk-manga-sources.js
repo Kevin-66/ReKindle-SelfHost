@@ -513,7 +513,9 @@
         fetch('/__rk/manga/azw3', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: title, pages: currentReading.pages })
+            // Settings > Accessibility > "Manga: AZW3 Book": original pages, KCC or KCC
+            // right to left (localStorage rk_manga_azw3; the server checks the value).
+            body: JSON.stringify({ title: title, pages: currentReading.pages, style: lsGet('rk_manga_azw3') || 'original' })
         }).then(json).then(function (d) { follow(d.id); }, function (e) { done('AZW3 failed: ' + e.message); });
     }
 
@@ -589,10 +591,11 @@
     // For both sources: once the visible page has loaded, fetch the next pages in
     // the background, and near the end of a chapter fetch the next chapter's page
     // list and first pages, so page turns and chapter changes are instant.
-    // Kept to a small window because e-readers have little memory.
+    // Kept to a small window because e-readers have little memory: 5 pages (owner,
+    // 2026-10-19: "at least 5"; it was 2). Also gives KCC reader pages time to be made.
     // Set localStorage 'rk_manga_preload' to '0' to turn it off.
 
-    var PRELOAD_AHEAD = 2;
+    var PRELOAD_AHEAD = 5;
     var PAGE_LIST_TTL = 10 * 60000; // MangaDex@Home links expire after ~15 minutes
     var pageLists = {};             // source|chapterId -> { pages, t } or { pending }
     var preloaded = [];             // keep Image objects alive while they load
@@ -741,6 +744,32 @@
         });
     };
 
+    // Back on a chapter's first page opens the previous chapter on its LAST page (owner,
+    // 2026-10-19: "it should bring me back to chapter's end"); manga.html opened it on
+    // page 1. Both chapter loaders (the one above and manga.html's own, used for MangaDex
+    // chapters not preloaded) set page 0 and then call updateMangaPage, which moves to the
+    // end when `backTo` names the chapter now shown. Other chapter changes (the chapter
+    // list, Next at a chapter's end, reopening) still start at page 1.
+    var backTo = null;   // { reading, chapter, from }: from = the page list we left
+
+    if (typeof prevPage === 'function') {
+        var originalPrevPage = prevPage;
+        prevPage = function () {
+            if (isReaderOpen && currentReading && currentPage === 0 && currentChapterIndex > 0 && !isLoadingNextChapter) {
+                backTo = { reading: currentReading, chapter: currentChapterIndex - 1, from: currentReading.pages };
+            }
+            return originalPrevPage.apply(this, arguments);
+        };
+    }
+
+    // Called by updateMangaPage: once a new page list is showing, land on its last page if
+    // it is the chapter Back asked for, and forget the request either way.
+    function landAfterBack() {
+        if (!backTo || currentReading.pages === backTo.from) return;
+        if (backTo.reading === currentReading && backTo.chapter === currentChapterIndex) currentPage = currentReading.pages.length - 1;
+        backTo = null;
+    }
+
     // ------------------------------------------------------------ page display
     //
     // Page turns work as in manga.html: the reader goes blank (white) at once and
@@ -761,12 +790,15 @@
     }
 
     // The page URL to show: MangaDex pages come as /api/proxy links (manga.html),
-    // Manhuagui ones as this server's signed /__rk/manga/img links.
+    // Manhuagui ones as this server's signed /__rk/manga/img links. With Settings >
+    // Accessibility > "Manga: KCC for Reader Pages" on (localStorage rk_manga_kcc = '1'),
+    // &kcc=1 asks the server for Kindle Comic Converter's version of the page.
     function pageSrc(url) {
         if (!url) return url;
+        var page = '&page=1' + (lsGet('rk_manga_kcc') === '1' ? '&kcc=1' : '');
         var m = /^\/api\/proxy\?url=([^&]+)$/.exec(url);
-        if (m) return '/__rk/img?url=' + m[1] + '&page=1';
-        if (url.indexOf('/__rk/manga/img?') === 0) return url + '&page=1';
+        if (m) return '/__rk/img?url=' + m[1] + page;
+        if (url.indexOf('/__rk/manga/img?') === 0) return url + page;
         return url;
     }
 
@@ -778,6 +810,7 @@
     if (typeof updateMangaPage === 'function' && typeof saveProgress === 'function') {
         updateMangaPage = function () {
             if (!currentReading || !currentReading.pages) return;
+            landAfterBack();
             var reading = currentReading;
             var pages = reading.pages;
             var page = currentPage;

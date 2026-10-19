@@ -252,6 +252,72 @@
             try { localStorage.setItem('rk_manga_blank', blank.checked ? '1' : '0'); } catch (e) { }
             saveToAccount('rkMangaBlank', blank.checked ? '1' : '0');
         };
+        addKccSettings(manga);
+    }
+
+    // Kindle Comic Converter for the Manga app (in the converter service). Reader pages:
+    // localStorage rk_manga_kcc = '1' on (off by default: the originals, as the owner
+    // reads them); rk-manga-sources.js adds &kcc=1 to page links. AZW3 books:
+    // rk_manga_azw3 = 'original' (default) | 'kcc' | 'kcc-rtl', sent with the AZW3
+    // request (server/src/manga-azw3.js). Both kept with the account like the rest.
+    var AZW3_STYLES = [['Original', 'original'], ['KCC', 'kcc'], ['KCC Manga', 'kcc-rtl']];
+
+    function addKccSettings(after) {
+        var css = '#rk-azw3-row{flex-wrap:wrap;}' +
+            '#rk-azw3-options{width:100%;display:grid;grid-template-columns:repeat(' + AZW3_STYLES.length + ',minmax(0,1fr));gap:6px;margin-top:10px;}' +
+            '.rk-azw3-opt{min-height:48px;border:2px solid #000;background:#fff;color:#000;box-shadow:2px 2px 0 #000;' +
+            'font-family:inherit;font-weight:bold;cursor:pointer;padding:4px 2px;line-height:1.1;}' +
+            '.rk-azw3-opt.active{background:#000;color:#fff;box-shadow:none;}';
+        var style = document.createElement('style');
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
+
+        var pages = document.createElement('div');
+        pages.className = 'setting-row';
+        pages.innerHTML =
+            '<div class="setting-text"><strong>Manga: KCC for Reader Pages</strong>' +
+            '<div class="setting-desc">Kindle Comic Converter on the server crops white margins and page numbers and tunes contrast for e-ink. Off: the original pages.</div></div>' +
+            '<input type="checkbox" id="toggle-manga-kcc" class="toggle-switch">';
+        after.parentNode.insertBefore(pages, after.nextSibling);
+        var box = document.getElementById('toggle-manga-kcc');
+        try { box.checked = localStorage.getItem('rk_manga_kcc') === '1'; } catch (e) { box.checked = false; }
+        box.onchange = function () {
+            try { localStorage.setItem('rk_manga_kcc', box.checked ? '1' : '0'); } catch (e) { }
+            saveToAccount('rkMangaKcc', box.checked ? '1' : '0');
+        };
+
+        var row = document.createElement('div');
+        row.className = 'setting-row';
+        row.id = 'rk-azw3-row';
+        var html = '<div class="setting-text"><strong>Manga: AZW3 Book</strong>' +
+            '<div class="setting-desc">How the AZW3 button makes a chapter. Original: the pages as the source serves them. ' +
+            'KCC: Kindle Comic Converter crops margins, tunes contrast, splits double pages and fills the screen. ' +
+            'KCC Manga: the same, read right to left.</div></div><div id="rk-azw3-options">';
+        for (var i = 0; i < AZW3_STYLES.length; i++) {
+            html += '<button type="button" class="rk-azw3-opt" data-style="' + AZW3_STYLES[i][1] + '">' + AZW3_STYLES[i][0] + '</button>';
+        }
+        row.innerHTML = html + '</div>';
+        pages.parentNode.insertBefore(row, pages.nextSibling);
+
+        var buttons = row.querySelectorAll('.rk-azw3-opt');
+        function mark(v) {
+            for (var j = 0; j < buttons.length; j++) {
+                buttons[j].className = 'rk-azw3-opt' + (buttons[j].getAttribute('data-style') === v ? ' active' : '');
+            }
+        }
+        for (var k = 0; k < buttons.length; k++) {
+            buttons[k].onclick = function () {
+                var v = this.getAttribute('data-style');
+                try { localStorage.setItem('rk_manga_azw3', v); } catch (e) { }
+                saveToAccount('rkMangaAzw3', v);
+                mark(v);
+            };
+        }
+        var saved = null;
+        try { saved = localStorage.getItem('rk_manga_azw3'); } catch (e) { saved = null; }
+        var known = false;
+        for (var m = 0; m < AZW3_STYLES.length; m++) if (AZW3_STYLES[m][1] === saved) known = true;
+        mark(known ? saved : 'original');
     }
 
     window.rkPagerRefresh = refresh;

@@ -5,7 +5,7 @@
 # ZLIBRARY_BROWSER_ENDPOINT=http://<this service>:8091 (and ZLIBRARY_BROWSER_TOKEN on
 # both). Built from the repository root so it shares selfhost/server/src/zlibrary-browser.js.
 # Calibre's ebook-convert turns downloaded books into MOBI, the format the Kindle
-# browser opens (POST /convert).
+# browser opens (POST /convert); Kindle Comic Converter prepares Manga pages (POST /kcc).
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/opt/rekindle-browsers \
@@ -17,6 +17,19 @@ RUN npm install --no-audit --no-fund --omit=dev playwright-core@1.63.0 \
     && node node_modules/playwright-core/cli.js install --with-deps --no-shell chromium \
     && chmod -R a+rX /opt/rekindle-browsers \
     && rm -rf /var/lib/apt/lists/*
+# Kindle Comic Converter (github.com/ciromattia/kcc, ISC licence) for Manga pages and
+# chapter books when Settings asks for it (service.mjs: POST /kcc, X-Comic-Style). Only
+# its command-line converter, in its own Python: no Qt (PySide6) GUI and no KindleGen
+# (KCC writes folders of pages; Calibre still makes the book). python-slugify < 9: KCC's
+# own requirement.
+ARG KCC_VERSION=12.0.0
+RUN apt-get update && apt-get install -y --no-install-recommends python3-venv \
+    && python3 -m venv /opt/kcc \
+    && /opt/kcc/bin/pip install --no-cache-dir Pillow psutil requests 'python-slugify<9' packaging \
+        mozjpeg-lossless-optimization natsort numpy PyMuPDF \
+    && /opt/kcc/bin/pip install --no-cache-dir --no-deps "https://github.com/ciromattia/kcc/archive/refs/tags/v${KCC_VERSION}.tar.gz" \
+    && /opt/kcc/bin/kcc-c2e --help > /dev/null \
+    && rm -rf /var/lib/apt/lists/* /root/.cache
 COPY selfhost/server/src/zlibrary-browser.js ./zlibrary-browser.mjs
 COPY selfhost/browser/service.mjs selfhost/browser/start.sh ./
 EXPOSE 8091

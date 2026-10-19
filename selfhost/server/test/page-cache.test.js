@@ -18,6 +18,15 @@ test('MangaDex pages are the same page whichever MangaDex@Home node served them'
     assert.equal(stableKey('mhg:aHR0cHM:sig1'), stableKey('mhg:aHR0cHM:sig2'));   // Manhuagui: the address, not the signature
 });
 
+test('Kindle Comic Converter\'s version of a page has its own stable key', () => {
+    const md = 'https://abc.mangadex.network/tokenA/data/0123456789abcdef0123/1-x.png';
+    const kcc = stableKey('kcc:' + md);
+    assert.notEqual(kcc, stableKey(md));   // never served as the original, or the other way round
+    assert.equal(kcc, stableKey('kcc:https://uploads.mangadex.org/data/0123456789abcdef0123/1-x.png'));
+    assert.equal(stableKey('kcc:mhg:aHR0cHM:sig1'), stableKey('kcc:mhg:aHR0cHM:sig2'));
+    assert.notEqual(stableKey('kcc:mhg:aHR0cHM:sig1'), stableKey('mhg:aHR0cHM:sig1'));
+});
+
 test('pages are saved, read back with their type, and survive a restart', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rk-pages-'));
     const cache = createPageCache(dir, 1024 * 1024);

@@ -2,11 +2,13 @@
 // re-encode it as JPEG (first frame of animations; e-ink can't animate). Served at
 // /__rk/img?url=..., which the Hacker News app uses for article and comment images
 // (a 9.6 MB animated WebP on a GitHub page would not load on a Kindle otherwise).
-// The Manga app's pages pass through here unchanged (pageOptions below).
+// The Manga app's pages pass through here unchanged (pageOptions below), or through
+// Kindle Comic Converter when Settings asks for it (serveKccPage).
 
 import sharp from 'sharp';
 import { withPublicNetworkOnly } from './netguard.js';
 import { readPage, writePage } from './page-cache.js';
+import { browserService, browserServiceConfigured } from './browser-service.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 // E-reader screens are ~1072-1448 px wide. REDDIT_IMAGE_MAX_WIDTH is an old name.
@@ -42,9 +44,12 @@ async function shrinkImage(buf, type) {
 // The Manga app asks for its pages with ?page=1. They are sent exactly as the
 // source serves them (no resizing or re-encoding: the owner wants the originals),
 // kept in this server's memory cache and marked no-store (see serveImage).
+// With &kcc=1 (Settings > Accessibility > "Manga: KCC for Reader Pages", off by
+// default) they are Kindle Comic Converter's version instead (serveKccPage).
 
 export function pageOptions(params) {
-    return params.get('page') ? { key: 'page' } : null;
+    if (!params.get('page')) return null;
+    return params.get('kcc') === '1' ? { key: 'page', kcc: true } : { key: 'page' };
 }
 
 // Tries each source in turn (best first): a URL, or a function returning the
@@ -83,6 +88,7 @@ let imageCacheBytes = 0;
 // manga page), cached under `key`: in memory (IMAGE_CACHE_MAX), and manga pages also on
 // disk (page-cache.js, 1 GB).
 export async function serveImage(key, sources, opts) {
+    if (opts && opts.kcc) return serveKccPage(key, sources);
     const pageKey = opts ? key : null;
     if (opts) key = `${key}|${opts.key}`;
     let hit = imageCache.get(key);
@@ -111,6 +117,34 @@ export async function serveImage(key, sources, opts) {
         status: 200,
         headers: { 'Content-Type': hit.type, 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }
     });
+}
+
+// A Manga page as Kindle Comic Converter makes it for the reader (the converter
+// service's POST /kcc: margins and page numbers cropped, contrast and gamma tuned for
+// e-ink, double pages kept whole), cached like the originals under 'kcc:' + key. The
+// original comes from the same cache as always. If KCC is not there or fails, the
+// reader gets the original page (not cached as KCC's), so reading never stops.
+let kccMissingUntil = 0;   // the converter service has no KCC (501): don't ask for a while
+
+async function serveKccPage(key, sources) {
+    const original = () => serveImage(key, sources, { key: 'page' });
+    if (!browserServiceConfigured() || Date.now() < kccMissingUntil) return original();
+    const viaKcc = async () => {
+        const page = await original();
+        const res = await browserService('/kcc', {
+            method: 'POST',
+            headers: { 'Content-Type': page.headers.get('content-type') || 'image/jpeg' },
+            body: Buffer.from(await page.arrayBuffer()),
+            signal: AbortSignal.timeout(30000)   // a reader is waiting; KCC takes ~1 s a page
+        });
+        if (res.status === 501) kccMissingUntil = Date.now() + 5 * 60000;
+        return res;
+    };
+    try {
+        return await serveImage('kcc:' + key, [viaKcc], { key: 'page' });
+    } catch {
+        return original();
+    }
 }
 
 // GET /__rk/img?url=https://...[&page=1]  (public addresses only)
