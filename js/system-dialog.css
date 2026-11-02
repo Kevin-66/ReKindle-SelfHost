@@ -1,0 +1,120 @@
+/*
+ * ReKindle shared System 7 dialog chrome.
+ *
+ * Load after the page's <style> block and add class="rk-dialog" to an existing
+ * modal box, then wrap its contents in .rk-dialog-body and replace the old
+ * heading with .rk-dialog-bar / .rk-dialog-title.
+ *
+ * Why: several app dialogs (live-game alerts, sign-in gates, Circle menus) were
+ * plain white boxes with no title bar, while the Pro paywall already used the
+ * striped System 7 card. This file gives every dialog the same chrome without
+ * introducing a JS component or touching per-page modal logic.
+ *
+ * Chromium 75 constraints: no flex gap, no min()/max()/clamp(), no transitions.
+ */
+
+.rk-dialog {
+    padding: 0 !important;
+    text-align: left;
+    background: #fff;
+    border: 2px solid #000;
+    box-shadow: 6px 6px 0 #000;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.rk-dialog-bar {
+    min-height: 34px;
+    border-bottom: 2px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    position: relative;
+    box-sizing: border-box;
+    padding: 3px 0;
+}
+
+.rk-dialog-stripes {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    right: 4px;
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+    z-index: 0;
+}
+
+.rk-dialog-title {
+    background: #fff;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 1rem;
+    line-height: 1.2;
+    position: relative;
+    z-index: 1;
+    display: inline-block;
+    max-width: 88%;
+    box-sizing: border-box;
+    border: none;
+    margin: 0;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
+
+.rk-dialog-body {
+    padding: 18px 18px 16px;
+    box-sizing: border-box;
+    margin: 0 !important;
+    text-align: center;
+}
+
+.rk-dialog-body > p {
+    margin: 0 0 16px;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    color: #000;
+}
+
+.rk-dialog-body button {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 12px;
+    border: 2px solid #000;
+    border-radius: 0;
+    box-shadow: 2px 2px 0 #000;
+    background: #fff;
+    color: #000;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: bold;
+    line-height: 1.2;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.rk-dialog-body button + button {
+    margin-top: 8px;
+}
+
+.rk-dialog-body button.rk-primary {
+    background: #000;
+    color: #fff;
+}
+
+.rk-dialog-body button:active {
+    background: #000;
+    color: #fff;
+    box-shadow: none;
+    transform: translate(2px, 2px);
+}
+
+/* Page styles often add `> * + *` margins to modal children; cancel the one
+   that would push the body away from the title bar. */
+.rk-dialog > .rk-dialog-body {
+    margin-top: 0 !important;
+}

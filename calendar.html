@@ -9,7 +9,9 @@
     <title>Calendar</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 
@@ -665,13 +667,39 @@
             left: 0;
             width: 100%;
             height: calc(100% - 35px);
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(0, 0, 0, 0.45);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 100;
             text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #auth-overlay .auth-card {
+            background: white;
+            border: 2px solid black;
+            box-shadow: 4px 4px 0 black;
+            padding: 20px;
+            width: 100%;
+            max-width: 340px;
+            box-sizing: border-box;
+        }
+
+        #auth-overlay .auth-card .sys-btn {
+            min-height: 48px;
+            width: 100%;
+        }
+
+        #auth-overlay .auth-card .auth-secondary {
+            margin-top: 10px;
+            border: 0;
+            background: white;
+            box-shadow: none;
+            text-decoration: underline;
+            font-weight: normal;
         }
 
         .sys-btn {
@@ -702,7 +730,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.45);
             z-index: 10000;
             align-items: center;
             justify-content: center;
@@ -886,11 +914,12 @@
             margin-left: 10px;
         }
     </style>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="time.js?v=5"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <script src="js/custom-select.js?v=2"></script>
 </head>
 
 <body>
@@ -919,7 +948,14 @@
             <div class="tab-btn" onclick="switchView('month')" data-i18n="calendar.tab.month">Month</div>
         </div>
 
-        <div id="content-area"></div>
+        <div id="content-area">
+            <script>
+                document.getElementById('content-area').innerHTML = window.rekindleEmptyState(
+                    window.t('common.loading', 'Loading...'),
+                    { icon: 'calendar' }
+                );
+            </script>
+        </div>
 
         <div id="status-bar">
             <span id="status-msg" data-i18n="calendar.status.ready">Ready.</span>
@@ -934,9 +970,13 @@
 
         <!-- AUTH OVERLAY -->
         <div id="auth-overlay">
-            <h2 style="margin-bottom:10px;" data-i18n="calendar.auth.title">Google Calendar</h2>
-            <p style="margin-bottom:20px; font-size:0.9rem;" data-i18n="calendar.auth.desc">Log in to sync.</p>
-            <button class="sys-btn" onclick="oauthSignIn()" data-i18n="calendar.auth.login">Log In</button>
+            <div class="auth-card">
+                <h2 style="margin-bottom:10px;" data-i18n="calendar.auth.title">Google Calendar</h2>
+                <p style="margin-bottom:20px; font-size:0.9rem;" data-i18n="calendar.auth.desc">Log in to sync.</p>
+                <button class="sys-btn" onclick="oauthSignIn()" data-i18n="calendar.auth.login">Log In</button>
+                <button class="sys-btn auth-secondary" onclick="useLocalCalendar()" data-i18n="calendar.auth.use_local">Use
+                    local calendar</button>
+            </div>
         </div>
     </div>
 
@@ -1025,7 +1065,7 @@
         </div>
     </div>
 
-    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://apis.google.com/js/api.js" defer></script>
 
     <script>
         // --- FIREBASE CONFIG ---
@@ -1047,11 +1087,14 @@
                 document.getElementById('modal-ok').onclick = () => { overlay.style.display = 'none'; if (callback) callback(true); };
             } else {
                 btnsEl.innerHTML = '<button class="modal-btn" onclick="hideModal()">OK</button>';
-                if (callback) document.querySelector('.modal-btn').onclick = () => { hideModal(); callback(); };
+                if (callback) btnsEl.querySelector('.modal-btn').onclick = () => { hideModal(); callback(); };
             }
             overlay.style.display = 'flex';
         }
-        function hideModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+        // Only the generic alert lives in #generic-modal-overlay. This used to
+        // hide #modal-overlay (the add/edit-event dialog), which left the alert
+        // stuck on screen with no close button and closed the editor under it.
+        function hideModal() { document.getElementById('generic-modal-overlay').style.display = 'none'; }
 
         const firebaseConfig = {
             apiKey: "AIzaSyDY7x7vVmlYUyVZNLuCCmIQYa6PWFVfZqQ",
@@ -1143,6 +1186,16 @@
 
             // Note: Persistence disabled due to IndexedDB hangs on some browsers (Safari)
 
+            // Render the local cache immediately. Firebase auth can take seconds on
+            // e-ink, and the page previously sat on the "Loading..." placeholder
+            // until onAuthStateChanged fired. A signed-in user is re-rendered by
+            // the cloud snapshot below.
+            try {
+                loadLocalEvents();
+            } catch (e) {
+                console.error('Error rendering local calendar cache:', e);
+            }
+
             // db.enablePersistence({ synchronizeTabs: true }) ...
             auth.onAuthStateChanged(async user => {
                 if (user) {
@@ -1199,16 +1252,32 @@
             localStorage.setItem('rekindle_google_calendar_enabled', enableGoogle);
 
             // Save preference to cloud
-            db.collection('users').doc(currentUser.uid).collection('settings').doc('integrations').set({
-                google_calendar: enableGoogle
-            }, { merge: true });
+            if (currentUser && db) {
+                db.collection('users').doc(currentUser.uid).collection('settings').doc('integrations').set({
+                    google_calendar: enableGoogle
+                }, { merge: true });
+            }
 
             if (enableGoogle) {
                 googleEnabled = true;
                 initGoogleMode();
             } else {
                 googleEnabled = false;
-                document.getElementById('status-msg').innerText = "Synced: " + currentUser.email;
+                document.getElementById('status-msg').innerText = currentUser ? ("Synced: " + currentUser.email) : "Guest Mode";
+                initNativeMode();
+            }
+        }
+
+        // Escape hatch for the Google auth card: a missing/expired token must not
+        // make the local calendar unreachable.
+        function useLocalCalendar() {
+            document.getElementById('auth-overlay').style.display = 'none';
+            if (currentUser && db) {
+                setSyncPreference(false);
+            } else {
+                googleEnabled = false;
+                localStorage.setItem('rekindle_google_calendar_enabled', 'false');
+                document.getElementById('status-msg').innerText = "Guest Mode";
                 initNativeMode();
             }
         }
@@ -1278,14 +1347,20 @@
             const todayZoned = getZonedDate();
             todayZoned.setHours(0, 0, 0, 0);
 
-            // Filter logic: Check if event's zoned start time is >= todayZoned
+            // Filter logic: Check if event's zoned start time is >= todayZoned.
+            // Cache the conversion for the grouping pass below.
+            const zonedByKey = {};
             const filteredEvents = events.filter(e => {
                 const z = getZonedDate(new Date(e.start));
+                zonedByKey[e.id || e.start] = z;
                 return z >= todayZoned;
             });
 
             if (filteredEvents.length === 0) {
-                wrapper.innerHTML = '<div style="text-align:center; padding:20px;">No upcoming events.</div>';
+                wrapper.innerHTML = window.rekindleEmptyState(
+                    window.t('calendar.msg.empty', 'No events scheduled.'),
+                    { icon: 'calendar' }
+                );
                 container.appendChild(wrapper);
                 return;
             }
@@ -1293,7 +1368,7 @@
             const grouped = {};
             filteredEvents.forEach(e => {
                 // IMPORTANT: Group by the DATE as it appears in the TARGET ZONE
-                const z = getZonedDate(new Date(e.start));
+                const z = zonedByKey[e.id || e.start] || getZonedDate(new Date(e.start));
                 // Use a string key based on the zoned date values
                 // ISO string slice is risky if z is local time, so build manually or use formatted
                 const dateKey = z.getFullYear() + '-' + (z.getMonth() + 1).toString().padStart(2, '0') + '-' + z.getDate().toString().padStart(2, '0');
@@ -1456,15 +1531,22 @@
             // Create slots for hours 6 AM to 10 PM (simplified view)
             // Or just list the events sorted
             if (dayEvents.length === 0) {
-                list.innerHTML = '<div style="padding:40px; text-align:center; color:#666;">No events scheduled.</div>';
+                list.innerHTML = window.rekindleEmptyState(
+                    window.t('calendar.msg.empty', 'No events scheduled.'),
+                    { icon: 'calendar' }
+                );
             } else {
-                // Group by hour for a structured look
+                // Group by hour for a structured look. This used to run
+                // getZonedDate() once per event per hour (24xN conversions).
+                const byHour = {};
+                dayEvents.forEach(e => {
+                    const hour = getZonedDate(new Date(e.start)).getHours();
+                    if (!byHour[hour]) byHour[hour] = [];
+                    byHour[hour].push(e);
+                });
+
                 for (let hour = 0; hour < 24; hour++) {
-                    const hourEvents = dayEvents.filter(e => {
-                        const d = new Date(e.start);
-                        const zoned = getZonedDate(d);
-                        return zoned.getHours() === hour;
-                    });
+                    const hourEvents = byHour[hour] || [];
 
                     if (hourEvents.length > 0) {
                         const slot = document.createElement('div');
@@ -1972,8 +2054,13 @@
             renderView();
         }
 
+        var cloudEventsUnsub = null;
+
         function loadCloudEvents() {
-            db.collection('users').doc(currentUser.uid).collection('events')
+            // onAuthStateChanged can fire more than once; without this guard each
+            // fire stacked another snapshot listener and another full re-render.
+            if (cloudEventsUnsub) cloudEventsUnsub();
+            cloudEventsUnsub = db.collection('users').doc(currentUser.uid).collection('events')
                 .onSnapshot(snap => {
                     events = [];
                     snap.forEach(doc => {
@@ -1983,6 +2070,10 @@
                     renderView();
                 });
         }
+
+        window.addEventListener('pagehide', function () {
+            if (cloudEventsUnsub) { cloudEventsUnsub(); cloudEventsUnsub = null; }
+        });
 
 
         async function loadCalDAVEvents() {
@@ -2365,7 +2456,7 @@
 
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
     <!-- STANDARD MODAL POPUP -->
     <div id="generic-modal-overlay">
         <div class="modal-box">

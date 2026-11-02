@@ -17,10 +17,30 @@
                 }
             } catch (e) { }
 
-            // 1. DETECT MESQUITE (Legacy Kindle / WebKit ~534)
-            // Legacy Kindles do not support native Promises. 
-            var isMesquite = typeof Promise === "undefined";
-            if (isMesquite) {
+            // Route each e-reader family to the build that is tested on it.
+            // Pre-Chromium Kindles run Mesquite (WebKit ~534, no native Promise)
+            // and belong on Lite; Kobo's stock browser belongs on Legacy.
+            var ua = navigator.userAgent || '';
+            var isKobo = /Kobo/i.test(ua);
+            var isKindle = /Kindle/i.test(ua);
+            var hasPromise = typeof Promise !== "undefined";
+            var hasAsync = true;
+            try { eval("async function f(){}"); } catch (e) { hasAsync = false; }
+
+            if (isKobo) {
+                window.location.href = "https://legacy.rekindle.ink/" + search;
+                return;
+            }
+
+            // Mesquite Kindles have no Promise; route them to Lite. This check
+            // must come before the generic no-Promise fallback below.
+            if (isKindle && (!hasPromise || !hasAsync)) {
+                window.location.href = "https://lite.rekindle.ink/" + search;
+                return;
+            }
+
+            // Generic fallbacks for devices we cannot identify by UA.
+            if (!hasPromise) {
                 document.write('<style>#legacy-overlay { display: -webkit-box !important; display: flex !important; -webkit-box-align: center; -webkit-box-pack: center; z-index: 9999; }</style>');
                 var count = 5;
                 setInterval(function () {
@@ -32,32 +52,34 @@
                 return;
             }
 
-            // 2. DETECT KOBO / LITE DEVICES (Chrome ~44)
-            // Chrome ~44 has Promises, but lacks async/await (added in Chrome 55).
-            var isLite = false;
-            try { eval("async function f(){}"); } catch (e) { isLite = true; }
-            if (isLite) { window.location.href = "https://lite.rekindle.ink/" + search; return; }
+            if (!hasAsync) {
+                window.location.href = "https://lite.rekindle.ink/" + search;
+                return;
+            }
         })();
     </script>
-    <script src="js/anti-tamper.js"></script>
+    <script src="js/anti-tamper.js?v=1"></script>
     <meta charset="UTF-8">
 
     <title>ReKindle</title>
     <link rel="manifest" href="manifest.json">
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js" defer></script>
 
-    <script src="time.js" defer></script>
-    <script src="icons.js?v=2" defer></script>
-    <script src="icons-beta.js" defer></script>
-    <script src="theme.js?v=18" defer></script>
+    <script src="time.js?v=5" defer></script>
+    <script src="icons.js?v=8" defer></script>
+    <script src="icons-beta.js?v=1" defer></script>
+    <script src="theme.js?v=35" defer></script>
     <script src="bad_words.js?v=4" defer></script>
-    <script src="js/i18n.js" defer></script>
-    <script src="js/ip-ban.js" defer></script>
+    <script src="js/i18n.js?v=4" defer></script>
+    <script src="js/ip-ban.js?v=1" defer></script>
 
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -96,7 +118,7 @@
             background-color: #e5e5e5;
             user-select: none;
             position: fixed;
-            inset: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -839,6 +861,7 @@
                 <p data-i18n="home.info.data_policy" style="font-size: 0.75rem; color: #666; margin-bottom: 5px; margin-top: 15px;">No data is, or ever
                     will be shared or sold by ReKindle.</p>
                 <a href="privacy" class="privacy-link" data-i18n="home.info.privacy">Privacy Policy</a>
+                <a href="changelog" class="privacy-link" data-i18n="home.info.changelog">Changelog</a>
                 <button class="sys-btn" onclick="openDonateModal()" data-i18n="home.btn.donate" style="box-shadow: 2px 2px 0 black; padding: 5px 10px; font-size: 0.8rem; margin-top:10px;">Donate</button>
             </div>
         </div>
@@ -1127,9 +1150,7 @@
                     if (data.manualLocation) localStorage.setItem('rekindle_location_manual', JSON.stringify(data.manualLocation));
                     if (data.unitSystem) localStorage.setItem('rekindle_unit_system', data.unitSystem);
                     if (data.themeMode) {
-                        // Dark mode is temporarily disabled.
-                        var syncedTheme = data.themeMode === 'light' ? 'light' : 'light';
-                        localStorage.setItem('rekindle_theme_mode', syncedTheme);
+                        localStorage.setItem('rekindle_theme_mode', data.themeMode);
                         if (window.rekindleApplyTheme) window.rekindleApplyTheme();
                     }
                     if (data.disableGames !== undefined) localStorage.setItem('rekindle_disable_games', data.disableGames);
@@ -1316,7 +1337,7 @@
 
         function createAppElement(app) {
             const a = document.createElement('a');
-            a.href = `${app.id}.html`;
+            a.href = window.rekindleExtensionlessHref ? window.rekindleExtensionlessHref(`${app.id}.html`) : `${app.id}.html`;
             a.className = 'app-icon';
             a.id = `icon-${app.id}`;
             
@@ -1441,7 +1462,7 @@
 
             featuredApps.forEach(app => {
                 const a = document.createElement('a');
-                a.href = `${app.id}.html`;
+                a.href = window.rekindleExtensionlessHref ? window.rekindleExtensionlessHref(`${app.id}.html`) : `${app.id}.html`;
                 if (app.id === 'discord') { a.onclick = (e) => { e.preventDefault(); openDiscordModal(); }; a.href = "javascript:void(0)"; }
                 a.className = 'featured-card';
                 const subheading = app.desc || '';

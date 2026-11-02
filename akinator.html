@@ -6,9 +6,9 @@
         content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <meta charset="UTF-8">
     <title data-i18n="akinator.title">Akinator</title>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
     <style>
         :root {
             --bg-color: #ffffff;
@@ -140,6 +140,27 @@
             line-height: 1.4;
             text-align: center;
             margin-bottom: 20px;
+        }
+
+        #start-view {
+            justify-content: center;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        #start-view .start-icon {
+            display: block;
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 12px;
+        }
+
+        #start-view > p,
+        #start-view > div,
+        #start-view > label,
+        #start-view > button {
+            width: 100%;
+            max-width: 340px;
         }
 
         label {
@@ -330,6 +351,7 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
 </head>
 
 <body>
@@ -342,6 +364,16 @@
 
         <div class="window-content">
             <div id="start-view" class="view active">
+                <svg class="start-icon" viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="black"
+                    stroke-width="3" stroke-linecap="square" stroke-linejoin="miter">
+                    <path d="M13 41h34c0 7-7 12-17 12s-17-5-17-12z"></path>
+                    <path d="M47 41l9-10"></path>
+                    <path d="M13 41c-4 0-6-2-6-5s2-5 6-5h5"></path>
+                    <path d="M22 31c2-5 6-8 11-8s9 3 11 8"></path>
+                    <path d="M33 23v-8"></path>
+                    <path d="M29 11c0-3 2-5 4-5s4 2 4 5"></path>
+                    <path d="M50 15l2 3 3 1-3 1-2 3-2-3-3-1 3-1z" fill="black" stroke="none"></path>
+                </svg>
                 <p class="intro-text" data-i18n="akinator.intro">Think of a character, real or fictional. The genie will try to guess it in 20 questions.</p>
 
                 <div>
@@ -426,14 +458,16 @@
             region: 'en',
             childMode: false,
             session: '',
-            signature: '',
             baseUrl: '',
             sid: 1,
-            step: 0,
+            // Akinator's first question is already step 1. Sending 0 makes
+            // /answer return {"completion":"KO"} and the game never advances.
+            step: 1,
             progression: 0,
             question: '',
             stepLast: '',
-            answers: []
+            answers: [],
+            guessNoQuestion: false
         };
 
         var isLoading = false;
@@ -449,60 +483,13 @@
         var backButton = document.getElementById('back-btn');
         var resultPhoto = document.getElementById('result-photo');
 
-        var CORS_PROXIES = [
-            { base: 'https://test.cors.workers.dev/?', encode: false },
-            { base: 'https://corsproxy.io/?url=', encode: true },
-            { base: 'https://api.codetabs.com/v1/proxy?quest=', encode: true }
-        ];
-
-        var activeTransport = null;
-
-        function regionInfo(region) {
-            var parts = String(region || 'en').split('_');
-            var sid = 1;
-            if (parts[1] === 'objects') sid = 2;
-            else if (parts[1] === 'animals') sid = 14;
-            return { baseUrl: 'https://' + parts[0] + '.akinator.com', sid: sid };
-        }
-
-        function buildForm(params) {
-            var parts = [];
-            for (var key in params) {
-                if (Object.prototype.hasOwnProperty.call(params, key)) {
-                    parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
-                }
-            }
-            return parts.join('&');
-        }
-
-        function extractFirst(text, patterns) {
-            var best = null;
-            for (var i = 0; i < patterns.length; i++) {
-                var flags = patterns[i].flags;
-                if (flags.indexOf('g') === -1) flags += 'g';
-                var regex = new RegExp(patterns[i].source, flags);
-                var match;
-                while ((match = regex.exec(text)) !== null) {
-                    if (match[1] && (!best || match[1].length > best.length)) {
-                        best = match[1];
-                    }
-                    if (match.index === regex.lastIndex) regex.lastIndex++;
-                }
-            }
-            return best;
-        }
-
-        function parseAnswerLabels(html) {
-            var ids = ['a_yes', 'a_no', 'a_dont_know', 'a_probably', 'a_probaly_not'];
-            var answers = [];
-            for (var i = 0; i < ids.length; i++) {
-                var regex = new RegExp("<a[^>]*id=[\"']" + ids[i] + "[\"'][^>]*>([\\s\\S]*?)<\\/a>", "i");
-                var match = html.match(regex);
-                var label = match && match[1] ? match[1].replace(/<[^>]*>/g, '').trim() : null;
-                answers.push(label || null);
-            }
-            return answers;
-        }
+        // Chrome-TLS relay (akinator-service/), hosted on Northflank's free
+        // always-on Developer Sandbox. Akinator's Cloudflare blocks every plain
+        // HTTP client by TLS fingerprint, so this Node relay (got-scraping) is
+        // the only transport. The old public CORS proxies were verified dead in
+        // 2026-10 and have been removed: they only added ~45s of spinner before
+        // the same error.
+        var BACKEND_URL = 'https://p01--akinator--lcgj9cjkcx8q.code.run';
 
         function fetchWithTimeout(url, options, ms) {
             options = options || {};
@@ -523,166 +510,78 @@
             });
         }
 
-        function proxyRequest(proxy, target, formBody) {
-            var url = proxy.base + (proxy.encode ? encodeURIComponent(target) : target);
-            return fetchWithTimeout(url, {
+        function backendRequest(payload, timeoutMs) {
+            return fetchWithTimeout(BACKEND_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: formBody
-            }, 15000);
-        }
-
-        async function startViaProxy(proxy) {
-            var info = regionInfo(state.region);
-            var form = buildForm({ cm: state.childMode ? 'true' : 'false', sid: info.sid });
-            var res = await proxyRequest(proxy, info.baseUrl + '/game', form);
-            if (!res.ok) throw new Error('Proxy returned HTTP ' + res.status);
-            var html = await res.text();
-            var session = extractFirst(html, [
-                /session:\s*'([^']+)'/,
-                /session\s*[:=]\s*"([^"]+)"/,
-                /uid_ext_session\s*=\s*'([^']+)'/,
-                /id=["']session["'][^>]*value=["']([^"']+)["']/i,
-                /value=["']([^"']+)["'][^>]*id=["']session["']/i
-            ]);
-            var signature = extractFirst(html, [
-                /signature:\s*'([^']+)'/,
-                /signature\s*[:=]\s*"([^"]+)"/,
-                /id=["']signature["'][^>]*value=["']([^"']+)["']/i,
-                /value=["']([^"']+)["'][^>]*id=["']signature["']/i
-            ]);
-            var question = extractFirst(html, [
-                /<p[^>]*class=["'][^"']*question-text[^"']*["'][^>]*id=["']question-label["'][^>]*>([\s\S]*?)<\/p>/i,
-                /<[^>]*id=["']question-label["'][^>]*>([\s\S]*?)<\//i
-            ]);
-            if (!session || !signature || !question) {
-                throw new Error('Could not parse Akinator session via proxy');
-            }
-            return {
-                session: session,
-                signature: signature,
-                question: question.trim(),
-                baseUrl: info.baseUrl,
-                sid: info.sid,
-                answers: parseAnswerLabels(html)
-            };
-        }
-
-        async function actionViaProxy(proxy, endpoint, params) {
-            var info = regionInfo(state.region);
-            var res = await proxyRequest(proxy, info.baseUrl + endpoint, buildForm(params));
-            if (!res.ok) throw new Error('Proxy returned HTTP ' + res.status);
-            var text = await res.text();
-            var data;
-            try {
-                data = JSON.parse(text);
-            } catch (e) {
-                throw new Error('Akinator returned an unexpected response via proxy');
-            }
-            if (!data || typeof data !== 'object') {
-                throw new Error('Akinator returned an unexpected response via proxy');
-            }
-            return data;
-        }
-
-        function sameTransport(a, b) {
-            return a.proxy.base === b.proxy.base;
-        }
-
-        function getTransports() {
-            var list = [];
-            var i;
-            for (i = 0; i < CORS_PROXIES.length; i++) {
-                list.push({ type: 'proxy', proxy: CORS_PROXIES[i] });
-            }
-            if (activeTransport) {
-                for (i = 0; i < list.length; i++) {
-                    if (sameTransport(list[i], activeTransport)) {
-                        var preferred = list.splice(i, 1)[0];
-                        list.unshift(preferred);
-                        break;
-                    }
-                }
-            }
-            return list;
-        }
-
-        async function withTransport(fn) {
-            var transports = getTransports();
-            var lastErr = null;
-            for (var i = 0; i < transports.length; i++) {
-                try {
-                    var result = await fn(transports[i]);
-                    activeTransport = transports[i];
-                    return result;
-                } catch (e) {
-                    console.warn('Akinator transport failed (' + transports[i].type + '):', e.message || e);
-                    lastErr = e;
-                    if (activeTransport && sameTransport(activeTransport, transports[i])) {
-                        activeTransport = null;
-                    }
-                }
-            }
-            throw lastErr || new Error(translate('akinator.error.network', 'Network error. Please try again.'));
-        }
-
-        function apiStart() {
-            return withTransport(function (t) {
-                var p = startViaProxy(t.proxy);
-                return p.then(function (data) {
-                    if (!data || !data.session || !data.signature || !data.question) {
-                        throw new Error('Invalid start response');
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }, timeoutMs || 20000).then(function (res) {
+                return res.text().then(function (text) {
+                    var data = {};
+                    try { data = JSON.parse(text); } catch (e) { data = {}; }
+                    if (!res.ok) {
+                        var err = new Error(data.message || ('Relay returned HTTP ' + res.status));
+                        err.code = data.error || 'relay_error';
+                        throw err;
                     }
                     return data;
                 });
+            }, function () {
+                var netErr = new Error(translate('akinator.error.network', 'Network error. Please try again.'));
+                netErr.code = 'network';
+                throw netErr;
             });
         }
 
+        function startViaBackend() {
+            return backendRequest({
+                action: 'start',
+                region: state.region,
+                childMode: state.childMode
+            }, 25000).then(function (data) {
+                if (!data || !data.session || !data.question) {
+                    throw new Error('Invalid start response');
+                }
+                return data;
+            });
+        }
+
+        function apiStart() {
+            return startViaBackend();
+        }
+
         function apiAnswer(index) {
-            return withTransport(function (t) {
-                var info = regionInfo(state.region);
-                return actionViaProxy(t.proxy, '/answer', {
-                    step: state.step,
-                    progression: state.progression,
-                    sid: info.sid,
-                    cm: state.childMode ? 'true' : 'false',
-                    answer: index,
-                    step_last_proposition: state.stepLast || '',
-                    session: state.session,
-                    signature: state.signature
-                });
+            return backendRequest({
+                action: 'answer',
+                region: state.region,
+                childMode: state.childMode,
+                session: state.session,
+                step: state.step,
+                progression: state.progression,
+                answer: index,
+                stepLast: state.stepLast || ''
             });
         }
 
         function apiBack() {
-            return withTransport(function (t) {
-                var info = regionInfo(state.region);
-                return actionViaProxy(t.proxy, '/cancel_answer', {
-                    step: state.step,
-                    progression: state.progression,
-                    sid: info.sid,
-                    cm: state.childMode ? 'true' : 'false',
-                    session: state.session,
-                    signature: state.signature
-                });
+            return backendRequest({
+                action: 'back',
+                region: state.region,
+                childMode: state.childMode,
+                session: state.session,
+                step: state.step,
+                progression: state.progression
             });
         }
 
         function apiContinue() {
-            return withTransport(function (t) {
-                var info = regionInfo(state.region);
-                return actionViaProxy(t.proxy, '/exclude', {
-                    step: state.step,
-                    progression: state.progression,
-                    sid: info.sid,
-                    cm: state.childMode ? 'true' : 'false',
-                    session: state.session,
-                    signature: state.signature,
-                    forward_answer: '1'
-                });
+            return backendRequest({
+                action: 'continue',
+                region: state.region,
+                childMode: state.childMode,
+                session: state.session,
+                step: state.step,
+                progression: state.progression
             });
         }
 
@@ -699,7 +598,7 @@
             for (var i = 0; i < answerButtons.length; i++) {
                 answerButtons[i].disabled = loading;
             }
-            backButton.disabled = loading || state.step <= 0;
+            backButton.disabled = loading || state.step <= 1;
         }
 
         function decodeHtml(text) {
@@ -734,12 +633,12 @@
                 var data = await apiStart();
 
                 state.session = data.session;
-                state.signature = data.signature;
                 state.baseUrl = data.baseUrl;
                 state.sid = data.sid;
-                state.step = 0;
-                state.progression = 0;
+                state.step = typeof data.step === 'number' && data.step > 0 ? data.step : 1;
+                state.progression = typeof data.progression === 'number' ? data.progression : 0;
                 state.stepLast = '';
+                state.guessNoQuestion = false;
                 state.question = data.question;
                 state.answers = data.answers || [];
 
@@ -755,7 +654,7 @@
         function renderGame() {
             showView('game');
             document.getElementById('question-text').textContent = decodeHtml(state.question);
-            document.getElementById('step-text').textContent = translate('akinator.hud.step', 'Question {n}').replace('{n}', state.step + 1);
+            document.getElementById('step-text').textContent = translate('akinator.hud.step', 'Question {n}').replace('{n}', state.step);
             document.getElementById('progress-text').textContent = translate('akinator.hud.progress', 'Confidence: {p}%').replace('{p}', Math.round(parseFloat(state.progression) || 0));
 
             for (var i = 0; i < answerButtons.length; i++) {
@@ -766,7 +665,7 @@
                 }
             }
 
-            backButton.disabled = state.step <= 0;
+            backButton.disabled = state.step <= 1;
         }
 
         function defaultAnswerLabel(index) {
@@ -781,85 +680,91 @@
             return translate(keys[index], fallbacks[index]);
         }
 
+        function handleGameError(e) {
+            console.error('Akinator error:', e);
+            if (e && e.code === 'session_expired') {
+                showError(translate('akinator.error.session', 'The genie lost track of that game. Starting again.'));
+                resetGame();
+                return;
+            }
+            showError(e && e.message ? e.message : translate('akinator.error.network', 'Network error. Please try again.'));
+        }
+
         async function answer(index) {
             if (isLoading) return;
             setLoading(true);
 
             try {
                 var data = await apiAnswer(index);
-                await handleResponse(data);
+                handleResponse(data);
             } catch (e) {
-                console.error('Answer error:', e);
-                showError(e.message);
+                handleGameError(e);
             } finally {
                 setLoading(false);
             }
         }
 
         async function goBack() {
-            if (isLoading || state.step <= 0) return;
+            if (isLoading || state.step <= 1) return;
             setLoading(true);
 
             try {
                 var data = await apiBack();
                 updateFromStep(data);
             } catch (e) {
-                console.error('Back error:', e);
-                showError(e.message);
+                handleGameError(e);
             } finally {
                 setLoading(false);
             }
         }
 
         function updateFromStep(data) {
-            state.step = parseInt(data.step, 10) || 0;
-            state.progression = parseFloat(data.progression) || 0;
-            state.question = data.question || state.question;
-            state.stepLast = '';
+            if (typeof data.step === 'number' && data.step > 0) state.step = data.step;
+            if (typeof data.progression === 'number' && isFinite(data.progression)) state.progression = data.progression;
+            if (data.question) state.question = data.question;
             renderGame();
         }
 
-        async function handleResponse(data) {
-            if (data.id_proposition || data.id_base_proposition || data.name_proposition) {
-                showResult(data);
-            } else {
-                updateFromStep(data);
-            }
+        function handleResponse(data) {
+            if (data.guess) showResult(data);
+            else updateFromStep(data);
         }
 
         function showResult(data) {
+            var guess = data.guess || {};
             showView('result');
-            document.getElementById('result-name').textContent = decodeHtml(data.name_proposition || data.name || '');
-            document.getElementById('result-desc').textContent = decodeHtml(data.description_proposition || data.description || '');
+            document.getElementById('result-name').textContent = decodeHtml(guess.name || '');
+            document.getElementById('result-desc').textContent = decodeHtml(guess.description || '');
 
-            var photo = data.photo || data.sugestion_photo || '';
-            if (photo) {
-                resultPhoto.src = photo;
+            if (guess.photo) {
+                resultPhoto.src = guess.photo;
                 resultPhoto.classList.add('visible');
             } else {
-                resultPhoto.src = '';
+                resultPhoto.removeAttribute('src');
                 resultPhoto.classList.remove('visible');
             }
 
-            if (typeof data.step !== 'undefined') {
-                state.step = parseInt(data.step, 10) || state.step;
-            }
-            if (typeof data.progression !== 'undefined') {
-                state.progression = parseFloat(data.progression) || state.progression;
-            }
-            state.stepLast = data.id_proposition || data.id_base_proposition || '';
+            if (typeof data.step === 'number' && data.step > 0) state.step = data.step;
+            if (typeof data.progression === 'number') state.progression = data.progression;
+            // Akinator only accepts the *current* step when continuing after a
+            // wrong guess (the old code sent the proposition id here).
+            state.stepLast = String(state.step);
+            state.guessNoQuestion = !!guess.noQuestion;
         }
 
         async function continueGame() {
             if (isLoading) return;
+            if (state.guessNoQuestion) {
+                resetGame();
+                return;
+            }
             setLoading(true);
 
             try {
                 var data = await apiContinue();
-                await handleResponse(data);
+                handleResponse(data);
             } catch (e) {
-                console.error('Continue error:', e);
-                showError(e.message);
+                handleGameError(e);
             } finally {
                 setLoading(false);
             }
@@ -870,19 +775,16 @@
         }
 
         function resetGame() {
-            state = {
-                region: 'en',
-                childMode: false,
-                session: '',
-                signature: '',
-                baseUrl: '',
-                sid: 1,
-                step: 0,
-                progression: 0,
-                question: '',
-                stepLast: '',
-                answers: []
-            };
+            // Keep the player's region / child-mode choice for the next game.
+            state.session = '';
+            state.baseUrl = '';
+            state.sid = 1;
+            state.step = 1;
+            state.progression = 0;
+            state.question = '';
+            state.stepLast = '';
+            state.answers = [];
+            state.guessNoQuestion = false;
             showView('start');
             setLoading(false);
         }
@@ -891,6 +793,7 @@
             if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
         });
     </script>
+    <script src="js/custom-select.js?v=2"></script>
 </body>
 
 </html>

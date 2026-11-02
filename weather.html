@@ -399,6 +399,13 @@
             margin-top: 10px;
         }
 
+        .forecast-empty {
+            padding: 10px;
+            color: #666;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
         .forecast-row {
             display: flex;
             align-items: center;
@@ -671,12 +678,14 @@
             }
         }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
+    <script src="time.js?v=5"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
 </head>
 
 <body>
@@ -726,7 +735,9 @@
 
             <!-- FORECAST -->
             <div class="section-title" data-i18n="weather.header.daily">5 Day Forecast</div>
-            <div class="forecast-list" id="forecast-container"></div>
+            <div class="forecast-list" id="forecast-container">
+                <div class="forecast-empty" data-i18n="weather.status.loading">LOADING...</div>
+            </div>
         </div>
     </div>
 
@@ -1199,7 +1210,7 @@
                 .then(data => {
                     if (data && data.features && data.features.length > 0) {
                         currentAlertData = data.features[0].properties;
-                        alertBanner.innerText = `⚠️ ${currentAlertData.event}`;
+                        alertBanner.innerText = `! ${currentAlertData.event}`;
                         alertBanner.style.display = 'inline-block';
                     }
                 })
@@ -1225,12 +1236,18 @@
             const windUnit = unit === 'fahrenheit' ? 'mph' : 'kmh';
 
             const currentLoc = userSettings.locations[userSettings.currentIndex];
+            let timeoutId = null;
 
             try {
                 // ADD minutely_15=precipitation to URL
                 const url = `https://api.open-meteo.com/v1/forecast?latitude=${currentLoc.lat}&longitude=${currentLoc.long}&current_weather=true&hourly=temperature_2m,weathercode&daily=weathercode,temperature_2m_max,temperature_2m_min&minutely_15=precipitation&timezone=auto&temperature_unit=${unit}&windspeed_unit=${windUnit}`;
 
-                const res = await fetch(url);
+                const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+                if (controller) {
+                    timeoutId = setTimeout(function () { controller.abort(); }, 12000);
+                }
+                const res = await fetch(url, controller ? { signal: controller.signal } : undefined);
+                if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
                 const data = await res.json();
 
                 // 1. Render Current
@@ -1259,7 +1276,13 @@
                 fetchGovAlerts(currentLoc.lat, currentLoc.long, currentLoc.country_code);
 
             } catch (e) {
+                if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
                 document.getElementById('current-cond').innerText = window.t('weather.status.error', "Connection Error");
+                const forecast = document.getElementById('forecast-container');
+                if (forecast) {
+                    forecast.innerHTML = '<div class="forecast-empty">' +
+                        window.t('weather.status.error', 'Connection Error') + '</div>';
+                }
                 console.error(e);
             }
         }
@@ -1456,7 +1479,7 @@
 
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
 
 
 </body>

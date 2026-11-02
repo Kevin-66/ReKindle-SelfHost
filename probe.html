@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+    <title>Browser Probe</title>
+    <style>
+        body {
+            background-color: #e5e5e5;
+            font-family: "Geneva", "Verdana", sans-serif;
+            color: #000;
+            margin: 0;
+            padding: 12px;
+        }
+
+        .window {
+            background: #fff;
+            border: 2px solid #000;
+            box-shadow: 4px 4px 0 #000;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .title-bar {
+            position: relative;
+            height: 35px;
+            border-bottom: 2px solid #000;
+            text-align: center;
+            line-height: 35px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .title-stripes {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            top: 4px;
+            bottom: 4px;
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+        }
+
+        .title-text {
+            position: relative;
+            background: #fff;
+            padding: 0 10px;
+            display: inline-block;
+        }
+
+        .close-box {
+            position: absolute;
+            left: 8px;
+            top: 8px;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #000;
+            background: #fff;
+            color: #000;
+            text-align: center;
+            line-height: 16px;
+            font-weight: bold;
+            text-decoration: none;
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        .content {
+            padding: 14px;
+        }
+
+        h1 {
+            font-size: 1.15rem;
+            margin: 0 0 8px;
+        }
+
+        p {
+            font-size: 0.9rem;
+            line-height: 1.35;
+            margin: 8px 0;
+        }
+
+        .note {
+            border: 2px dashed #000;
+            padding: 8px;
+            font-size: 0.85rem;
+            margin: 10px 0;
+        }
+
+        .warn {
+            border: 2px solid #000;
+            background: #000;
+            color: #fff;
+            padding: 8px;
+            font-size: 0.9rem;
+            margin: 10px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        td {
+            border: 1px solid #000;
+            padding: 5px 6px;
+            font-size: 0.82rem;
+            vertical-align: top;
+            word-break: break-word;
+        }
+
+        td.k {
+            width: 52%;
+            font-weight: bold;
+        }
+
+        td.ok {
+            font-weight: bold;
+        }
+
+        td.bad {
+            background: #000;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .btn {
+            background: #fff;
+            border: 2px solid #000;
+            padding: 10px 18px;
+            font-weight: bold;
+            font-family: inherit;
+            font-size: 0.95rem;
+            box-shadow: 2px 2px 0 #000;
+            cursor: pointer;
+        }
+
+        .btn:active {
+            background: #000;
+            color: #fff;
+            box-shadow: none;
+        }
+
+        .footer {
+            font-size: 0.78rem;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-stripes"></div>
+            <a class="close-box" href="/">X</a>
+            <span class="title-text">Browser Probe</span>
+        </div>
+        <div class="content">
+            <h1>ReKindle Browser Probe</h1>
+            <p>Open this page on the e-reader. It checks the JavaScript and CSS features ReKindle
+                needs, then makes real requests for <b>manifest.json</b> so the network results are
+                not guesses.</p>
+
+            <div id="warning" class="warn" style="display:none;"></div>
+            <div id="summary" class="note">Running tests...</div>
+
+            <table>
+                <tbody id="rows"></tbody>
+            </table>
+
+            <p><button class="btn" onclick="runTests()">Re-run tests</button></p>
+
+            <p class="footer">The critical row is <b>XHR GET manifest</b>. If it does not say
+                <b>OK 200</b>, ReKindle's login, sync, chat and online apps cannot work on this
+                browser, because the fetch() polyfill is built on XMLHttpRequest.</p>
+
+            <p class="footer">On the Legacy build, a <b>YES</b> for AbortController, TextEncoder,
+                TextDecoder, String.matchAll, Element.prepend and canvas.toBlob can come from the
+                injected shims rather than the engine itself. The two manifest rows are real
+                network requests.</p>
+        </div>
+    </div>
+
+    <script>
+        var rowsBody = null;
+        var summaryEl = null;
+        var warningEl = null;
+        var xhrOk = null;
+
+        function makeRow(label) {
+            var tr = document.createElement('tr');
+            var key = document.createElement('td');
+            key.className = 'k';
+            key.appendChild(document.createTextNode(label));
+            var value = document.createElement('td');
+            tr.appendChild(key);
+            tr.appendChild(value);
+            rowsBody.appendChild(tr);
+            return value;
+        }
+
+        function addRow(label, value, good) {
+            var cell = makeRow(label);
+            cell.appendChild(document.createTextNode(String(value)));
+            if (good === true) cell.className = 'ok';
+            else if (good === false) cell.className = 'bad';
+            return cell;
+        }
+
+        function probe(label, fn) {
+            var value;
+            try {
+                value = fn();
+            } catch (e) {
+                value = 'ERROR: ' + (e && e.message ? e.message : e);
+            }
+            var cell = addRow(label, value);
+            if (value === 'NO' || String(value).indexOf('ERROR') === 0) cell.className = 'bad';
+        }
+
+        function typeOf(path) {
+            try {
+                var parts = path.split('.');
+                var cur = window;
+                for (var i = 0; i < parts.length; i++) cur = cur[parts[i]];
+                return typeof cur;
+            } catch (e) {
+                return 'ERROR';
+            }
+        }
+
+        function yesNo(value) {
+            return value ? 'YES' : 'NO';
+        }
+
+        function cssSupports(prop, value) {
+            try {
+                if (window.CSS && CSS.supports) return CSS.supports(prop, value);
+            } catch (e) { }
+            try {
+                var el = document.createElement('div');
+                el.style[prop] = value;
+                return !!el.style[prop];
+            } catch (e2) {
+                return false;
+            }
+        }
+
+        function customPropertiesWork() {
+            try {
+                var el = document.createElement('div');
+                el.style.setProperty('--rekindle-probe', '1');
+                return el.style.getPropertyValue('--rekindle-probe') === '1';
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function localStorageWorks() {
+            try {
+                localStorage.setItem('rekindle_probe', '1');
+                var ok = localStorage.getItem('rekindle_probe') === '1';
+                localStorage.removeItem('rekindle_probe');
+                return ok;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function classListMultiWorks() {
+            try {
+                var el = document.createElement('div');
+                el.classList.add('rekindle-probe-a', 'rekindle-probe-b');
+                return el.classList.contains('rekindle-probe-a') && el.classList.contains('rekindle-probe-b');
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function slot(label) {
+            var cell = makeRow(label);
+            cell.appendChild(document.createTextNode('testing...'));
+            return cell;
+        }
+
+        function refreshSummary() {
+            if (!rowsBody || !summaryEl) return;
+            var bad = 0;
+            var cells = rowsBody.getElementsByTagName('td');
+            for (var i = 0; i < cells.length; i++) {
+                if (cells[i].className === 'bad') bad++;
+            }
+            summaryEl.innerHTML = '';
+            summaryEl.appendChild(document.createTextNode(bad + ' check(s) failed. See the black cells below.'));
+            if (xhrOk === false) {
+                warningEl.style.display = 'block';
+                warningEl.innerHTML = '';
+                warningEl.appendChild(document.createTextNode('XHR failed. ReKindle login, sync, chat and online apps cannot work on this browser; the fetch() polyfill is built on XMLHttpRequest.'));
+            }
+        }
+
+        function setSlot(cell, text, good) {
+            cell.innerHTML = '';
+            cell.appendChild(document.createTextNode(String(text)));
+            cell.className = good === true ? 'ok' : (good === false ? 'bad' : '');
+            refreshSummary();
+        }
+
+        function testXhr() {
+            var cell = slot('XHR GET manifest');
+            if (typeof XMLHttpRequest === 'undefined') {
+                xhrOk = false;
+                setSlot(cell, 'MISSING', false);
+                return;
+            }
+            var xhr;
+            try {
+                xhr = new XMLHttpRequest();
+            } catch (e) {
+                setSlot(cell, 'ERROR: ' + (e.message || e), false);
+                return;
+            }
+            try {
+                xhr.open('GET', '/manifest.json?probe=' + (+new Date()), true);
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) return;
+                    xhrOk = xhr.status === 200;
+                    setSlot(cell, xhr.status === 200 ? 'OK 200' : 'HTTP ' + xhr.status, xhrOk);
+                };
+                xhr.onerror = function () { xhrOk = false; setSlot(cell, 'NETWORK ERROR', false); };
+                if ('timeout' in xhr) {
+                    xhr.timeout = 10000;
+                    xhr.ontimeout = function () { xhrOk = false; setSlot(cell, 'TIMEOUT', false); };
+                }
+                xhr.send();
+            } catch (e2) {
+                xhrOk = false;
+                setSlot(cell, 'ERROR: ' + (e2.message || e2), false);
+            }
+        }
+
+        function testFetch() {
+            var cell = slot('fetch GET manifest');
+            if (typeof fetch !== 'function') {
+                setSlot(cell, 'MISSING', false);
+                return;
+            }
+            try {
+                fetch('/manifest.json?probe=' + (+new Date())).then(function (res) {
+                    setSlot(cell, res && res.ok ? 'OK ' + res.status : 'HTTP ' + (res ? res.status : '?'), !!(res && res.ok));
+                })['catch'](function (e) {
+                    setSlot(cell, 'ERROR: ' + (e && e.message ? e.message : e), false);
+                });
+            } catch (e2) {
+                setSlot(cell, 'ERROR: ' + (e2.message || e2), false);
+            }
+        }
+
+        function runTests() {
+            rowsBody = document.getElementById('rows');
+            summaryEl = document.getElementById('summary');
+            warningEl = document.getElementById('warning');
+            rowsBody.innerHTML = '';
+            warningEl.style.display = 'none';
+            summaryEl.innerHTML = '';
+            summaryEl.appendChild(document.createTextNode('Running tests...'));
+
+            addRow('User agent', navigator.userAgent || 'unknown');
+            addRow('Protocol', location.protocol + '//' + location.host);
+            addRow('Screen', (screen.width || '?') + ' x ' + (screen.height || '?') + ' @ ' + (window.devicePixelRatio || 1) + 'x');
+            addRow('Language', navigator.language || 'unknown');
+            addRow('Legacy build flag', yesNo(window.isLegacyVersion));
+            addRow('Lite build flag', yesNo(window.isLiteVersion));
+
+            // Put the network rows first: on an e-reader they must be visible
+            // without scrolling.
+            xhrOk = null;
+            testXhr();
+            testFetch();
+
+            probe('localStorage', function () { return yesNo(localStorageWorks()); });
+            probe('Promise', function () { return yesNo(typeof Promise !== 'undefined'); });
+            probe('XMLHttpRequest', function () { return yesNo(typeof XMLHttpRequest !== 'undefined'); });
+            probe('fetch', function () { return yesNo(typeof fetch === 'function'); });
+            probe('URLSearchParams', function () { return yesNo(typeof URLSearchParams !== 'undefined'); });
+            probe('AbortController', function () { return yesNo(typeof AbortController !== 'undefined'); });
+            probe('TextEncoder', function () { return yesNo(typeof TextEncoder !== 'undefined'); });
+            probe('TextDecoder', function () { return yesNo(typeof TextDecoder !== 'undefined'); });
+            probe('String.matchAll', function () { return yesNo(typeof String.prototype.matchAll === 'function'); });
+            probe('NodeList.forEach', function () { return yesNo(!!(window.NodeList && NodeList.prototype.forEach)); });
+            probe('Element.closest', function () { return yesNo(!!(window.Element && Element.prototype.closest)); });
+            probe('Element.prepend', function () { return yesNo(!!(window.Element && Element.prototype.prepend)); });
+            probe('Element.replaceWith', function () { return yesNo(!!(window.Element && Element.prototype.replaceWith)); });
+            probe('classList multi-token', function () { return yesNo(classListMultiWorks()); });
+            probe('canvas.toBlob', function () { return yesNo(!!(window.HTMLCanvasElement && HTMLCanvasElement.prototype.toBlob)); });
+            probe('MutationObserver', function () { return yesNo(typeof MutationObserver !== 'undefined'); });
+            probe('WebSocket', function () { return yesNo(typeof WebSocket !== 'undefined'); });
+            probe('EventSource', function () { return yesNo(typeof EventSource !== 'undefined'); });
+            probe('serviceWorker', function () { return yesNo(!!(navigator.serviceWorker)); });
+            probe('indexedDB', function () { return yesNo(!!(window.indexedDB || window.webkitIndexedDB)); });
+            probe('crypto.subtle', function () { return yesNo(!!(window.crypto && window.crypto.subtle)); });
+            probe('Intl', function () { return yesNo(typeof Intl !== 'undefined'); });
+            probe('matchMedia', function () { return yesNo(typeof window.matchMedia === 'function'); });
+            probe('history.replaceState', function () { return yesNo(!!(window.history && history.replaceState)); });
+
+            probe('CSS -webkit-flex', function () { return yesNo(cssSupports('display', '-webkit-flex')); });
+            probe('CSS flexbox', function () { return yesNo(cssSupports('display', 'flex')); });
+            probe('CSS grid', function () { return yesNo(cssSupports('display', 'grid')); });
+            probe('CSS gap', function () { return yesNo(cssSupports('gap', '10px')); });
+            probe('CSS custom properties', function () { return yesNo(customPropertiesWork()); });
+
+            setTimeout(refreshSummary, 1200);
+        }
+
+        window.onload = runTests;
+    </script>
+</body>
+
+</html>

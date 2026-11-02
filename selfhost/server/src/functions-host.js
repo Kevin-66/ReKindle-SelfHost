@@ -1,12 +1,14 @@
-// Runs ReKindle's Cloud Functions file (firebase-functions/index.js) as-is.
-// `require('firebase-admin')` and `require('firebase-functions/...')` get local
-// stand-ins; everything else (imapflow, nodemailer, ...) loads normally.
+// Runs ReKindle's Cloud Functions (firebase-functions/index.js and the files it
+// requires) as-is. `require('firebase-admin')` and `require('firebase-functions/...')`
+// get local stand-ins; everything else (imapflow, nodemailer, ...) loads normally.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { config, SERVER_DIR, UPSTREAM_ADMIN_EMAIL } from './config.js';
 import { createAdminModule } from './admin-shim.js';
+import { withPublicNetworkOnly } from './netguard.js';
 import * as auth from './auth.js';
 
 const STATUS = {
@@ -68,6 +70,9 @@ function shims() {
         'firebase-functions/v2/https': https,
         'firebase-functions/https': https,
         'firebase-functions/logger': logger,
+        // Scheduled jobs don't run here (2026-10: cleanupSocial, the social apps'
+        // retention cleanup; chat is off on this server).
+        'firebase-functions/v2/scheduler': { onSchedule: () => ({ __rkScheduled: true }) },
         'firebase-functions/v1': anyProxy(),
         'firebase-functions': anyProxy(),
         'firebase-functions/params': { defineSecret: () => ({ value: () => '' }), defineString: () => ({ value: () => '' }) }
@@ -80,17 +85,32 @@ function load() {
         console.warn(`[functions] ${file} not found; server functions are unavailable`);
         return {};
     }
-    // The upstream file hard-codes the original developer's account as admin.
-    const src = fs.readFileSync(file, 'utf8')
-        .split(`'${UPSTREAM_ADMIN_EMAIL}'`).join('__rkAdminEmail()')
-        .split(`"${UPSTREAM_ADMIN_EMAIL}"`).join('__rkAdminEmail()');
     const nodeRequire = createRequire(path.join(SERVER_DIR, 'package.json'));
     const fake = shims();
-    const req = (name) => (Object.prototype.hasOwnProperty.call(fake, name) ? fake[name] : nodeRequire(name));
-    const mod = { exports: {} };
-    const run = new Function('require', 'module', 'exports', '__filename', '__dirname', '__rkAdminEmail', src);
-    run(req, mod, mod.exports, file, path.dirname(file), auth.adminEmail);
-    return mod.exports;
+    const loaded = new Map();
+    // Upstream splits its functions over several files (2026-10: require('./substack'),
+    // './account-deletion', ...); those load the same way, with the same stand-ins.
+    function loadFile(f) {
+        if (loaded.has(f)) return loaded.get(f).exports;
+        // The upstream files hard-code the original developer's account as admin.
+        const src = fs.readFileSync(f, 'utf8')
+            .split(`'${UPSTREAM_ADMIN_EMAIL}'`).join('__rkAdminEmail()')
+            .split(`"${UPSTREAM_ADMIN_EMAIL}"`).join('__rkAdminEmail()');
+        const mod = { exports: {} };
+        loaded.set(f, mod);
+        const req = (name) => {
+            if (Object.prototype.hasOwnProperty.call(fake, name)) return fake[name];
+            if (name.startsWith('./') || name.startsWith('../')) {
+                const target = path.resolve(path.dirname(f), name);
+                return loadFile(fs.existsSync(target) ? target : target + '.js');
+            }
+            return nodeRequire(name);
+        };
+        const run = new Function('require', 'module', 'exports', '__filename', '__dirname', '__rkAdminEmail', src);
+        run(req, mod, mod.exports, f, path.dirname(f), auth.adminEmail);
+        return mod.exports;
+    }
+    return loadFile(file);
 }
 
 const upstream = load();
@@ -132,4 +152,84 @@ export async function invokeCallable(name, data, decoded, rawRequest) {
 
 export function errorStatus(e) {
     return (e && e.httpErrorCode && e.httpErrorCode.status) || 500;
+}
+
+// ---------------------------------------------------------------- HTTP functions
+//
+// Upstream's onRequest functions that pages call directly (2026-10: `substack`, the
+// Substack relay, and `standardebooks` for the Reader) run at /__rk/fn/<name>;
+// transform.js points the pages' cloudfunctions.net addresses there. They get the
+// part of Express's request/response they use (req.query, res.set/status/json/send/end).
+
+export function hasRequestFunction(name) {
+    return !!(upstream[name] && upstream[name].__rkRequest);
+}
+
+// Substack: the app asks every publication for its posts again each time "Following"
+// or a publication opens, so successful answers are kept for an hour (owner's choice,
+// 2026-10, first for the rekindle-substack worker), per account and Substack cookie.
+const REQUEST_CACHE_MS = { substack: 60 * 60 * 1000 };
+const REQUEST_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const requestCache = new Map(); // key -> { t, headers, body }
+let requestCacheBytes = 0;
+
+function remember(key, headers, body) {
+    const old = requestCache.get(key);
+    if (old) { requestCacheBytes -= old.body.length; requestCache.delete(key); }
+    requestCache.set(key, { t: Date.now(), headers, body });
+    requestCacheBytes += body.length;
+    for (const [k, v] of requestCache) {
+        if (requestCacheBytes <= REQUEST_CACHE_MAX_BYTES) break;
+        requestCacheBytes -= v.body.length;
+        requestCache.delete(k);
+    }
+}
+
+// The function checks the sign-in itself; a cached answer is only given to the
+// same signed-in account.
+function cacheKey(name, req, url) {
+    const m = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || ''));
+    const user = m ? auth.verifyIdToken(m[1].trim()) : null;
+    if (!user) return null;
+    const sid = crypto.createHash('sha256').update(String(req.headers['x-substack-sid'] || '')).digest('base64url').slice(0, 22);
+    return `${name} ${url.search} ${user.uid} #${sid}`;
+}
+
+function expressResponse(res, onOk) {
+    const api = {
+        set(name, value) { res.setHeader(name, value); return api; },
+        status(code) { res.statusCode = code; return api; },
+        json(value) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            return api.send(JSON.stringify(value));
+        },
+        send(body) {   // a string or a Buffer
+            const buf = Buffer.from(body);
+            if (!res.getHeader('content-type')) res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Content-Length', buf.length);
+            if (onOk && res.statusCode === 200 && /json/i.test(String(res.getHeader('content-type')))) {
+                onOk(Object.entries(res.getHeaders()), buf);
+            }
+            res.end(buf);
+            return api;
+        },
+        end() { res.end(); return api; }
+    };
+    return api;
+}
+
+export async function handleRequestFunction(req, res, name, url) {
+    const handler = upstream[name].__rkRequest;
+    const ttl = req.method === 'GET' ? REQUEST_CACHE_MS[name] || 0 : 0;
+    const key = ttl ? cacheKey(name, req, url) : null;
+    const hit = key ? requestCache.get(key) : null;
+    if (hit && Date.now() - hit.t < ttl) {
+        res.writeHead(200, Object.fromEntries(hit.headers));
+        res.end(hit.body);
+        return;
+    }
+    // Node's request (headers, method, connection), plus Express's req.query.
+    const request = Object.create(req, { query: { value: Object.fromEntries(url.searchParams) } });
+    const response = expressResponse(res, key ? (headers, body) => remember(key, headers, body) : null);
+    await withPublicNetworkOnly(() => handler(request, response));
 }

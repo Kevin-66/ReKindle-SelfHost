@@ -26,6 +26,8 @@
     let isPro = false;
     let currentUser = null;
     let checkComplete = false;
+    let lastPaywallStatus = 'Subscription required.';
+    let paywallI18nBound = false;
 
     function initFirebase() {
         if (typeof firebase === 'undefined') return false;
@@ -35,25 +37,120 @@
         return true;
     }
 
-    function showPaywall(message = 'Subscription required.') {
+    function paywallText(key, fallback) {
+        if (typeof window.t === 'function') return window.t(key, fallback);
+        return fallback;
+    }
+
+    // The global dark-mode filter inverts a black scrim into a bright white
+    // wash. Feed it white instead under dark mode so it still dims the page.
+    function paywallScrim() {
+        if (document.documentElement.getAttribute('data-theme') !== 'dark') {
+            return 'rgba(0,0,0,0.45)';
+        }
+        return 'rgba(255,255,255,0.55)';
+    }
+
+    function ensurePaywallStyles() {
+        if (document.getElementById('rk-paywall-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'rk-paywall-styles';
+        style.textContent = [
+            '#paywall-overlay{position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;',
+            'background:rgba(0,0,0,0.45)!important;z-index:2147483647!important;flex-direction:column!important;',
+            'align-items:center!important;justify-content:center!important;padding:20px!important;box-sizing:border-box!important;',
+            'visibility:visible!important;opacity:1!important;transform:none!important;clip-path:none!important;clip:auto!important;}',
+            '#paywall-overlay .rk-paywall-card{width:100%;max-width:400px;background:#fff;border:2px solid #000;',
+            'box-shadow:6px 6px 0 #000;color:#000;font-family:"Geneva","Verdana",sans-serif;text-align:left;box-sizing:border-box;}',
+            '#paywall-overlay .rk-paywall-bar{height:34px;border-bottom:2px solid #000;display:flex;align-items:center;',
+            'justify-content:center;background:#fff;position:relative;box-sizing:border-box;}',
+            '#paywall-overlay .rk-paywall-stripes{position:absolute;top:4px;bottom:4px;left:4px;right:4px;',
+            'background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,#000 3px,#000 4px);z-index:0;}',
+            '#paywall-overlay .rk-paywall-title{background:#fff;padding:0 12px;font-weight:bold;font-size:1rem;',
+            'position:relative;z-index:1;display:inline-flex;align-items:center;height:100%;box-sizing:border-box;border:none;}',
+            '#paywall-overlay .rk-paywall-body{padding:20px 20px 16px;box-sizing:border-box;text-align:center;}',
+            '#paywall-overlay .rk-paywall-head{font-size:1.15rem;line-height:1.25;font-weight:bold;margin:0 0 8px;color:#000;}',
+            '#paywall-overlay .rk-paywall-desc{font-size:0.82rem;line-height:1.4;color:#333;max-width:300px;margin:0 auto 12px;}',
+            '#paywall-overlay .rk-paywall-benefits{list-style:none;padding:0;margin:0 0 14px;text-align:left;font-size:0.78rem;line-height:1.45;color:#222;}',
+            '#paywall-overlay .rk-paywall-benefits li{margin:0 0 4px;padding-left:14px;position:relative;}',
+            '#paywall-overlay .rk-paywall-benefits li:before{content:"+";position:absolute;left:0;font-weight:bold;}',
+            '#paywall-overlay .rk-paywall-price{font-size:0.82rem;font-weight:bold;margin:0 0 12px;color:#000;}',
+            '#paywall-overlay .rk-paywall-primary,#paywall-overlay .rk-paywall-secondary{display:block;width:100%;',
+            'min-height:48px;padding:8px 12px;border:2px solid #000;border-radius:0;box-shadow:2px 2px 0 #000;',
+            'margin:0;font-family:inherit;font-size:0.92rem;font-weight:bold;line-height:1.2;cursor:pointer;box-sizing:border-box;}',
+            '#paywall-overlay .rk-paywall-primary{background:#000;color:#fff;}',
+            '#paywall-overlay .rk-paywall-primary:active{background:#fff;color:#000;box-shadow:none;transform:translate(2px,2px);}',
+            '#paywall-overlay .rk-paywall-secondary{margin-top:8px;background:#fff;color:#000;}',
+            '#paywall-overlay .rk-paywall-secondary:active{background:#000;color:#fff;box-shadow:none;transform:translate(2px,2px);}',
+            '#paywall-overlay .rk-paywall-status{font-size:0.72rem;line-height:1.3;color:#555;margin:12px 0 0;min-height:1em;}',
+            ':root[data-theme="dark"] #paywall-overlay{background:' + paywallScrim() + '!important;}',
+            ':root[data-theme="dark"] .rk-paywall-desc,:root[data-theme="dark"] .rk-paywall-status{color:#333;}'
+        ].join('');
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    function renderPaywall(message) {
+        lastPaywallStatus = message || lastPaywallStatus;
+        ensurePaywallStyles();
+
         let overlay = document.getElementById('paywall-overlay');
         if (!overlay) {
-            // Create overlay if not exists
             overlay = document.createElement('div');
             overlay.id = 'paywall-overlay';
-            overlay.style.cssText = 'display:flex !important; position:fixed !important; top:35px !important; left:0 !important; width:100% !important; height:calc(100% - 35px) !important; background:rgba(255,255,255,0.98) !important; z-index:2147483647 !important; flex-direction:column !important; justify-content:center !important; align-items:center !important; text-align:center !important; padding:20px !important; box-sizing:border-box !important; visibility:visible !important; opacity:1 !important; transform:none !important; clip-path:none !important; clip:auto !important;';
-            overlay.innerHTML = `
-                <h2 style="margin-top:0;">ReKindle+</h2>
-                <p>Support ReKindle development and get<br>access to exclusive apps.</p>
-                <button onclick="window.location.href='pay.html'" style="padding:12px 32px; cursor:pointer; font-size:1.1rem; font-weight:bold; font-family:inherit; background:#fff; border:2px solid #000; color:#000;">Subscribe / Login</button>
-                <p style="font-size:0.8rem; margin-top:20px; color:#666;" id="paywall-status">${message}</p>
-            `;
             document.body.appendChild(overlay);
-        } else {
-            overlay.style.display = 'flex';
-            const status = document.getElementById('paywall-status');
-            if (status) status.innerText = message;
         }
+
+        // Keep display:flex and the exact inline z-index: the anti-tamper
+        // interval below checks both values.
+        overlay.style.cssText = 'display:flex!important;position:fixed!important;top:0!important;left:0!important;' +
+            'width:100%!important;height:100%!important;background:' + paywallScrim() + '!important;' +
+            'z-index:2147483647!important;flex-direction:column!important;align-items:center!important;' +
+            'justify-content:center!important;padding:20px!important;box-sizing:border-box!important;' +
+            'visibility:visible!important;opacity:1!important;transform:none!important;clip-path:none!important;clip:auto!important;';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+
+        const pageTitle = String(document.title || '').replace(/\s*[\u2014-]\s*ReKindle.*$/i, '').trim();
+        const appName = pageTitle && pageTitle.toLowerCase() !== 'rekindle' ? pageTitle : '';
+        const headline = appName
+            ? (window.tFormat ? window.tFormat('paywall.unlock_app', { app: appName }, 'Unlock ${app} with ReKindle+') : 'Unlock ' + appName + ' with ReKindle+')
+            : paywallText('paywall.unlock', 'Unlock ReKindle+');
+        const cta = currentUser
+            ? paywallText('paywall.subscribe', 'Subscribe \u2014 from $2/month')
+            : paywallText('paywall.login_subscribe', 'Log in to subscribe');
+
+        overlay.innerHTML = '<div class="rk-paywall-card">' +
+            '<div class="rk-paywall-bar"><div class="rk-paywall-stripes"></div>' +
+            '<span class="rk-paywall-title">' + paywallText('paywall.title', 'ReKindle+') + '</span></div>' +
+            '<div class="rk-paywall-body">' +
+            '<h2 class="rk-paywall-head">' + headline + '</h2>' +
+            '<p class="rk-paywall-desc">' + paywallText('paywall.desc', 'All 13 ReKindle+ apps, cloud storage and AI, in one membership.') + '</p>' +
+            '<ul class="rk-paywall-benefits">' +
+            '<li>' + paywallText('paywall.benefit.apps', 'All 13 ReKindle+ apps') + '</li>' +
+            '<li>' + paywallText('paywall.benefit.cloud', 'Cloud storage, sync and AI') + '</li>' +
+            '<li>' + paywallText('paywall.benefit.cancel', 'Cancel anytime; lifetime option available') + '</li>' +
+            '</ul>' +
+            '<p class="rk-paywall-price">' + paywallText('paywall.price', '$2/month \u00b7 $15/year \u00b7 $30 lifetime') + '</p>' +
+            '<button type="button" class="rk-paywall-primary" onclick="window.location.href=\'pay.html\'">' +
+            cta + '</button>' +
+            '<button type="button" class="rk-paywall-secondary" onclick="window.location.href=\'help.html#pro\'">' +
+            paywallText('paywall.see', "See what's included") + '</button>' +
+            '<button type="button" class="rk-paywall-secondary" onclick="window.location.href=\'index\'">' +
+            paywallText('common.back', 'Back') + '</button>' +
+            '<p class="rk-paywall-status" id="paywall-status">' + lastPaywallStatus + '</p>' +
+            '</div></div>';
+
+        if (!paywallI18nBound) {
+            paywallI18nBound = true;
+            document.addEventListener('rekindle:i18n:ready', function () {
+                const el = document.getElementById('paywall-overlay');
+                if (el && el.style.display !== 'none') renderPaywall(lastPaywallStatus);
+            });
+        }
+    }
+
+    function showPaywall(message = 'Subscription required.') {
+        renderPaywall(message);
     }
 
     function hidePaywall() {
@@ -122,32 +219,45 @@
         }
     }
 
+    let checkPromise = null;
+    let checkCallbacks = [];
+
     function check(callback) {
-        // 1. Quick cache check
-        try {
-            const cached = localStorage.getItem(CACHE_KEY);
-            if (cached && parseInt(cached) > Date.now()) {
-                isPro = true;
-                hidePaywall();
-                if (callback) callback(true);
-                // Still verify in background
+        if (typeof callback === 'function') {
+            if (checkComplete) {
+                callback(isPro);
+            } else {
+                checkCallbacks.push(callback);
             }
-        } catch (e) { }
-
-        // 2. Initialize Firebase
-        if (!initFirebase()) {
-            showPaywall('Error: Firebase not loaded.');
-            if (callback) callback(false);
-            return;
         }
+        if (checkPromise) return checkPromise;
 
-        // 3. Wait for auth
-        firebase.auth().onAuthStateChanged(async (user) => {
-            currentUser = user;
-            const result = await checkProStatus(user);
-            checkComplete = true;
-            if (callback) callback(result);
+        checkPromise = new Promise(function (resolve) {
+            // Initialize Firebase BEFORE waiting for auth. Pro apps run their
+            // own init inside the callback and many call firebase.auth()/
+            // firestore() synchronously.
+            if (!initFirebase()) {
+                showPaywall('Error: Firebase not loaded.');
+                resolve(false);
+                return;
+            }
+
+            firebase.auth().onAuthStateChanged(async function (user) {
+                currentUser = user;
+                const result = await checkProStatus(user);
+                checkComplete = true;
+                resolve(result);
+            });
+        }).then(function (result) {
+            const callbacks = checkCallbacks.slice();
+            checkCallbacks = [];
+            callbacks.forEach(function (cb) {
+                try { cb(result); } catch (e) { console.error('Pro gate callback failed', e); }
+            });
+            return result;
         });
+
+        return checkPromise;
     }
 
     // Anti-tamper enforcer

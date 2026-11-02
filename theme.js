@@ -4,7 +4,10 @@
     // Automatically strip .html from URL bar
     if (window.location.pathname.endsWith('.html')) {
         var cleanUrl = window.location.pathname.replace('.html', '');
-        window.history.replaceState(null, '', cleanUrl);
+        // Keep the query string: ?lang=de and ?login=true are read later by
+        // i18n / index and must survive the pretty-URL rewrite (the local
+        // .html test URLs depend on this).
+        window.history.replaceState(null, '', cleanUrl + window.location.search);
     }
 
     // --- CONFIGURATION ---
@@ -12,16 +15,29 @@
     var AUTO_START_HOUR = 18; // 6 PM
     var AUTO_END_HOUR = 6;    // 6 AM
     var ROTATION_KEY = 'rekindle_rotation'; // '0', '90', '180', '270'
+    var FONT_KEY = 'rekindle_font_opendyslexic'; // 'true', 'false'
 
-    // Temporarily force light mode while dark mode is disabled.
-    var storedMode = localStorage.getItem(THEME_KEY);
-    if (storedMode === 'dark' || storedMode === 'auto') {
-        localStorage.setItem(THEME_KEY, 'light');
+    // Read the saved mode. `?theme=dark|light|auto` is a preview override for
+    // the screenshot audit and support links. It is kept in sessionStorage (not
+    // localStorage) so it survives the auth redirect to index/login and the
+    // extensionless-URL reload, without changing the saved preference.
+    var PREVIEW_KEY = 'rekindle_theme_preview';
+    function getThemeMode() {
+        var preview = '';
+        try {
+            var match = /[?&]theme=(light|dark|auto)(?:&|$)/.exec(window.location.search);
+            if (match) {
+                preview = match[1];
+                sessionStorage.setItem(PREVIEW_KEY, preview);
+            } else {
+                preview = sessionStorage.getItem(PREVIEW_KEY) || '';
+            }
+        } catch (e) {}
+        return preview || localStorage.getItem(THEME_KEY) || 'light';
     }
 
     function applyTheme() {
-        // Temporarily force light mode regardless of saved preference.
-        var mode = 'light';
+        var mode = getThemeMode();
         var isDark = false;
 
         if (mode === 'dark') {
@@ -29,6 +45,16 @@
         } else if (mode === 'auto') {
             var now = new Date();
             var hour = now.getHours();
+            // Kindle's browser often reports UTC from getHours(). Shift with the
+            // saved manual offset (hours) so Auto switches at the user's local
+            // night, not at UTC night. No timezone helper here: those can open
+            // the setup prompt before the app has even rendered.
+            var storedOffset = parseFloat(localStorage.getItem('rekindle_timezone_offset'));
+            if (!isNaN(storedOffset)) {
+                var utcHour = now.getUTCHours() + now.getUTCMinutes() / 60;
+                var localHour = ((utcHour + storedOffset) % 24 + 24) % 24;
+                hour = Math.floor(localHour);
+            }
             // Check if it's night time (after start hour OR before end hour)
             if (hour >= AUTO_START_HOUR || hour < AUTO_END_HOUR) {
                 isDark = true;
@@ -39,14 +65,82 @@
 
         var doc = document.documentElement;
         if (isDark) {
-            doc.style.colorScheme = 'dark';
+            doc.style.colorScheme = 'light';
             doc.setAttribute('data-theme', 'dark');
             injectDarkStyles();
+            markDarkScrims(document);
+            startScrimObserver();
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () { markDarkScrims(document); });
+            }
         } else {
             doc.style.colorScheme = 'light';
             doc.removeAttribute('data-theme');
             removeDarkStyles();
+            stopScrimObserver();
         }
+    }
+
+    // --- DARK SCRIMS ---
+    // Scrims are usually rgba(0,0,0,.4-.6). The global invert() turns those
+    // into a bright white wash, so mark every full-screen fixed scrim and give
+    // it the inverted source colour. A class is used (rather than a long list
+    // of page selectors) because many pages create their overlay dynamically.
+    var SCRIM_SELECTOR = '.modal-overlay, .overlay, [id$="-overlay"], [id$="-modal"], [class*="overlay"], [style*="position:fixed"], [style*="position: fixed"]';
+    var scrimObserver = null;
+
+    function isDarkScrim(el) {
+        if (!el || el.nodeType !== 1 || !window.getComputedStyle) return false;
+        var cs = window.getComputedStyle(el);
+        if (!cs || cs.position !== 'fixed') return false;
+        var bg = cs.backgroundColor || '';
+        var m = /rgba?\(([0-9]+),\s*([0-9]+),\s*([0-9]+)(?:,\s*([0-9.]+))?\)/.exec(bg);
+        if (!m) return false;
+        var r = +m[1], g = +m[2], b = +m[3];
+        var alpha = (m[4] === undefined) ? 1 : +m[4];
+        if (r > 70 || g > 70 || b > 70 || alpha <= 0) return false;
+        // Hidden overlays have no box yet; mark them anyway so they are right
+        // the first time they open. Visible ones must cover the viewport.
+        var rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0 && window.innerWidth && window.innerHeight) {
+            if (rect.width < window.innerWidth * 0.8 || rect.height < window.innerHeight * 0.8) return false;
+        }
+        return true;
+    }
+
+    function markDarkScrims(root) {
+        var scope = root || document;
+        var nodes = [];
+        if (scope.nodeType === 1 && scope.matches && scope.matches(SCRIM_SELECTOR)) nodes.push(scope);
+        if (scope.querySelectorAll) {
+            var found = scope.querySelectorAll(SCRIM_SELECTOR);
+            for (var i = 0; i < found.length; i++) nodes.push(found[i]);
+        }
+        for (var j = 0; j < nodes.length; j++) {
+            if (isDarkScrim(nodes[j])) nodes[j].classList.add('rk-dark-scrim');
+        }
+    }
+
+    function startScrimObserver() {
+        if (scrimObserver || !window.MutationObserver) return;
+        scrimObserver = new MutationObserver(function (mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                var added = mutations[i].addedNodes;
+                for (var j = 0; j < added.length; j++) {
+                    if (added[j].nodeType === 1) markDarkScrims(added[j]);
+                }
+            }
+        });
+        scrimObserver.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    function stopScrimObserver() {
+        if (scrimObserver) {
+            scrimObserver.disconnect();
+            scrimObserver = null;
+        }
+        var marked = document.querySelectorAll('.rk-dark-scrim');
+        for (var i = 0; i < marked.length; i++) marked[i].classList.remove('rk-dark-scrim');
     }
 
     function injectDarkStyles() {
@@ -79,6 +173,18 @@
                 '}\n' +
                 ':root[data-theme="dark"] img.keep-white {\n' +
                 '    filter: none;\n' +
+                '}\n' +
+                '/* Scrims are black translucent in light mode; invert() would turn\n' +
+                '   them into a bright white wash over the whole app. Feed them the\n' +
+                '   inverted source colour so they still dim (and never brighten)\n' +
+                '   the page in dark mode. */\n' +
+                ':root[data-theme="dark"] .modal-overlay,\n' +
+                ':root[data-theme="dark"] [id$="-overlay"]:not(#gallery-flipbook-overlay),\n' +
+                ':root[data-theme="dark"] #ip-ban-fallback-modal,\n' +
+                ':root[data-theme="dark"] #rekindle-ageverif-modal,\n' +
+                ':root[data-theme="dark"] .overlay,\n' +
+                ':root[data-theme="dark"] .rk-dark-scrim {\n' +
+                '    background-color: rgba(255, 255, 255, 0.55) !important;\n' +
                 '}\n';
             document.head.appendChild(style);
         }
@@ -92,9 +198,6 @@
         var style = document.getElementById('rekindle-dark-theme');
         if (style) style.remove();
     }
-
-    // Run immediately
-    applyTheme();
 
     // Export for Settings App to call
     // --- DISPLAY MODE ---
@@ -231,20 +334,11 @@
         applyFont();
     }
 
-    // Run as soon as possible
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
-    // Still run theme/scale immediately in case it's in the head (prevents flash)
-    applyTheme();
-    applyScale();
-    applyRotation();
-    applyViewport();
-    injectEInkStyles();
-    applyFont();
+    // Run once, immediately. Every apply* helper lazily creates its own <style>
+    // in <head>, which already exists while the page is parsing, so the old
+    // "run now AND again on DOMContentLoaded" pair only doubled the work
+    // (two stylesheet rewrites + recalcs per page) for no benefit.
+    init();
 
     // --- VIEWPORT ---
     function applyViewport() {
@@ -262,6 +356,12 @@
         var autoEnabled = localStorage.getItem(SCALE_AUTO_KEY) !== 'false'; // Default to true
 
         if (autoEnabled) {
+            // Kindle Paperwhite baseline: below 800x906 the UI is scaled down to
+            // fit. 732x762 (Kobo Libra Colour) therefore lands on 0.75, which is
+            // kept deliberately: at 1.0 the home screen loses its two-column
+            // featured grid and pushes "All Applications" below the fold, and the
+            // real Kobo layout bugs were the missing scroll (applyOverflowFallback)
+            // and the 2009 box model in the old builds, not the zoom itself.
             var targetW = 800;
             var targetH = 906;
             var currentW = window.innerWidth;
@@ -292,6 +392,54 @@
             applyScale();
         }
     }
+
+    // --- OVERFLOW FALLBACK ---
+    // Pages size their window in vh and set body { overflow: hidden }. When the
+    // content is taller than the viewport (Settings, Chess, KindleChat on a
+    // short screen) the bottom is clipped with no scrollbar and no way to reach
+    // it. After paint, if the document really is taller than the viewport,
+    // switch the page to a normal scrolling document.
+    //
+    // The class goes on <html>, never on <body>: post-load <body> class changes
+    // drop elements on the Kobo/QtWebKit repaint path (see legacy-build.md).
+    var OVERFLOW_CLASS = 'rekindle-page-scroll';
+
+    function injectOverflowStyle() {
+        if (document.getElementById('rekindle-overflow-style')) return;
+        var style = document.createElement('style');
+        style.id = 'rekindle-overflow-style';
+        style.textContent =
+            'html.' + OVERFLOW_CLASS + ' { height: auto !important; overflow-x: hidden !important; overflow-y: auto !important; } ' +
+            'html.' + OVERFLOW_CLASS + ' body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: auto !important; } ' +
+            // The window must be allowed to grow past the 95vh budget, otherwise
+            // the page scrolls around a window that still clips its own content.
+            'html.' + OVERFLOW_CLASS + ' .window { max-height: none !important; margin-top: 10px !important; margin-bottom: 10px !important; }';
+        document.head.appendChild(style);
+    }
+
+    function applyOverflowFallback() {
+        if (!document.body) return;
+        var root = document.documentElement;
+        if ((' ' + root.className + ' ').indexOf(' ' + OVERFLOW_CLASS + ' ') !== -1) return;
+        // Stay off pages that intentionally lock the viewport (position: fixed
+        // bodies) and pages where the content already fits.
+        if (root.scrollHeight <= window.innerHeight + 2) return;
+        injectOverflowStyle();
+        root.className += ' ' + OVERFLOW_CLASS;
+    }
+    window.rekindleApplyOverflowFallback = applyOverflowFallback;
+
+    function scheduleOverflowFallback() {
+        if (document.readyState === 'complete') applyOverflowFallback();
+        else window.addEventListener('load', applyOverflowFallback);
+        // Late content (Firebase lists, i18n re-flow, images) changes the height
+        // after load, so re-check once the quiet period has passed.
+        setTimeout(applyOverflowFallback, 1200);
+        setTimeout(applyOverflowFallback, 3000);
+        window.addEventListener('resize', applyOverflowFallback);
+        window.addEventListener('orientationchange', applyOverflowFallback);
+    }
+    scheduleOverflowFallback();
 
     // --- UNIT SYSTEM ---
     var UNIT_KEY = 'rekindle_unit_system'; // 'metric', 'imperial', 'auto'
@@ -384,8 +532,6 @@
 
 
     // --- FONT LOGIC ---
-    var FONT_KEY = 'rekindle_font_opendyslexic'; // 'true', 'false'
-
     function applyFont() {
         var enabled = localStorage.getItem(FONT_KEY) === 'true';
         var doc = document.documentElement;
@@ -455,9 +601,6 @@
         applyFont();
     }
     window.rekindleApplyFont = applyFont;
-
-    // Run Immediately (Global Scope) like applyTheme
-    applyFont();
 
     // Export for Apps to call
     window.rekindleApplyTheme = applyTheme;
@@ -616,40 +759,71 @@
         });
     };
 
-    function autoInitPresence() {
-        if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
-            try {
-                var auth = firebase.auth();
-                var db = firebase.database();
-                if (auth && db) {
-                    if (window._rekindlePresenceInited) return true;
-                    window._rekindlePresenceInited = true;
+    // Presence is a realtime connection + a write on EVERY page load, but only
+    // index.html ever reads presence/ (for live-game listings). So it is opt-in
+    // as of 2026-10-26: set window.rekindlePresence = true before theme.js runs,
+    // or add data-presence="1" to <body>. Everything else skips the connection.
+    function presenceWanted() {
+        if (window.rekindlePresence === true) return true;
+        var body = document.body;
+        return !!(body && body.getAttribute && body.getAttribute('data-presence') === '1');
+    }
 
-                    auth.onAuthStateChanged(function (user) {
-                        if (user && window.rekindleInitGlobalPresence) {
-                            window.rekindleInitGlobalPresence(db, user.uid);
-                        } else if (!user && window._rekindlePresenceRef) {
-                            window._rekindlePresenceRef.remove();
-                            window._rekindlePresenceRef.onDisconnect().cancel();
-                            window._rekindlePresenceRef = null;
-                        }
-                    });
-                    return true;
-                }
-            } catch (e) {
-                return false;
+    // Returns true when no further attempt can help (including "not wanted" and
+    // "this page never loaded the RTDB SDK"), false while waiting for Firebase.
+    function autoInitPresence() {
+        if (!presenceWanted()) return true;
+        if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return false;
+        // Firebase is loaded but this page has no database SDK: stop immediately.
+        // Without this check the 500ms poller below ran 20 times on ~130 pages.
+        if (typeof firebase.database !== 'function') return true;
+        try {
+            var auth = firebase.auth();
+            var db = firebase.database();
+            if (auth && db) {
+                if (window._rekindlePresenceInited) return true;
+                window._rekindlePresenceInited = true;
+
+                auth.onAuthStateChanged(function (user) {
+                    if (user && window.rekindleInitGlobalPresence) {
+                        window.rekindleInitGlobalPresence(db, user.uid);
+                    } else if (!user && window._rekindlePresenceRef) {
+                        window._rekindlePresenceRef.remove();
+                        window._rekindlePresenceRef.onDisconnect().cancel();
+                        window._rekindlePresenceRef = null;
+                    }
+                });
+                return true;
             }
+        } catch (e) {
+            return false;
         }
         return false;
     }
 
+    // Try once immediately (the Firebase SDK is usually already parsed), then
+    // poll for at most 10s instead of the old 1s x 30 (30s) wakeup tail.
     var presenceAttempts = 0;
-    var presenceTimer = setInterval(function () {
-        presenceAttempts++;
-        if (autoInitPresence() || presenceAttempts > 30) {
-            clearInterval(presenceTimer);
+    var presenceTimer = null;
+
+    function tryAutoInitPresence() {
+        if (autoInitPresence()) {
+            if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
+            return true;
         }
-    }, 1000);
+        return false;
+    }
+
+    if (!tryAutoInitPresence()) {
+        presenceTimer = setInterval(function () {
+            presenceAttempts++;
+            if (tryAutoInitPresence() || presenceAttempts >= 20) {
+                clearInterval(presenceTimer);
+                presenceTimer = null;
+            }
+        }, 500);
+        window.addEventListener('load', tryAutoInitPresence);
+    }
 
     // --- CACHE MANAGEMENT ---
     function clearServiceWorkerCache() {
@@ -661,25 +835,48 @@
     window.clearServiceWorkerCache = clearServiceWorkerCache;
 
     // --- SERVICE WORKER REGISTRATION & AUTO-RELOAD ---
+    // `?theme=` is the screenshot/support preview. Skip the SW there: a fresh
+    // registration calls clients.claim() -> controllerchange -> reload, which
+    // can interrupt a capture and leave filtered canvas/grid layers unpainted.
+    var previewMode = false;
+    try {
+        previewMode = /[?&]theme=/.test(window.location.search) || !!sessionStorage.getItem(PREVIEW_KEY);
+    } catch (e) {}
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
-            navigator.serviceWorker.register('./sw.js')
-                .then(function (registration) {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                })
-                .catch(function (err) {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
-        });
+        if (previewMode) {
+            if (navigator.serviceWorker.getRegistrations) {
+                navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    for (var i = 0; i < regs.length; i++) regs[i].unregister();
+                }).catch(function () {});
+            }
+        } else {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(function (registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function (err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
 
-        // Forced Update Logic: Reload when a new service worker takes control
-        var refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function () {
-            if (refreshing) return;
-            refreshing = true;
-            console.log('Service Worker: Controller changed. Reloading page...');
-            window.location.reload();
-        });
+            // Forced Update Logic: Reload when a new service worker takes control.
+            // Never reload while a sign-in/registration is in flight: the reload
+            // aborts the auth request and the user comes back in Guest Mode
+            // (the "it reloads right after I tap Log In" reports, 2026-09/10).
+            // Skipping costs nothing — the new worker controls the next navigation.
+            var refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (refreshing) return;
+                if (window.__rkAuthBusy) {
+                    console.log('Service Worker: controller changed during sign-in; not reloading.');
+                    return;
+                }
+                refreshing = true;
+                console.log('Service Worker: Controller changed. Reloading page...');
+                window.location.reload();
+            });
+        }
     }
 
     // --- VIEWPORT LOCKDOWN (Kindle/E-ink) ---
@@ -704,36 +901,59 @@
         lastTouchEnd = now;
     }, false);
 
-    // --- AVATAR CACHING HELPER ---
-    window.rekindleAvatarCache = {};
-    window.rekindleFetchAvatarSeed = function (db, uid, callback) {
-        if (!uid) { callback('default'); return; }
-        if (uid in window.rekindleAvatarCache) {
-            callback(window.rekindleAvatarCache[uid]);
-            return;
-        }
-        if (!db) { callback(uid); return; }
-
-        db.ref('user_cards/' + uid).once('value').then(function (snap) {
-            var seed = uid;
-            if (snap.exists()) {
-                var card = snap.val();
-                seed = card.customAvatar || card.avatarSeed || uid;
-            }
-            window.rekindleAvatarCache[uid] = seed;
-            callback(seed);
-        }).catch(function () {
-            callback(uid);
-        });
-    };
-
     // --- USER CARD CACHING HELPER ---
-    // Cache stores { card, ts } entries; TTL is 15 minutes (900 000 ms).
+    // Two-tier cache: localStorage ("rekindle_ucard_" + uid, { ts, card }, 1 hour TTL)
+    // backed by an in-memory map ({ card, ts }, 15 minute TTL). Checking localStorage
+    // first means a fresh page load costs zero RTDB reads for cards fetched < 1h ago.
     window.rekindleCardCache = {};
     var _pendingCardFetches = {};
     var _CARD_TTL = 900000;
+    var _CARD_LS_TTL = 3600000;
+    var _CARD_LS_PREFIX = 'rekindle_ucard_';
+    var _CARD_CACHE_MAX = 500;
+
+    function _readStoredCard(uid) {
+        try {
+            var raw = localStorage.getItem(_CARD_LS_PREFIX + uid);
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed.ts !== 'number') return null;
+            if ((Date.now() - parsed.ts) >= _CARD_LS_TTL) return null;
+            return parsed;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function _writeStoredCard(uid, card) {
+        try {
+            localStorage.setItem(_CARD_LS_PREFIX + uid, JSON.stringify({ ts: Date.now(), card: card }));
+        } catch (e) { }
+    }
+
+    // Cheap guard against unbounded memory growth: drop the single oldest entry.
+    function _capCardCache() {
+        var keys = Object.keys(window.rekindleCardCache);
+        if (keys.length <= _CARD_CACHE_MAX) return;
+        var oldestKey = null;
+        var oldestTs = Infinity;
+        for (var i = 0; i < keys.length; i++) {
+            var entry = window.rekindleCardCache[keys[i]];
+            var ts = entry && typeof entry.ts === 'number' ? entry.ts : 0;
+            if (ts < oldestTs) { oldestTs = ts; oldestKey = keys[i]; }
+        }
+        if (oldestKey) delete window.rekindleCardCache[oldestKey];
+    }
+
     window.rekindleFetchUserCard = function (db, uid, callback) {
         if (!uid || !db) { callback(null); return; }
+        var stored = _readStoredCard(uid);
+        if (stored) {
+            window.rekindleCardCache[uid] = { card: stored.card, ts: Date.now() };
+            _capCardCache();
+            callback(stored.card);
+            return;
+        }
         var cached = window.rekindleCardCache[uid];
         if (cached && (Date.now() - cached.ts) < _CARD_TTL) {
             callback(cached.card);
@@ -747,6 +967,8 @@
         db.ref('user_cards/' + uid).once('value').then(function (snap) {
             var card = snap.exists() ? snap.val() : null;
             window.rekindleCardCache[uid] = { card: card, ts: Date.now() };
+            _capCardCache();
+            _writeStoredCard(uid, card);
             var cbs = _pendingCardFetches[uid];
             delete _pendingCardFetches[uid];
             cbs.forEach(function (cb) { cb(card); });
@@ -757,7 +979,22 @@
         });
     };
     window.rekindleInvalidateUserCard = function (uid) {
-        if (uid) delete window.rekindleCardCache[uid];
+        if (!uid) return;
+        delete window.rekindleCardCache[uid];
+        try { localStorage.removeItem(_CARD_LS_PREFIX + uid); } catch (e) { }
+    };
+
+    // --- AVATAR CACHING HELPER ---
+    // Delegates to rekindleFetchUserCard so avatar and card lookups share a single
+    // cache/read path (previously this read the same user_cards node through its
+    // own cache, doubling RTDB reads for one uid).
+    window.rekindleFetchAvatarSeed = function (db, uid, callback) {
+        if (!uid) { callback('default'); return; }
+        if (!db) { callback(uid); return; }
+        window.rekindleFetchUserCard(db, uid, function (card) {
+            var seed = (card && (card.customAvatar || card.avatarSeed)) || uid;
+            callback(seed);
+        });
     };
 
 })();

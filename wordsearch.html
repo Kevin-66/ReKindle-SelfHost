@@ -3,8 +3,8 @@
     <meta charset="UTF-8">
     
     <title>Word Search</title>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -252,7 +252,7 @@
             text-align: center;
         }
     </style>
-    <script src="theme.js?v=18"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -337,7 +337,7 @@
             placedWords = [];
             foundWords = [];
             startSelection = null;
-            document.getElementById('status-msg').innerText = window.t ? window.t('wordsearch.status.instruction') : "Tap start letter, then tap end letter.";
+            document.getElementById('status-msg').innerText = window.t ? window.t('wordsearch.status.instruction', "Tap start letter, then tap end letter.") : "Tap start letter, then tap end letter.";
 
             // 1. Pick 6 random words
             const shuffled = [...WORD_POOL].sort(() => 0.5 - Math.random());
@@ -500,7 +500,7 @@
 
                 // Win Check
                 if (foundWords.length === placedWords.length) {
-                    document.getElementById('status-msg').innerText = window.t ? window.t('wordsearch.status.complete') : "Puzzle Complete!";
+                    document.getElementById('status-msg').innerText = window.t ? window.t('wordsearch.status.complete', "Puzzle Complete!") : "Puzzle Complete!";
                     // Flash Window Content
                     const content = document.querySelector('.window-content');
                     content.style.filter = "invert(1)";
@@ -531,7 +531,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" defer></script>
 
 
 </body></html>

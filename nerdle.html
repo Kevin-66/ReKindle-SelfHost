@@ -5,11 +5,13 @@
     <title>Nerdle</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
 
     <style>
         /* SYSTEM 7 AESTHETICS */
@@ -347,7 +349,7 @@
             margin-left: 10px;
 }
     </style>
-    <script src="theme.js?v=18"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -567,12 +569,10 @@
 
             if (gameOver) {
                 if (guesses[guesses.length - 1] === targetEquation) {
-                    showMessage(window.t ? window.t('nerdle.msg.correct') : "Correct!");
+                    showMessage(window.t ? window.t('nerdle.msg.correct', "Correct!") : "Correct!");
                 } else {
-                    showMessage((window.t ? window.t('nerdle.msg.answer') : "Answer: ${ans}").replace('${ans}', targetEquation));
+                    showMessage((window.t ? window.t('nerdle.msg.answer', "Answer: ${ans}") : "Answer: ${ans}").replace('${ans}', targetEquation));
                 }
-            } else {
-                console.log("Target (Restored):", targetEquation);
             }
         }
 
@@ -590,7 +590,7 @@
             document.querySelectorAll('.key').forEach(k => {
                 k.dataset.state = "";
             });
-            showMessage(window.t ? window.t('nerdle.label.guess') : "Guess the calculation");
+            showMessage(window.t ? window.t('nerdle.label.guess', "Guess the calculation") : "Guess the calculation");
 
             saveGame();
         }
@@ -626,7 +626,6 @@
                     const eq = `${expression}=${result}`;
                     if (eq.length === COLS) {
                         targetEquation = eq;
-                        console.log("Target:", targetEquation);
                         return;
                     }
                 }
@@ -707,18 +706,18 @@
             const guessStr = currentGuess.join('');
 
             // Checks
-            if (currentGuess.length !== COLS) return showMessage(window.t ? window.t('nerdle.msg.too_short') : "Too short");
-            if (guessStr.indexOf('=') === -1) return showMessage(window.t ? window.t('nerdle.msg.must_equal') : "Must contain '='");
+            if (currentGuess.length !== COLS) return showMessage(window.t ? window.t('nerdle.msg.too_short', "Too short") : "Too short");
+            if (guessStr.indexOf('=') === -1) return showMessage(window.t ? window.t('nerdle.msg.must_equal', "Must contain '='") : "Must contain '='");
             const parts = guessStr.split('=');
-            if (parts.length > 2) return showMessage(window.t ? window.t('nerdle.msg.one_equal') : "Only one '=' allowed");
+            if (parts.length > 2) return showMessage(window.t ? window.t('nerdle.msg.one_equal', "Only one '=' allowed") : "Only one '=' allowed");
 
             const lhs = parts[0];
             const rhs = parts[1];
-            if (!/^[0-9+\-*/]+$/.test(lhs) || !/^[0-9]+$/.test(rhs)) return showMessage(window.t ? window.t('nerdle.msg.invalid_chars') : "Invalid characters");
+            if (!/^[0-9+\-*/]+$/.test(lhs) || !/^[0-9]+$/.test(rhs)) return showMessage(window.t ? window.t('nerdle.msg.invalid_chars', "Invalid characters") : "Invalid characters");
 
             try {
-                if (eval(lhs) !== parseInt(rhs)) return showMessage(window.t ? window.t('nerdle.msg.incorrect') : "Equation incorrect");
-            } catch (e) { return showMessage(window.t ? window.t('nerdle.msg.invalid_calc') : "Invalid calculation"); }
+                if (eval(lhs) !== parseInt(rhs)) return showMessage(window.t ? window.t('nerdle.msg.incorrect', "Equation incorrect") : "Equation incorrect");
+            } catch (e) { return showMessage(window.t ? window.t('nerdle.msg.invalid_calc', "Invalid calculation") : "Invalid calculation"); }
 
             // Process Valid Guess
             const rowIdx = guesses.length;
@@ -731,13 +730,13 @@
 
             // Win/Loss
             if (guessStr === targetEquation) {
-                showMessage(window.t ? window.t('nerdle.msg.correct') : "Correct!");
+                showMessage(window.t ? window.t('nerdle.msg.correct', "Correct!") : "Correct!");
                 gameOver = true;
                 flashWin();
             } else {
                 if (guesses.length >= ROWS) {
                     gameOver = true;
-                    showMessage((window.t ? window.t('nerdle.msg.answer') : "Answer: ${ans}").replace('${ans}', targetEquation));
+                    showMessage((window.t ? window.t('nerdle.msg.answer', "Answer: ${ans}") : "Answer: ${ans}").replace('${ans}', targetEquation));
                 } else {
                     currentGuess = [];
                 }
@@ -813,7 +812,7 @@
             area.removeAttribute('data-i18n');
             if (!gameOver) {
                 setTimeout(() => {
-                    area.innerText = window.t ? window.t('nerdle.label.guess') : "Guess the calculation";
+                    area.innerText = window.t ? window.t('nerdle.label.guess', "Guess the calculation") : "Guess the calculation";
                 }, 2000);
             }
         }
@@ -846,7 +845,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" defer></script>
 
 
 </body></html>

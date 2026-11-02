@@ -4,9 +4,46 @@
 
 ## 📝 Agent Documentation Rule
 
-**This file is a living document.** Whenever you fix an issue, discover a gotcha, uncover a cross-page CSS leak, or learn anything about this codebase that isn't already written here, **add it immediately**.
+**This file is a living document with a 65,536-byte budget.** DSH injects it as workspace instructions on every turn; past the cap it is silently truncated (at 100 KB, the last third - the KindleChat, games and performance sections - was missing from the agent's context). So this file now holds only **cross-cutting** constraints, and area-specific deep dives live in `docs/agent/*.md`, loaded on demand.
 
-Future agents (including yourself in a new session) will not have access to your working context. If you don't write it down, the knowledge is lost. Be generous with details, code snippets, and file paths. A few minutes of documentation now saves hours of re-discovery later.
+**Where a new finding goes:**
+
+| Finding | Destination |
+| :--- | :--- |
+| Applies to every page: browser limits, System 7 UI, i18n, Firebase/rules, social content rules, perf patterns | this file, in the matching section |
+| Specific to one area: KindleChat internals, one game, one integration, reports, avatars, the perf audit | the matching doc in `docs/agent/` (index below) |
+
+**Rules:**
+1. **Read the area's topic doc before editing that area.** It is *not* in context automatically.
+2. Document immediately after a fix: date, file paths, code, and the symptom it prevents. A few minutes of documentation now saves hours of re-discovery later.
+3. **Keep this file under 60,000 bytes** (`wc -c AGENTS.md`). If an addition would push it over, move an existing deep dive into its topic doc instead of trimming the new finding.
+4. Add any new topic doc to the index below and link it back to this file.
+
+## 🗂 Topic Docs (load on demand)
+
+Only this file is injected automatically. The docs below are **not** in the agent's context until opened - read the matching one before starting work in that area.
+
+| Doc | Read before working on |
+| :--- | :--- |
+| [kindlechat.md](docs/agent/kindlechat.md) | `kindlechat.html`, `emojis.js`, `sw.js` + OpenMoji caching |
+| [games.md](docs/agent/games.md) | Any game page, `js/gamerules.js`, canvas sizing |
+| [performance.md](docs/agent/performance.md) | Slow-device / e-ink optimisation: load path + caching, containment, dirty-flag rendering, feed pagination, rect caching, `commentCount` |
+| [moderation-reports.md](docs/agent/moderation-reports.md) | `js/reports.js`, report buttons, `/reports` data model, Discord notifications |
+| [integrations.md](docs/agent/integrations.md) | Akinator, NRL scores, comics / Internet Archive, Gutenberg / Standard Ebooks (Reader tabs) |
+| [avatars.md](docs/agent/avatars.md) | `drawAvatar()`, `user_cards`, pixel-art avatars, grayscale values, ReKindle+ gradient gate |
+| [visual-audit.md](docs/agent/visual-audit.md) | No-focus WebKit screenshot harness, visual review, System 7 checklist |
+| [dark-mode.md](docs/agent/dark-mode.md) | `theme.js` dark mode, scrims, `.keep-white`, dark-mode audits |
+| [i18n.md](docs/agent/i18n.md) | `window.t()` / `tFormat` calls, raw key or `${...}` text on screen, translated dropdown labels, the global `function t` trap |
+| [backlog.md](docs/agent/backlog.md) | Deferred 2026-10 audit work: skipped/partial fixes and verification steps |
+| [account-deletion.md](docs/agent/account-deletion.md) | `settings.html` Delete Account, `deleteAccount` function, full user-data sweep |
+| [password-recovery.md](docs/agent/password-recovery.md) | `settings.html` Change Password "forgot" path, `resetForgottenPassword`, session-as-authority policy |
+| [help.md](docs/agent/help.md) | `help.html`, `help-data.js`: adding/renaming app guides, search, A-Z index, help content coverage |
+| [social-cleanup.md](docs/agent/social-cleanup.md) | Daily `cleanupSocial` retention: KindleChat messages/translations/art, topics, neighbourhood posts, reports, automod & moderator logs |
+| [usage-limits.md](docs/agent/usage-limits.md) | Firebase/Cloudflare quota measurements, Spark limits, Pages Functions invocation traps |
+| [legacy-build.md](docs/agent/legacy-build.md) | Lite/Legacy pipeline: SRI on localized libs, extensionless links, Kobo/WebKit `/probe`, old-browser polyfills |
+| [payments.md](docs/agent/payments.md) | Stripe worker, Pro grants/revokes, reconciliation |
+| [kindle-fullscreen.md](docs/agent/kindle-fullscreen.md) | `kindle/` launcher, cover, KPM |
+| [link-blocking.md](docs/agent/link-blocking.md) | URL/link ban: `js/link-guard.js`, `containsUrl()`, evasion forms, parity test |
 
 ## 🚫 Restrictions (Target: Chromium 75)
 
@@ -49,7 +86,7 @@ Future agents (including yourself in a new session) will not have access to your
 }
 ```
 
-### 4. No Alerts (`alert()`)
+### 5. No Alerts (`alert()`)
 **Constraint:** `window.alert()`, `confirm()`, and `prompt()` are unsupported.
 **Solution:** Use **Custom Modals** (HTML/CSS overlays).
 
@@ -107,6 +144,8 @@ The main container for every app.
 ```
 
 **Content-area gotcha:** `theme.js` injects `.window { max-height: 95vh !important; }` (scaled down at higher zoom levels). Use `height: 90vh` when you want a fixed-height window with a viewport gap; if you use `min-height: 90vh` instead, the window can grow to the theme.js `max-height` and lose the gap. For content pages that should shrink to their content and only scroll when content is long, use `height: fit-content` and `flex: 0 1 auto; min-height: 0;` on the scrollable child instead of `flex-grow: 1`.
+
+**Page-overflow fallback (2026-10-24):** `theme.js` `applyOverflowFallback()` adds `rekindle-page-scroll` to `<html>` when `documentElement.scrollHeight > innerHeight + 2`, releasing the `body` height/overflow and the `.window` max-height so the page scrolls. Do not re-add `body { overflow: hidden }` to a page that can be taller than the viewport without giving its window a real scroller — that is what clipped Settings/Chess on Kobo. Auto-scaling stays at its 800×906 (Paperwhite) target: a 700×700 Kobo target was reverted because 1.0 collapses the featured grid to one card per row. See [legacy-build.md](docs/agent/legacy-build.md#kobo-layout-at-732762-2026-10-24).
 
 ### 3. The Title Bar (`.title-bar`)
 **Mandatory Structure:** The title bar uses a specific layered technique to achieve the "text on stripes" look.
@@ -249,49 +288,28 @@ The project uses a custom `i18n.js` loader.
 
 ### Variable Interpolation
 
-The `i18n.js` loader only does simple key lookup; **it does NOT interpolate variables**. Locale values use `${key}` placeholders (e.g. `"${pName}: Place ${ship} (${size})"`), but calling `window.t('key', { pName: ... })` will return the raw placeholder string unchanged. In dynamic code, fetch the template first and then replace placeholders manually:
+The `i18n.js` loader only does simple key lookup; it does **not** interpolate `${...}` placeholders. Use `window.tFormat(key, vars, fallback)` (added 2026-10-20) for any dynamic text:
 
 ```javascript
-var template = window.t ? window.t('battleship.setup.msg') : '${pName}: Place ${ship} (${size})';
-var text = template.replace('${pName}', 'You').replace('${ship}', shipName).replace('${size}', shipDef.size);
+// key: "blackjack.label.bank" -> "Bank: ${amount}"
+el.innerText = window.tFormat('blackjack.label.bank', { amount: bankroll }, 'Bank: ${amount}');
 ```
 
-Or use a small helper that replaces all `${key}` occurrences. Many existing HTML files incorrectly pass a variables object as the second argument to `window.t()`, which silently fails on the Kindle browser.
+`tFormat` takes the English fallback as its third argument, replaces **all** occurrences of each `${name}`, and is safe before translations arrive (it falls back to the English string). Do **not** call `window.t('key', { vars })` — the second argument is the fallback string, so the object is returned unchanged.
 
-### Two Related i18n Display Bugs (fixed 2026-07)
+For dynamic labels, omit `data-i18n` on the element (the loader would overwrite the value with the raw template) and render from JS. Re-render static labels on `document.addEventListener('rekindle:i18n:ready', render)`; labels refreshed every frame (e.g. Mario's HUD) need no listener. Never leave `data-i18n` on an element that you also update with `removeAttribute('data-i18n')` unless the value is rendered synchronously first.
 
-1. **Raw key shown (`blackjack.label.bank`, `hangman.status.guess`, etc.):** `window.t` is defined synchronously by `i18n.js`, but `window.rekindleTranslations` only populates after the async `fetch('locales/xx.json')` resolves. Any `window.t('some.key')` called **without a fallback** from `window.onload` (which often fires first) returns `defaultText || key` → the **raw key string**. If the code then also does `removeAttribute('data-i18n')` (a common pattern to stop the loader overwriting dynamic text), the raw key is stuck on screen permanently. **Fix:** always pass an English fallback as the second argument: `window.t('blackjack.label.bank', 'Bank: ${amount}')`. Fixed in `blackjack.html`, `hangman.html`, `jigsaw.html`, `memory.html`, `doom.html`, `connect4.html`.
-2. **Raw `${placeholder}` shown (`MODE: ${NUM}`, `Mode: ${mode}`):** never put `data-i18n="key"` on an element whose locale value contains `${...}` placeholders — `applyTranslations()` sets `innerText` to the **uninterpolated template**. The `data-i18n-args` attribute seen on some buttons is **not supported by `js/i18n.js`** (it does nothing). For dynamically-interpolated labels, omit `data-i18n` entirely and set the text in JS with manual `.replace()`. Fixed on the mode buttons in `connect4.html`, `2pconnect4.html`, `liveconnect4.html`, `doom.html`. (`livetictactoe.html` still carries the unsupported `data-i18n-args` pattern on its mode buttons — fix the same way if reported.)
+`scripts/test-i18n.js` is the guard: it rejects `data-i18n` keys whose English value contains `${...}`, `data-i18n-args`, literal `window.t('key')` calls without a fallback, and object-argument `window.t` calls.
+
+### i18n Display Bugs & the Global `t` Conflict
+
+Three display bugs — raw key on load, raw `${placeholder}`, and **computed** keys such as `'suggestions.cat.' + label` (which `scripts/test-i18n.js` cannot see) — plus the global `function t` recursion trap, are documented in [i18n.md](docs/agent/i18n.md). The rule: **every** `window.t()` call needs an English fallback, literal or computed. `locales/en.json` is never fetched, so `window.t(key)` with no fallback returns the key itself.
 
 ### Icons (SVG)
 Icons are stored as raw SVG strings in `icons.js`.
 *   **Size:** Designed for **32x32** pixel grid.
 *   **Stroke:** `stroke-width="2"` (Standard) or `"1.5"` for detail.
 *   **Style:** `fill="none"` `stroke="black"` OR `fill="black"` `stroke="none"`.
-
-## JavaScript Global `t` Naming Conflict
-
-Do **not** define a global `function t(key, fallback)` in page scripts. `js/i18n.js` already exposes the translation helper as `window.t`. Because a global `function t` declaration also attaches itself to `window.t`, it overwrites the i18n helper and calls itself recursively, causing a `RangeError: Maximum call stack size exceeded`.
-
-**Example of broken code (`akinator.html` before fix):**
-```javascript
-function t(key, fallback) {
-    if (typeof window.t === 'function') {
-        return window.t(key, fallback || key); // window.t is itself, infinite loop
-    }
-    return fallback || key;
-}
-```
-
-**Fix:** Use a different local name (e.g., `translate`) and call `window.t` inside it, or use `window.t` directly with a fallback guard.
-```javascript
-function translate(key, fallback) {
-    if (typeof window.t === 'function') {
-        return window.t(key, fallback || key);
-    }
-    return fallback || key;
-}
-```
 
 ## Cloudflare Pages Functions Routing for Subpaths
 
@@ -308,8 +326,7 @@ To handle subpaths under a function route, use a catch-all file inside a folder:
 functions/api/foo/[[path]].js   → handles /api/foo and /api/foo/*
 ```
 
-**Real bug fixed (historical):** `functions/api/akinator.js` was deployed and the root `/api/akinator` worked, but `POST /api/akinator/start` returned 405 because the subpath fell through to the static asset handler. The fix was moving the function to `functions/api/akinator/[[path]].js`. (That function no longer exists — Akinator was moved to a worker, then the backend was removed entirely in 2026-07; the page now uses CORS proxies only. The routing lesson still applies to any future multi-endpoint function.)
-
+**Real bug fixed (historical):** `functions/api/akinator.js` was deployed and the root `/api/akinator` worked, but `POST /api/akinator/start` returned 405 because the subpath fell through to the static asset handler. The fix was moving the function to `functions/api/akinator/[[path]].js`. (That function no longer exists — Akinator moved to a worker, then to CORS proxies, and since 2026-10 it uses an always-on Node relay on Northflank, `akinator-service/`, because Akinator's Cloudflare blocks Cloudflare Workers by TLS fingerprint. See [integrations.md](docs/agent/integrations.md). The routing lesson still applies to any future multi-endpoint function.)
 
 ## 🏗 System Architecture
 
@@ -332,6 +349,7 @@ functions/api/foo/[[path]].js   → handles /api/foo and /api/foo/*
 *   **Persistence:** `localStorage` is available but **volatile**.
 *   **Limit:** **64MB** Global Cache Limit. If exceeded, the OS performs `rm -rf` on the entire cache directory at launch.
 *   **Sync:** Rely on Firebase Firestore for critical data; do not trust `localStorage` for long-term storage.
+*   **`rekindle_location_manual` must stay plain JSON (2026-10-20):** `time.js`, `theme.js`, `js/i18n.js`, `index.html`, `weather.html` and `maps.html` all read it with `JSON.parse(localStorage.getItem(...))`. `settings.html` used to store it base64-XOR'd via `setSecureItem`, so every reader threw and silently lost the timezone/DST zone, the unit preference and the auto-language country. Write it with `writeStoredLocation()`; `readStoredLocation()` migrates the old obfuscated value on first read.
 
 ### 5. Timezone & Date Quirks
 *   **Constraint:** The Kindle browser (`Intl` API) often defaults to **UTC** or ignores the system timezone configuration.
@@ -346,6 +364,7 @@ functions/api/foo/[[path]].js   → handles /api/foo and /api/foo/*
     *   It triggers **only** when local-time helpers are actually called (`rekindleGetZonedDate()`, `rekindleFormatTime()`, `getDateInZone()` without an explicit zone) — it does **not** run automatically on every page load.
     *   The modal searches the Open-Meteo geocoding API, fetches the UTC offset, saves it to `localStorage` (`rekindle_location_manual` + `rekindle_timezone_offset`), and **reloads the page** on success.
     *   It has **no dismiss button** — the user must set their timezone or leave the popup open.
+    *   Its "Sign in instead" button goes to `index?login=true` (the canonical index login popup); the prompt is suppressed on that URL so it cannot cover the modal, and signing in restores the account's saved timezone. See section 12.
     *   Because this modal is injected into arbitrary host pages, it is subject to the class-name leakage warning in section 6 above.
 
 ### 6. Canvas / Touch Coordinate Bug with CSS `zoom`
@@ -380,33 +399,11 @@ Add this CSS block **after** your existing `.window` / `.title-bar` rules and **
 
 **Apps already using this fix:** `pool.html`, `pool2p.html`, `circle.html`, `blockblast.html`.
 
-### 6b. Unsupported CSS: `aspect-ratio` and `min()`/`max()`/`clamp()`
+### 7. Unsupported CSS: `aspect-ratio` and `min()`/`max()`/`clamp()`
 **Constraint:** Chromium 75 does **not** support the `aspect-ratio` property (added Chrome 88) or CSS math functions `min()` / `max()` / `clamp()` (added Chrome 79). `calc()` **is** supported.
 **Solution:** Use explicit `width`/`height` (or padding hacks) instead of `aspect-ratio`, and compute min/max sizing in JavaScript instead of `min()`/`max()`.
 
-### 6c. Fitting a square game canvas + controls vertically (`crossy.html`)
-A canvas styled only with `width: 100%; max-width: 512px` scales with **width** only, so on short screens the canvas + on-screen controls overflow the `95vh` window — and with `body { overflow: hidden; touch-action: none; }` the window cannot be scrolled to reach the controls.
-
-**Pattern:** Size the canvas in JS from the actual leftover vertical space, measuring the other chrome via the DOM so title-bar zoom/padding are accounted for:
-
-```javascript
-function resizeCanvas() {
-    if (!canvas) return;
-    var win = document.querySelector('.window');
-    var content = document.querySelector('.window-content');
-    var maxW = Math.min(content.clientWidth - 30, 512); // content box width, capped
-    var maxWindowH = Math.floor(window.innerHeight * 0.95); // matches .window max-height
-    var othersH = win.offsetHeight - canvas.offsetHeight;   // everything except the canvas
-    var size = Math.floor(Math.min(maxW, maxWindowH - othersH - 8)); // -8 = canvas border
-    if (size < 128) size = 128;
-    canvas.style.width = size + 'px';
-    canvas.style.height = size + 'px';
-}
-```
-
-Call it in init, on `resize`/`orientationchange`/`load`, and with a couple of delayed `setTimeout`s (theme.js may apply title-bar zoom after first paint, changing available height).
-
-### 7. Firebase Architecture
+### 8. Firebase Architecture
 The project uses **two separate Firebase projects**. You must know which one your feature targets and update the correct rules file.
 
 #### Project 1: Primary (`rekindle-dd1fa`)
@@ -421,7 +418,7 @@ The project uses **two separate Firebase projects**. You must know which one you
 *   **Used by:** Social apps — KindleChat, Neighbourhood, Topics, Flipbook, Pixel, Moderation. Any HTML file using `projectId: "rekindle-socials"`.
 *   **Config:** `firebase-social.json`
 *   **Firestore Rules:** `firestore-social.rules` — topics, neighbourhood posts/comments.
-*   **RTDB Rules:** `rtdb-social-rules.json` — KindleChat messages, translations, server-side rate limits (`kindlechat/server_rate_limits`), and per-user duplicate-detection cache (`kindlechat/user_recent`).
+*   **RTDB Rules:** `rtdb-social-rules.json` — KindleChat messages, translations, server-side rate limits (`kindlechat/server_rate_limits`), and the retired `kindlechat/user_recent` duplicate cache (rules kept, but nothing reads or writes it since 2026-10-20).
 *   **Cloud Functions:** Same `firebase-functions/index.js` (initialized as secondary `socialAdminApp`).
 
 #### Rule Update Checklist
@@ -437,125 +434,12 @@ When adding a new feature that writes to Firebase, you **must** update the corre
 
 Without matching rules, writes will be **silently rejected** by security rules. Always follow the existing patterns in the target file for authenticated-user-only collections.
 
-### 9. Server-Side Rate Limiting & Duplicate Detection (`rekindle-moderate` Worker)
+#### Game leaderboards are server-written (do not add client writes)
+`leaderboard_*` documents are written **only** by the `submitScore` Cloud Function (`firebase-functions/scores.js` + `score-config.js`). `firestore.rules` denies client create/update; the browser asks `startGameRun` for a server-timed run and then submits through `js/score-submit.js`. This exists because the old rules only checked `score is number`, so one console line (`set({score: 1e308})`) took first place on every board (the 2026-10 "IMAOKASDF" report).
 
-The moderation worker enforces **global, per-user token-bucket rate limits** using the social RTDB, so the limits are shared across all Cloudflare Worker isolates and cannot be bypassed by parallel requests, different regions, or extracted tokens used outside the app.
+When adding a game with a leaderboard: add the collection to `score-config.js`, add a read/delete-only rules block, include `<script src="js/score-submit.js" data-game="…"></script>`, and call `RekindleScores.submit(collection, payload)` instead of `db…set()`. Deploy **functions before rules**. Full guide: [games.md](docs/agent/games.md#-leaderboard-integrity-added-2026-10-20-after-the-imaokasdf-is-hacking-report).
 
-#### Rate-limit data model
-*   **Bucket path:** `kindlechat/server_rate_limits/{uid}/{contentType}`
-*   **Bucket shape:** `{ tokens: number, lastRefill: number, updatedAt: number }`
-*   **Concurrency:** RTDB REST `ETag` / `If-Match` optimistic locking with retry on `412` conflicts.
-
-#### Configured limits
-| Content type | Capacity | Refill rate |
-| :--- | :--- | :--- |
-| `kindlechat` | 5 | 1 token / 12 s |
-| `topic` | 3 | 1 token / 8 h |
-| `topic_comment` | 5 | 1 token / 12 s |
-| `neighbourhood_post` | 5 | 1 token / 5 min |
-| `neighbourhood_comment` | 10 | 1 token / 30 s |
-| `report` | 5 | 1 token / 12 min |
-
-#### Duplicate / repetitive-content detection
-*   **Path:** `kindlechat/user_recent/{uid}/{contentType}/{hash}`
-*   **Hash:** Normalized text (lowercased, punctuation stripped, whitespace collapsed) run through DJB2.
-*   **Window:** 5 minutes.
-*   Repeated identical or near-identical text within the window is rejected with a `429` error.
-
-#### Important rules
-*   No user bypasses the limits — not even `ukiyo@rekindle.ink` or moderators.
-*   These paths are **service-account writable only** in `rtdb-social-rules.json`.
-
-#### Firebase RTDB Script Gotcha
-Only include `firebase-database-compat.js` on pages that actually use Realtime Database (presence, matchmaking, chat, sessions, etc.). Pages that only need Auth/Firestore/Functions (such as `login.html`) should omit it. Loading RTDB unnecessarily can trigger `SafariExtensionMessageEvent` duplicate-variable errors in browsers with certain Safari extensions installed, and it causes extra polling connections to `*.firebaseio.com` that may log CORS/network errors even when the user is authenticated.
-
-#### Reading Social RTDB Data from Non-Social Pages
-Any page that reads/writes data owned by the **social** project (e.g. `users_public/{uid}/birthday`, written by `neighbourhood.html`) must do the full social-auth setup — referencing `socialRtdb` without it crashes with `ReferenceError` (this was the `life.html` stuck-loading bug, 2026-07):
-
-1. Include `firebase-functions-compat.js` (needed for the callable).
-2. Init the secondary app: `const socialApp = firebase.initializeApp(socialConfig, 'social'); const socialRtdb = socialApp.database(); const socialAuth = socialApp.auth();` (config in `neighbourhood.html:1151`).
-3. Sign in before any RTDB access: `firebase.functions().httpsCallable('getSocialToken')({})` → `socialAuth.signInWithCustomToken(result.data.token)`. The callable (main project) mints a social custom token carrying `moderator`/`pro`/`ageVerified`/`email` claims; social RTDB rules on `users_public` require `auth.token.ageVerified == true` even for reads.
-4. Non-social pages should NOT force the `ensureAgeVerified()` flow — instead degrade gracefully (e.g. `life.html` falls back to `localStorage` key `rekindle_life_birthday`) so non-age-verified users can still use the app; their data just won't sync.
-
-### 8. URL / Link Blocking in Social Apps
-All social apps (KindleChat, Neighbourhood, Topics) block users from posting URLs and links. This is enforced **both client-side and server-side** (moderation worker).
-
-**Client-side helper** (add to each social app HTML):
-```javascript
-function containsUrl(text) {
-    if (!text) return false;
-    var t = String(text).toLowerCase();
-    var protocolLike = /h\s*t\s*t\s*p\s*s?\s*[:/]{1,4}/.test(t);
-    var wwwLike = /\bwww\./.test(t);
-    var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link)\b/.test(t);
-    var ipLike = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(t);
-    return protocolLike || wwwLike || domainLike || ipLike;
-}
-```
-
-**Where to block:**
-*   **KindleChat:** `sendMessage()` and `sendGeneralMessageViaWorker()` in `kindlechat.html`
-*   **Neighbourhood:** `submitPost()` and `submitComment()` in `neighbourhood.html`
-*   **Topics:** `submitTopic()` (title, subheading, poll options) and `postComment()` in `topics.html`
-*   **Moderation Worker:** `workers/rekindle-moderate/worker.js` — checks for each `type` handler (`kindlechat`, `topic`, `topic_comment`, `neighbourhood_post`, `neighbourhood_comment`)
-
-**Error message (URL):** Use `"Links and URLs are not allowed."` consistently across all apps.
-
-### 9. Promotional Term Blocking in Social Apps
-The following competing-service names are banned from mention in social apps as promotional content: **Unreader**, **un-reader**, **Inkchat**, **kindlehub**. This is enforced **both client-side and server-side** (moderation worker).
-
-**Client-side helper** (add to each social app HTML next to `containsUrl`):
-```javascript
-function containsPromotedTerm(text) {
-    if (!text) return false;
-    return /\b(?:unreader|un-reader|inkchat|kindlehub)\b/i.test(String(text));
-}
-```
-
-**Where to block:** Same locations as URL blocking. Apply `containsPromotedTerm()` to message text, topic titles/subheadings, poll questions/options, post text, and comment text.
-
-**Error message (promotion):** Use `"Promotional content is not allowed."` consistently across all apps.
-
-### 10. ASCII Emoji Stripping Before Moderation
-The OpenAI `omni-moderation-latest` model incorrectly flags innocent ASCII art emoticons (e.g. `¯\_(ツ)_/¯`, `( ͡° ͜ʖ ͡°)`, `(っ◕‿◕)っ`) as sexual or harassing content.
-
-**Rule:** All ASCII emojis from `emojis.js` must be stripped from message text **before** it is sent to the OpenAI moderation API.
-
-**Implementation:** `workers/rekindle-moderate/worker.js` maintains a hard-coded list of every `art` value from `ASCII_EMOJIS` and removes them via `stripAsciiEmojis(text)` inside `moderateContent()`. If the text is empty after stripping (emoji-only messages), moderation is skipped entirely and the message is allowed.
-
-**If you add new emojis to `emojis.js`, you must also add their `art` strings to the `ASCII_EMOJI_ARTS` array in `worker.js`.**
-
-### 10b. Unicode Emoji Picker (`POPULAR_EMOJIS` in emojis.js)
-`emojis.js` also defines `POPULAR_EMOJIS` (~120 curated `{emoji, name}` entries — deliberately trimmed to the most popular/wholesome set for the all-ages community: no edgy/gross, alcohol, anger, or money emojis) used by the KindleChat emoji picker (`initAsciiPicker()` in `kindlechat.html`). It is a **category object** (`{"Smileys": [...], "Hearts": [...], "Hands": [...], "Animals": [...], "Nature": [...], "Food": [...], "Fun": [...]}`), NOT a flat array — category keys become the picker sidebar tab labels. This is a **separate global from `ASCII_EMOJIS`** on purpose: the worker's `ASCII_EMOJI_ARTS` strip-list mirrors `ASCII_EMOJIS` only, so do NOT merge these arrays or the strip-list invariant breaks. Standard Unicode emojis do not trip omni-moderation the way ASCII art does, so they need no stripping.
-
-How the picker works:
-- The emoji categories are prepended to the picker as sidebar tabs (Smileys first = default active), built by merging each `POPULAR_EMOJIS` category into `pickerCategories`; all `ASCII_EMOJIS` categories are then flattened into ONE trailing tab labeled `っ◕‿◕)っ`. Emoji category tabs render an OpenMoji icon (the category's first emoji, `.emoji-tab` class, inverted on hover/active) instead of a text label — the category key is only used for the section id and `title` tooltip.
-- The emoji section uses its own `.emoji-grid` (CSS Grid with `gap`, 48px cells / 32px images) and `.emoji-option` classes — do NOT reuse `.ascii-grid`/`.ascii-option` for emoji sections: `.ascii-grid>*+* { margin-left: 5px }` indents every wrapped row and has no vertical gaps, and the base `.ascii-option` styles (min-width, flex-grow, Courier font) fight the image cells. `.emoji-option img` also needs `image-rendering: auto` to undo the body's `image-rendering: pixelated` for smooth SVG scaling.
-- Each option renders as an `<img src="openmoji/{file}">` looked up via `EMOJI_SVG_MAP` from `js/emoji-render.js` (the Kindle cannot render emoji glyphs). **Do not** call `renderEmojis()` on the picker container — the ASCII art sections contain chars ≥ U+2600 (☁, ♥, ✿) that are also in `EMOJI_SVG_MAP` and would get mangled into images.
-- `insertAscii()` inserts the raw Unicode char for ASCII art, but for Unicode emojis it inserts an `<img class="composer-emoji">` (OpenMoji) — see the composer note below.
-- **Entries must use bare codepoints WITHOUT the `FE0F` variation selector** (e.g. `"❤"` U+2764, not `"❤️"` U+2764 U+FE0F) — the auto-generated `EMOJI_SVG_MAP` keys are FE0F-less for these, so FE0F forms silently miss.
-- After editing `emojis.js`, bump its `?v=` query in `kindlechat.html` (only page that includes it).
-
-### 10d. OpenMoji Caching (sw.js + _headers)
-`/openmoji/*` requests are cached at two layers so Kindles never re-download emoji icons:
-
-1. **Service worker (`sw.js`)** — route `1b` serves `/openmoji/*` **cache-first** (not stale-while-revalidate): OpenMoji filenames are codepoint-addressed so content never changes, and SWR would waste a background revalidation request per icon. The ~115 picker icons (`EMOJI_ASSETS`, ~0.5MB) are precached at install (best-effort per-file so one flaky icon can't fail the whole install); any other emoji first seen in a message is runtime-cached on demand via `cache.put`. Do NOT precache the whole 19MB openmoji/ dir (64MB Kindle global cache limit).
-2. **HTTP headers (`_headers`, Cloudflare Pages)** — `/openmoji/*` gets `Cache-Control: public, max-age=31536000, immutable`, covering first visits before the SW installs (Pages' default is `max-age=0, must-revalidate`, which forces a revalidation round-trip per file per session). The same file also sets: `/sw.js` → `no-cache` (SW updates must never stall), `/fonts/*` → immutable year, `/locales/*` → 1 hour, and global `X-Content-Type-Options: nosniff`. Do NOT long-cache `/js/*` or HTML — most JS has no `?v=` buster, so users would be stranded on stale code.
-
-**Regeneration rules:** when `POPULAR_EMOJIS` changes, regenerate `EMOJI_ASSETS` in `sw.js` (derive filenames from `EMOJI_SVG_MAP`); if the openmoji/ art itself is ever regenerated (library upgrade, same filenames new content), bump `CACHE_NAME` so clients drop the stale icons.
-
-### 10c. KindleChat Composer Is `contenteditable` (Not a `<textarea>`)
-The KindleChat message composer (`#msg-input` in `kindlechat.html`) is a `contenteditable` div, not a textarea, because a textarea can only hold plain text and Unicode emojis render as blank boxes on Kindle. Emojis live in the composer as real `<img class="composer-emoji" src="openmoji/..." alt="{unicode}">` nodes that flow inline with the text.
-
-Invariants to preserve when touching the composer:
-- **Never read/write `.value`** — it does nothing on a div. Read with `getComposerText()` (serializes childNodes: text → nodeValue, `<img>` → `alt`, `<br>`/`<div>` → `\n`), clear with `innerHTML = ''`, set plain text with `textContent = ...`.
-- The `alt` attribute on composer emoji imgs is the source of truth for the sent Unicode char — `serializeComposer()` converts imgs back to `alt` text, so messages still send/render as before (and `renderEmojis()` in bubbles handles display).
-- Paste is force-plain-text via a `paste` listener (`text/plain` only) — do not remove it or rich HTML (incl. foreign images) can enter the composer.
-- Placeholder is CSS `#msg-input:empty:before { content: attr(placeholder) }`; an `input` listener normalizes a fully-empty composer to `innerHTML = ''` so `:empty` matches again. Because of this, `js/i18n.js` sets `data-i18n-placeholder` via `setAttribute('placeholder', ...)` (property assignment does not reflect to `attr()` on a div).
-- Disabled state = `contentEditable="false"` + `.composer-disabled` class (managed by `setChatInputEnabled`), not the `disabled` attribute.
-- `user-select: text` on `#msg-input` overrides the body's `user-select: none`, or the caret/selection breaks.
-
-### 11. RTDB Turn Timers and `ServerValue.TIMESTAMP` Placeholders
+### 9. RTDB Turn Timers and `ServerValue.TIMESTAMP` Placeholders
 When building turn-based multiplayer games with RTDB, store `turnStartedAt` using `firebase.database.ServerValue.TIMESTAMP` so all clients share the same clock.
 
 **Gotcha:** After a local write, the RTDB value listener may fire before the server resolves the timestamp. The local snapshot then contains the sentinel object `{ '.sv': 'timestamp' }` (or an estimated value), not a number. Computing `Date.now() - turnStartedAt` against this placeholder produces `NaN`, which causes `setTimeout(..., NaN)` to fire immediately or with a browser-default delay.
@@ -587,7 +471,7 @@ const elapsed = serverTime() - gameState.turnStartedAt;
 matchRef.update({ roundEndsAt: serverTime() + 80000 });
 ```
 
-### 12. Host Migration in RTDB Multiplayer Games
+### 10. Host Migration in RTDB Multiplayer Games
 Do **not** remove the entire game node when the host disconnects. A brief network hiccup would destroy the match and kick every player out.
 
 **Pattern:**
@@ -613,7 +497,7 @@ if (!gameState.players[gameState.host]) {
 
 This keeps the game alive if the host leaves or drops, and lets remaining players finish the match. It is implemented in `liveuno.html`.
 
-### 13. Home-Screen Live Games Validation (`index.html`)
+### 11. Home-Screen Live Games Validation (`index.html`)
 
 The Live Games section and its tab badge must **never trust `presence/{hostUid}` alone** to validate a `matchmaking/{game}/{matchId}` listing. `presence/{uid}` is a **global per-user online flag** (written by `theme.js` `rekindleInitGlobalPresence`), so a stale listing stays visible whenever the user is online *anywhere* in the app. Stale listings happen in practice: `liveuno.html` `leaveMatch()` cancels the matchmaking `onDisconnect` when the host leaves a lobby with players remaining (migration then owns the listing, but migration only runs while a guest client is connected), guests who disconnect abruptly leave ghost player nodes, and crashes/races can skip the `onDisconnect().remove()`.
 
@@ -631,59 +515,165 @@ Cleanup/heal writes are idempotent and guarded by per-session attempted-sets (`m
 
 **Invariants for future live games:** the game node must live at `games/{gameType}/{matchId}` with `status: 'lobby'` while joinable and a `players` map of `{name, joinedAt, isBot?}` — the validator relies on all three. If a game's flow cancels the matchmaking `onDisconnect` before the listing is removed, expect the validator to eventually delete or heal the listing instead.
 
-### Akinator API (`akinator.html`)
-The Akinator game talks to Akinator.com through third-party **CORS proxies only** — there is no self-hosted backend (the Cloudflare Worker fallback was removed 2026-07 at user request; the old worker code still exists undeployed at `workers/rekindle-akinator/`).
+### 12. Authentication Entry Points (`index.html` modal vs `login.html`)
 
-### Transport chain (in `akinator.html`)
-- **CORS proxies** (`CORS_PROXIES` list, tried in order). The page itself scrapes `/game` for session/signature/question and POSTs form data to `/answer`, `/cancel_answer`, `/exclude`. Per-proxy entry shape: `{ base, encode }` — `encode: true` means append `encodeURIComponent(targetUrl)` (corsproxy.io, codetabs), `false` means append the raw URL (Zibri's `test.cors.workers.dev`).
+**Users sign in only through the login popup on the index page.** The canonical login/registration UI is `#login-modal` on `index.html` (`openLogin()`, the `LOG IN / REGISTER` menu item and the mobile About-sheet button). `index?login=true` opens the modal directly, so any page that needs a "log in" affordance should either open its own modal or link to `index?login=true`.
 
-`withTransport(fn)` runs each operation against the chain; the first transport that succeeds becomes `activeTransport` and is tried first next time (reset on failure). **Akinator sessions are param-based** (`session` + `signature` in every POST, no cookies), so transports can switch mid-game without losing state.
+**`login.html` is a diagnostics page, not a login page.** It exists for troubleshooting: auth state, network state, `Run Diagnostics`, the raw log, Logout. It still renders working Login/Register buttons (and its own `restoreTimezone()` for direct visits with a `return`), which makes it look canonical, but users should not be sent there to sign in — and it must not be the destination of a generic auth redirect. Nothing in the app links to it any more.
 
-### Proxy gotchas (verified 2026-07)
-- **`X-Requested-With: XMLHttpRequest` is required** on POSTs to Akinator's endpoints — without it Akinator's Cloudflare returns a 403 WAF block page. Browsers can send it (triggers a preflight; working proxies answer OPTIONS correctly).
-- `test.cors.workers.dev` (Zibri's cloudflare-cors-anywhere) is the only public proxy verified to work with Akinator. It **rejects requests without an `Origin` header** ("Error: use fetch()") and without a browser User-Agent — both are automatic from a real browser, but curl/node tests must set them manually.
-- `corsproxy.io` reaches Akinator but gets a Cloudflare challenge page; codetabs/allorigins are frequently down (522); `proxy.corsfix.com` requires per-domain registration; `cors.sh` needs an API key. Public proxies are flaky — with no worker fallback anymore, all proxies failing means the user sees a start/network error. Re-test before adding/reordering proxies.
-- The proxy path validates responses (regex-extracted session/signature/question for start, `JSON.parse` for actions), so a proxy returning a challenge page or HTML just fails through to the next transport.
+**Timezone popup routing (changed 2026-10-20):** the timezone prompt's "Sign in instead" button (`#tz-signin-btn` in `time.js`) used to send users to `login?return=…`. It now sets `window.location.href = 'index?login=true'`. Three pieces keep that flow working — do not break them independently:
 
-### Akinator.com endpoint details
-- Akinator.com sits behind Cloudflare bot protection; calls can be blocked if the upstream IP/headers are flagged.
-- The start endpoint scrapes the Akinator `/game` page. Reliable patterns are:
-  - `session: '...'` (inline JS)
-  - `signature: '...'` (inline JS)
-  - `<p class="question-text" id="question-label">...</p>`
-  - Answer labels from `<a class="li-game" href="#" id="a_yes" onclick="chooseAnswer(0)">...</a>` (and `a_no`, `a_dont_know`, `a_probably`, `a_probaly_not`).
-- Action endpoints: `/answer` (send 0-4), `/cancel_answer` (back), `/exclude` (continue after wrong guess).
-- Supported regions and theme `sid` values: characters=1, objects=2, animals=14.
-- Sessions are short numeric strings (e.g. `'886'`) and the signature is base64 — both appear multiple times in the `/game` HTML. `extractFirst()` picks the **longest** match across all patterns to avoid short decoys.
-- Continue maps to Akinator `/exclude` and **must** send `forward_answer: '1'` (per the site's own `continuePartie()` JS) — **not** `step_last_proposition`. Without it, Akinator returns the HTML game page instead of JSON, and the browser's `JSON.parse` throws.
-- Canonical endpoint params (scraped from the `/game` page inline JS, 2026-07): `/answer` = step, progression, sid, cm, answer, step_last_proposition, session, signature. `/cancel_answer` = step, progression, sid, cm, session, signature. `/exclude` = step, sid, cm, progression, session, signature, forward_answer ('1' = keep playing, '0' = end game).
-- akinator.com hard-blocks some residential IPs with a Cloudflare 403 even with full browser headers. Don't trust local `curl` results for diagnosis.
+1. `checkTimezoneOffset()` in `time.js` returns early when the URL has `login=true` (in addition to the existing `/login…` guard). The prompt overlay is `z-index: 99999` and the index login modal is `z-index: 10000`, so without this the prompt would cover the login modal.
+2. `doLogin()` in `index.html` calls `window.rekindleRestoreTimezoneFromProfile(auth.currentUser)` after the IP-ban check passes. That helper lives in `time.js` (exported at the bottom): it reads `users/{uid}/settings/general`, copies `manualLocation` / `timezoneOffset` into `rekindle_location_manual` / `rekindle_timezone_offset`, and removes an open prompt. It is what makes the popup's "Your saved timezone will be restored" hint true, and it also works for users whose localStorage was wiped by the Kindle cache cleanup.
+3. `login.html` keeps its own `restoreTimezone()` (same Firestore read) for the `return` flow on direct troubleshooting visits. Keep the two implementations in sync if the `settings/general` schema changes.
 
-## ❓ Game Rules Helper (js/gamerules.js)
+The button no longer carries a `return` param, so a user who signs in from a page that showed the prompt lands on the dashboard instead of returning to that page.
 
-`js/gamerules.js` adds a "?" button to the title bar of games whose rules may not be universally known, opening a System 7 "How to Play" modal.
+## 🛡 Social & Moderation Rules
 
-### How it works
-- Pages opt in simply by including `<script src="js/gamerules.js"></script>` (in `<head>`, next to `js/i18n.js`).
-- The game is detected from the page **filename** via the `ALIASES` map (e.g. `2pchess`, `livechess` → `chess`), so variants share one rules entry.
-- Rules text lives in the `RULES` registry as English default HTML. At open time it calls `window.t('gamerules.<key>', defaultHtml)`, so translations can be added to locale files later without touching this script. Title/close use `gamerules.title` / `gamerules.close`.
-- The modal (`#gamerules-overlay`) is appended to `<body>` (never inside `.window`) to dodge the stacking-context trap, with all CSS scoped under `#gamerules-*` selectors and explicit resets per the injected-UI rules in section 6.
+Enforced client-side and in `workers/rekindle-moderate/worker.js` for every social app (KindleChat, Neighbourhood, Topics). Reporting UI and the `/reports` data model are in [moderation-reports.md](docs/agent/moderation-reports.md).
 
-### Button placement gotcha
-Several games already have right-side title-bar controls (e.g. `yahtzee.html` New/Scores buttons, `chess.html` Stats, `2048.html` Reset, `spellbound.html` Stats, `oregontrail.html` Restart). The script measures those siblings with `offsetLeft`/`offsetWidth` (**pre-zoom layout units** — safe under theme.js CSS `zoom`, unlike `getBoundingClientRect()`) and shifts the "?" button left of them. All target pages' `.title-bar` rules have `position: relative`, which this relies on.
+### 0. KindleChat Direct Messages (2026-10-20)
+DMs live **only** in the social RTDB (`rekindle-socials`): `kindlechat/dm_threads`, `dm_messages`, `dm_user_threads`, `dm_prefs`, `dm_blocks`. Only ReKindle+ members may start a conversation; every first contact requires recipient acceptance; all content is written by the moderation worker (clients may write only `lastReadAt` and `allowRequests`). Messages are text-only, capped at 1,000 chars, moderated, and block/report are always available; a block is reversible only by the person who set it (`dm_unblock`). Never re-enable the legacy Firestore `rooms` collection and never grant moderators a blanket read on `dm_messages` — reports carry a scoped context instead. Kill switch: `kindlechat/config/dm_enabled` / `dm_beta_enabled`. Full design: [kindlechat.md](docs/agent/kindlechat.md#kindlechat-direct-messages-2026-10-20).
 
-### Adding a new game
-1. Add an entry to `RULES` (key) and `ALIASES` (filename → key) in `js/gamerules.js`.
-2. Include the script tag in the page's `<head>`.
-3. Optionally add `gamerules.<key>` translations to the locale files.
+### 1. URL / Link Blocking in Social Apps
+All social apps (KindleChat, Neighbourhood, Topics) block users from posting URLs and links. This is enforced **both client-side and server-side** (moderation worker).
 
-Games deliberately **excluded** (rules universally known / self-evident): tictactoe (+2p/live), snake, tetris, crossy, dino, hangman, memory, maze, jigsaw, circle, doom, mario, trivia, airtype, uno.html (menu wrapper — rules live on `liveuno.html`), life.html (life calendar, not a game).
+**Client-side helper:** `js/link-guard.js` (`window.rekindleContainsLink`, loaded by all three
+social pages; each page's `containsUrl()` delegates to it and keeps a legacy fallback). It
+normalises the usual evasions before matching - comma/space/dot-word/bracketed/full-width split
+domains (`nexora-chat-v12,netlify,app/ NEW WEBSITE v12`, 2026-10-26), `hxxp`/spaced protocols and
+IPs - while letting ordinary chat (`hello, me and my friend`) through. The worker carries a
+mirror; `node scripts/test-link-guard.js` (in `npm test`) checks both agree. Rules and
+trade-offs: [link-blocking.md](docs/agent/link-blocking.md).
+
+**Where to block:**
+*   **KindleChat:** `sendMessage()` in `kindlechat.html` (`doSendMessage()` is the only send path; the old unmoderated `sendGeneralMessageViaWorker()` was deleted 2026-10-20)
+*   **Neighbourhood:** `submitPost()` and `submitComment()` in `neighbourhood.html`
+*   **Topics:** `submitTopic()` (title, subheading, poll options) and `postComment()` in `topics.html`
+*   **Moderation Worker:** `workers/rekindle-moderate/worker.js` — checks for each `type` handler (`kindlechat`, `topic`, `topic_comment`, `neighbourhood_post`, `neighbourhood_comment`)
+
+**Error message (URL):** Use `"Links and URLs are not allowed."` consistently across all apps.
+
+### 2. Banned Competitor Mentions in Social Apps
+**Any mention** of these competing services is banned from social apps (not just promos): **KindleHub** (`kindlehub`, `kindlehub.pro`, and its "khub" nickname), **Unreader** / **un-reader**, **Inkchat**. KindleHub's owner repeatedly spams promo for it, so this is enforced **client-side and server-side** (moderation worker), and existing mentions are masked for display.
+
+**Evasion forms seen in the wild (all now caught):**
+* Spelled-out dots: `kindlehubDOTpro`, `Unr3ad3r-v4yf.onrender(DOT)com`
+* Cyrillic/Greek homoglyphs: `kindlеhub` (Cyrillic `е`), `httрs://kindlеhub.рro/`, `unrеаdеr`
+* Leetspeak: `Unr3ad3r`, `k1ndlehub`, `1nkchat`
+* Separators/spacing: `kindle.hub`, `kindle hub`, `un-reader`, `k i n d l e h u b`
+* The abbreviation `khub` / `K-Hub` (**must be blocked** - it is how users are funnelled to the competitor)
+* Zero-width characters between letters
+
+**Client-side helper:** `js/promo-ban.js` (loaded by `kindlechat.html`, `neighbourhood.html`, `topics.html`). It folds homoglyphs/leetspeak/diacritics to ASCII, compacts non-alphanumerics, matches `kindlehub` / `unreader` / `inkchat` plus standalone `khub`, and maps the match back to the original characters. Exposes:
+```javascript
+window.rekindleContainsPromotedTerm(text)      // true -> reject the write
+window.rekindleCensorPromotedTerms(text)       // masks matches with █████ for display
+window.rekindleContainsPromotedUsername(name)  // substring check for usernames
+window.rekindleCensorPromotedUsername(name)
+```
+The local `containsPromotedTerm(text)` in each social page must stay as a thin wrapper that delegates to `window.rekindleContainsPromotedTerm` (with a plain-regex fallback in case the helper fails to load). **Do not re-implement the regex locally** - the old `\b(?:unreader|un-reader|inkchat|kindlehub)\b` was trivially bypassed by `kindlеhub`, `kindle.hub` and `khub`.
+
+**Server-side mirror:** `workers/rekindle-moderate/worker.js` `containsPromotedTerm()` carries the same folding logic (comments say KEEP IN SYNC with `js/promo-ban.js`). It is applied to every content type: `kindlechat`, `topic` (title/subheading/poll), `topic_comment`, `neighbourhood_post`, `neighbourhood_comment`.
+
+**Where to block (client):**
+* KindleChat: `sendMessage()`.
+* Neighbourhood: `submitPost()`, `submitComment()`, **`editPost()`** (edits write straight to Firestore, bypassing the worker), and `saveProfile()` (all bio/profile fields).
+* Topics: `submitTopic()` (title, subheading, poll question/options) and the comment send path.
+
+**Display masking:** `censorText()` (KindleChat, messages/translations/art captions) and `censorProfileText()` (Neighbourhood profiles/posts/comments) chain `rekindleCensorPromotedTerms()` before `filterBadWords()`, and displayed usernames go through `censorUsername()` (KindleChat + Neighbourhood). Topics masks titles, subheadings, poll options and comment bodies. This is intentional: old spam must not keep advertising the competitor.
+
+**Usernames:** banned-name usernames are rejected at registration - `login.html` / `index.html` `isForbiddenUsername()` lists `kindlehub`, `khub`, `unreader`, `inkchat`, and `registerUser` in `firebase-functions/index.js` enforces the same rule server-side (client checks are bypassable). Usernames are alphanumeric-only, so the server check is a plain lowercase substring match.
+
+**Error message (promotion):** Use `"Promotional content is not allowed."` consistently across all apps. For profiles the inline save status uses the `neighbourhood.msg.promo` key with an English fallback.
+
+### 3. ASCII Emoji Stripping Before Moderation
+The OpenAI `omni-moderation-latest` model incorrectly flags innocent ASCII art emoticons (e.g. `¯\_(ツ)_/¯`, `( ͡° ͜ʖ ͡°)`, `(っ◕‿◕)っ`) as sexual or harassing content.
+
+**Rule:** All ASCII emojis from `emojis.js` must be stripped from message text **before** it is sent to the OpenAI moderation API.
+
+**Implementation:** `workers/rekindle-moderate/worker.js` maintains a hard-coded list of every `art` value from `ASCII_EMOJIS` and removes them via `stripAsciiEmojis(text)` inside `moderateContent()`. If the text is empty after stripping (emoji-only messages), moderation is skipped entirely and the message is allowed.
+
+**If you add new emojis to `emojis.js`, you must also add their `art` strings to the `ASCII_EMOJI_ARTS` array in `worker.js`.**
+
+### 4. Server-Side Rate Limiting & Duplicate Detection (`rekindle-moderate` Worker)
+
+The moderation worker enforces **global, per-user token-bucket rate limits** using the social RTDB, so the limits are shared across all Cloudflare Worker isolates and cannot be bypassed by parallel requests, different regions, or extracted tokens used outside the app.
+
+#### Rate-limit data model
+*   **Bucket path:** `kindlechat/server_rate_limits/{uid}/{contentType}`
+*   **Bucket shape:** `{ tokens: number, lastRefill: number, updatedAt: number }`, plus `rep: string` on the `kindlechat` bucket (the repetition-guard state — see §5; it rides on this bucket, so it costs no extra operations).
+*   **Concurrency:** RTDB REST `ETag` / `If-Match` optimistic locking with retry on `412` conflicts.
+
+#### Configured limits
+| Content type | Capacity | Refill rate |
+| :--- | :--- | :--- |
+| `kindlechat` | 5 | 1 token / 12 s |
+| `topic` | 3 | 1 token / 8 h |
+| `topic_comment` | 5 | 1 token / 12 s |
+| `neighbourhood_post` | 5 | 1 token / 5 min |
+| `neighbourhood_comment` | 10 | 1 token / 30 s |
+| `dm` | 8 | 1 token / 8 s |
+| `dm_request` | 5 | 1 token / 2 h (plus a 3-pending cap) |
+| `report` | 5 | 1 token / 12 min |
+
+#### Duplicate / repetitive-content detection
+*   **Chat:** handled by the repetition guard in §5 below (state rides on the rate-limit bucket; adds no Firebase operations).
+*   **Topics, topic comments, neighbourhood posts/comments:** **no duplicate check** (removed 2026-10-20). The old `checkUserRecentContent()` read `kindlechat/user_recent/...`, but nothing had written that node since 2026-09-21, so the check could never match — it was one wasted RTDB read per post. It is now gone, along with `recordUserRecentContent()` / `cleanupUserRecentContent()` / `rtdbSocialPutSimple()`. Duplicate protection for those types is covered by the token-bucket limits in the table above.
+*   **Do not re-add a `user_recent` check** unless you also add an awaited writer (`ctx.waitUntil()` if it runs after the response). A fire-and-forget writer is what silently killed it for a month.
+
+#### Important rules
+*   No user bypasses the limits — not even `ukiyo@rekindle.ink` or moderators.
+*   These paths are **service-account writable only** in `rtdb-social-rules.json`.
+
+#### Firebase RTDB Script Gotcha
+Only include `firebase-database-compat.js` on pages that actually use Realtime Database (presence, matchmaking, chat, sessions, etc.). Pages that only need Auth/Firestore/Functions (such as `login.html`) should omit it. Loading RTDB unnecessarily can trigger `SafariExtensionMessageEvent` duplicate-variable errors in browsers with certain Safari extensions installed, and it causes extra polling connections to `*.firebaseio.com` that may log CORS/network errors even when the user is authenticated.
+
+#### Reading Social RTDB Data from Non-Social Pages
+Any page that reads/writes data owned by the **social** project (e.g. `users_public/{uid}/birthday`, written by `neighbourhood.html`) must do the full social-auth setup — referencing `socialRtdb` without it crashes with `ReferenceError` (this was the `life.html` stuck-loading bug, 2026-07):
+
+1. Include `firebase-functions-compat.js` and `js/social-token-cache.js?v=1` (the helper needs the Functions SDK).
+2. Init the secondary app: `const socialApp = firebase.initializeApp(socialConfig, 'social'); const socialRtdb = socialApp.database(); const socialAuth = socialApp.auth();` (config in `neighbourhood.html:1151`).
+3. Sign in before any RTDB access with `window.rekindleEnsureSocialAuth(auth, socialAuth)` — it signs in with the `getSocialToken` callable's custom token (which carries `moderator`/`pro`/`ageVerified`/`email` claims) and caches the token in `sessionStorage` for 50 minutes. Do **not** call `getSocialToken` directly on every page load: that was the top Cloud Function (~126k/month, 2026-10-25 audit) and the helper is the fix. Social RTDB rules on `users_public` require `auth.token.ageVerified == true` even for reads.
+4. Non-social pages should NOT force the `ensureAgeVerified()` flow — instead degrade gracefully (e.g. `life.html` falls back to `localStorage` key `rekindle_life_birthday`) so non-age-verified users can still use the app; their data just won't sync.
+
+### 5. Repeated-Message Flood Guard (KindleChat, 2026-10-20)
+
+`evaluateChatRepetition()` in `workers/rekindle-moderate/worker.js` plus the client mirror `js/spam-guard.js` reject a user's 3rd near-identical message inside 10 minutes (and an exact duplicate inside 5) **without adding any Firebase operations**: the state rides in the existing `kindlechat/server_rate_limits/{uid}/kindlechat` bucket as a `rep` string. Never add a separate read/write for spam state, and keep the client mirror in sync with the worker. `node scripts/test-chat-spam.js` replays the real 2026-10-19 flood. Full design: [kindlechat.md](docs/agent/kindlechat.md).
+
+### 6. Reporting Requires a Comment
+
+Every social report must carry a comment containing at least one real word (2+ letters, any script). Enforced server-side in the `report` handler (`reportCommentError()` in `workers/rekindle-moderate/worker.js`, checked before the rate limiter) and mirrored in `js/reports.js` so the modal shows the message inline. `scripts/test-reports.js` asserts both gates agree, so change them together.
+
+### 7. The Moderation Console Is Owner-Only and Automod-First
+
+Social moderation is automated end to end: the Worker moderates every write and `/reports` auto-deletes when moderation confirms the report (chat, DMs, comments — since 2026-10-26 one reporter cannot delete alone) or on 2 independent reports (everything else). `moderation.html` is therefore an **owner-only** console — no moderator grants, mod-mode, timeouts or manual action log. Its tabs are Automod Log, Reports, Banned IPs, Users and Content Review. Automod rejections live in the **social** RTDB (`/automod_log`, written by `logAutomodRejection()`, pruned after 30 days); the `automod_log`/`automod_strikes`/`automod_last_action` rules in `rtdb-rules.json` were dead and have been removed. See [moderation-reports.md](docs/agent/moderation-reports.md).
+
+## 🔐 Server Boundary Rules (2026-10-20 audit)
+
+*   **`functions/api/proxy.js` is not a general CORS proxy.** It now allows GET/HEAD only, rejects private/loopback/link-local/metadata hosts and embedded URL credentials, re-validates every redirect, forwards only `accept`/`accept-language`/`authorization`/`if-none-match`/`range`, enforces a 10 s timeout and 10 MB response cap, and sends no wildcard CORS header. Any new public API host should get a dedicated allowlisted function (see `gutenberg.js`/`reddit.js`) instead of widening the generic proxy. Do not add POST support without a concrete caller.
+*   **Mail callables require auth + an active ReKindle+ subscription.** All six go through `resolveMailConnection(uid, config, kind)` (`assertMailAccess`, plus `assertMailEndpoint` for password accounts). Outlook.com/Hotmail uses OAuth2 XOAUTH2 via a device-code flow (`mailMicrosoftStart`/`Poll`/`Status`/`Disconnect`): refresh tokens live in RTDB `mail_oauth/{uid}/{accountId}` (default-deny, Admin SDK only — never add rules, never return it; several mailboxes per user are supported) and OAuth endpoints are pinned to Microsoft's hosts. Rate limits use `mail_rate_limits/{uid}/{kind}`; errors stay generic. See [integrations.md](docs/agent/integrations.md#-mail-outlookcom--hotmail-via-oauth2-device-code-2026-10-26).
+*   **Custom auth claims must be merged, never replaced.** Identity Toolkit's `customAttributes` replaces the whole claims object. Use `mergeClaims()` (`workers/rekindle-stripe/claims.js`) or spread the existing claims before calling `setCustomUserClaims`; otherwise `ageVerified`/`moderator` are silently deleted when Pro is granted or revoked. `getSocialToken` lazily repairs a wiped `ageVerified` claim from `users/{uid}/ageVerification/latest`.
+*   **Quality gate:** `npm test` runs the i18n, compatibility, proxy-guard, claim-merge, chat-spam, direct-message, Oregon Trail, and Pinterest cross-device connection checks. Both CI and the deploy workflow run it before building.
+
+## 📦 Dependency & CodeQL Security (2026-10-20)
+
+*   **`npm audit` must report 0** for the two tracked Node manifests: the repo root (build tooling + `admin/` scripts) and `firebase-functions/` (Cloud Functions). `workers/rekindle-reader` is separate and clean. Use plain `npm audit fix` (non-major only); never `npm audit fix --force`.
+*   **`firebase-admin` stays on `13.10.x` on purpose.** 13.10 drops the vulnerable `node-forge` dependency and moves `@google-cloud/firestore`/`storage` to optional dependencies. v14 is **modular-only**: it deletes the namespaced `admin.auth()`, `admin.database()`, `admin.firestore()`, `admin.credential.*`, `admin.firestore.FieldValue` and `admin.database.ServerValue` APIs used throughout `firebase-functions/` and `admin/*.js`. Migrating to v14 (`getAuth()`, `getDatabase()`, `getFirestore()`, `cert()`, modular `FieldValue`/`ServerValue`) is a separate refactor, not a version bump.
+*   **Keep `"uuid": "^11.1.1"` in both `overrides` blocks.** firebase-admin 13.10 still installs the optional Google Cloud clients, whose `uuid < 11.1.1` copies trigger GHSA-w5hq-g745-h8pq. Those libraries only call `uuid.v4()`, so the major override is safe; remove it when the admin v14 migration lands.
+*   **Do not re-add `firebase-functions-test`** until it peer-supports `firebase-admin@14`. It is unused (no test files reference it) and pulled a vulnerable jest / `ts-deepmerge` / `js-yaml` tree that accounted for most Dependabot alerts.
+*   **CodeQL default setup analyzes `actions`, `javascript-typescript` and `python` only.** `scripts/shot-webkit.swift` is a standalone macOS WebKit harness with no Xcode/SwiftPM project, so CodeQL's Swift autobuild always fails on the macOS runner. Do not re-add Swift to the default setup and do not add a `codeql.yml` (advanced setup cannot coexist with default setup).
+*   **Node 22 is the build/runtime baseline.** CI and the deploy workflow run Node 22 (Node 20 is EOL and `firebase-admin@14` requires ≥22). The functions package already pins `"engines": {"node": "22"}`.
+*   **Mail-library majors:** `nodemailer@10`, `imapflow@2` and `mailparser@3.10` only change packaging/Node floor (≥20) — the `createTransport`/`sendMail`, `new ImapFlow`, `fetchOne`/`search`/`list` and `simpleParser` APIs used by `firebase-functions/index.js` are unchanged.
+*   **Never sanitise HTML with a regex.** Rich text from Reddit, Wiktionary, saved notes and RSS goes through `js/safe-html.js` (`window.rekindleSetSafeHtml(el, html)` / `window.rekindleSafeHtmlFragment(html)`), which parses with `DOMParser`, removes script/style/iframe/form nodes, `on*` handlers and `javascript:`/`vbscript:`/`data:` URLs, then appends inert nodes (never `innerHTML`). Values inside inline handlers use the `escapeJsString()` helper (JS escapes + HTML entities); Firebase push keys are safe as ids. Regex `<script>` stripping is what produced the 2026-10 code-scanning XSS backlog — do not reintroduce it.
+*   **Code scanning is kept at 0 open alerts.** The 26 alerts dismissed on 2026-10-20 are triaged: test-only linters (`used in tests`), plain-text scrapers rendered with `textContent`/`innerText`, the DOMParser sanitiser itself, the localhost-only dev server, and two accepted `localStorage` caches (timezone city/offset and the user's own birthday — no credentials). If a new alert appears, fix the sink first; only dismiss with a specific comment.
 
 ## ✅ Best Practices
 -   **Images:** Use **WebP** or **SVG**. They are fully supported and perform best.
 -   **Modals:** Always stick to the `.modal-overlay` / `.modal-box` DOM structure found in `weather.html`.
 -   **Custom Selects:** `js/custom-select.js` replaces native `<select>` elements with a System 7 styled widget. Because the native select is hidden, the custom widget must explicitly respect the native `disabled` state and per-option `disabled` attributes via the `disabled` CSS class and early-return guards in the `CustomSelect` class (see the `updateDisabledState()`, `toggle()`, `open()`, `select()`, and `renderOptions()` methods). Without this, a disabled select will still appear interactive. **Modal gotcha:** the replacement `.custom-select-container` is `display: inline-block; width: auto` and does NOT inherit page CSS aimed at `select` (e.g. `.modal-form select { width: 100%; margin-bottom: 20px }`), so selects inside modals render shrunken with collapsed spacing. Re-apply layout to the widget: `.modal-form .custom-select-container { display: block; width: 100%; margin-bottom: 20px; }` and `.modal-form .custom-select-trigger { width: 100%; box-sizing: border-box; }` (see `checkers.html` / `chess.html` new-game modals).
--   **Dark mode chrome:** `theme.js` applies a global `invert(1) hue-rotate(180deg)` filter in dark mode. Because `color-scheme: dark` changes the default canvas text color to white, the filter would invert that text back to black-on-black, so `theme.js` now also sets explicit `color: #000` on the dark root so the filter produces white text. White buttons, close boxes, and borders on light System 7 UI can also become black-on-black and disappear; add the `no-invert` helper class (re-inverted by `theme.js`) to any control that must stay visible in dark mode, e.g. `<div class="controls no-invert">` or `<button class="sys-btn no-invert">`. Note that `.no-invert` restores the original light colors, so text inside a `.no-invert` element with a transparent background may end up black-on-black; add a dark-mode `color: #fff` rule for that text (see `pet.html` `.btn-label`). **Note:** Dark mode is currently temporarily disabled — `theme.js` forces `light` mode and `settings.html` greys out/disables the theme dropdown.
+-   **Dark mode chrome (2026-10-26):** `theme.js` uses the global `invert(1) hue-rotate(180deg)` filter, but sets `color-scheme: light` so native inputs render light and invert to dark. `img`/`video`/`canvas`/`.no-invert` are re-inverted; `.keep-white` opts black-on-transparent images out (e.g. the dashboard `logo.svg`), while photos/QR codes must stay re-inverted. Scrims are the trap: `theme.js` marks full-screen fixed/absolute overlays with `.rk-dark-scrim` and feeds them `rgba(255,255,255,.55)` so they render as 55% black after inversion. Permanent black accent bars need a page-level `[data-theme="dark"]` override (Journal month header, Strands clue bar), and map tiles use `filter:none` to darken. `?theme=dark|light|auto` is a session preview that also skips the SW. Full details, page fixes and the verification method: [dark-mode.md](docs/agent/dark-mode.md).
 
 ## 🌐 External API Proxies (Rate-limiting)
 External APIs such as Reddit aggressively rate-limit shared cloud egress IPs (e.g., Cloudflare Pages/Workers). Any proxy under `functions/api/` or `workers/` that calls an external API should:
@@ -695,365 +685,44 @@ External APIs such as Reddit aggressively rate-limit shared cloud egress IPs (e.
 
 Example pattern: `functions/api/reddit.js`.
 
-## 🖼 Grayscale Avatars (`customAvatar` float arrays) & ReKindle+ Gradient Gate
+**Worker quota + preflight (2026-10-25):** Workers Free is 100k requests/day shared with Pages Functions; over it every worker returns the CORS-less `error code: 1027` page (KindleChat showed "Load failed"). Cross-origin JSON POSTs cost 2 requests (OPTIONS + POST) unless the worker sends `Access-Control-Max-Age` + `Vary: Origin` — never remove them ([usage-limits.md](docs/agent/usage-limits.md), `scripts/test-worker-cors.js`). Socials: separate **ReKindle Social** account, URLs in `js/social-endpoints.js`.
 
-`customAvatar` arrays (stored in RTDB `user_cards/{uid}` and social `users_public/{uid}`) support **float shade values 0..1**, not just 0/1 — 0 = white, 1 = black, mid values = gray (matching `pixel.html` grid values). Gradient pixel-art avatars are a **ReKindle+ feature**.
+**Some hosts block Cloudflare egress outright — a proxy cannot fix it.** `standardebooks.org` answers every request from AS132892 (the Workers/Pages network, e.g. `2a06:98c0:3600::103`) with an Apache 403, whatever the User-Agent or headers, so `/api/proxy` and `/api/*` are dead ends for it. Relay through a Firebase function (Google Cloud egress) instead — see `firebase-functions/standardebooks.js` and [integrations.md](docs/agent/integrations.md#standard-ebooks-403s-every-cloudflare-egress-ip-2026-10-20). Same workaround family as the Akinator relay (`akinator-service/`).
 
-*   **Gate (neighbourhood.html only):** the pixel-art avatar picker locks any 16x16 drawing whose grid has any value strictly `> 0 && < 1` (`gridHasGradients()`). Non-plus users see the item greyed out (`.pixel-picker-item.locked`, opacity 0.5 + `filter: grayscale(1)`) with a `.pixel-picker-lock-badge` ("PLUS", reuses `neighbourhood.lbl.plus`); clicking it shows `showGradientPaywallAlert()` instead of selecting. `selectPixelArtAsAvatar()` re-checks server-side-of-client (data + `isPlus`) as a guard. `isPlus` comes from `localStorage.rekindle_is_pro`.
-*   **Four `drawAvatar()` copies render grayscale:** `neighbourhood.html`, `kindlechat.html`, `topics.html`, `index.html` all have their own `drawAvatar(canvasId, seed)`; each renders array values `0 < v < 1` as `rgb(s,s,s)` where `s = Math.round((1 - v) * 255)`, then restores `fillStyle = '#000'`. **If you add a new page that draws avatars from `user_cards`, copy the grayscale-aware loop, not the old `seed[i] === 1` check.**
-*   `gridToAvatar()` (neighbourhood.html) clamps grid values to 0..1 instead of binarizing; pure B&W art (already 0/1) is unaffected.
-*   The 1-bit "Draw Icon" editor (`openAvatarModal()`) **binarizes on load** (`v >= 0.5 ? 1 : 0`) so a gradient avatar is WYSIWYG in the editor; saving from that editor replaces the avatar with 1-bit data.
-*   Grayscale avatars are static one-time canvas draws, so they do NOT cause the e-ink full-refresh flashing that animated anti-aliased canvases do (contrast with the Surfer/Cube Dash 1-bit rules).
+## ⚠️ Deploying to Cloudflare Pages (do not deploy the repo root)
 
-## 📋 Reporting System
+`npx wrangler pages deploy .` uploads **everything in the directory, including `.gitignore`d files**. `service-account.json`, `service-account-social.json` and `firebase-functions/.env` (which also holds `OPENAI_API_KEY`) were publicly downloadable from both `rekindle.ink` and `beta.rekindle.ink` until 2026-10-20 because the deploy scripts pointed at `.` and `build-automation.js`'s `ignoreList` did not exclude them.
 
-Users can report content across all social apps. Reports are stored in Firestore and trigger Discord notifications.
+**Rules:**
+*   Deploy the build output, never the source tree: `npm run build && npx wrangler pages deploy _deploy/main --project-name=rekindle --branch=main` (prod) or `--branch=beta` (beta). `npm run deploy:prod` / `npm run deploy:beta` now do this.
+*   `_deploy/main` must contain `functions/` — Cloudflare Pages needs it at the deploy root, and `build-automation.js` copies it in.
+*   `build-automation.js` has `FORBIDDEN_IN_DEPLOY` + `assertNoSecretsInDeploy()`: the build aborts if any credential file survives the copy. Keep that list in sync with `ignoreList` when adding new secret files.
+*   Pages caches non-HTML assets on the edge (`s-maxage=604800`). A file removed from a deployment can still be served from the custom-domain cache for up to 7 days — purge the cache (or rotate the credential) after any accidental publish.
 
-### Architecture
-- **Client Module:** `js/reports.js` — provides `rekindleOpenReportModal()` with System 7 styling
-- **Backend Handler:** `workers/rekindle-moderate/worker.js` handles `type: "report"` requests
-- **Storage:** RTDB `/reports` on the **social** project (`rekindle-socials`)
-- **Notifications:** Discord bot via `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` environment variables. Fires on every report submission. Includes action buttons (Delete, Timeout, Dismiss) for manual moderation.
+### 🧊 Cache busting a changed shared asset (required)
 
-### Data Model (`/reports` RTDB)
-Each entry is keyed by a Firebase push ID and contains:
-```javascript
-{
-  reporterId, reporterName,
-  reportedUserId, reportedUserName,
-  contentType, contentId, contentPath,
-  reason, comment, contentSnapshot,
-  status: "pending" | "resolved" | "dismissed",
-  createdAt, resolvedAt, resolvedBy, resolutionNote
-}
-```
+Pages serves non-HTML assets from the edge for up to 7 days, and installed service workers keep their own copy. **A deploy that changes a shared JS/CSS file without changing its URL is only half-shipped**: the new bytes sit on the origin while users keep receiving the cached old file.
 
-### RTDB Rules
-Reports live under `/reports` in `rtdb-social-rules.json`:
-- `.read`: `ukiyo@rekindle.ink` or moderators
-- `.write`: `ukiyo@rekindle.ink` or the social service account
-- `.indexOn`: `["contentId", "contentType", "status", "createdAt"]`
-
-### RTDB Indexes Required
-Add this index in the Firebase Console under the social RTDB for the `/reports` node:
-- `contentId`
-- `contentType`
-- `status`
-- `createdAt`
-
-### Rate Limits
-- 60 reports per hour per user (enforced in moderation worker)
-
-### Adding Report Buttons to New Social Apps
-1. Include `<script src="js/reports.js"></script>` in the HTML `<head>`
-2. Call `rekindleOpenReportModal({contentType, contentId, contentPath, reportedUserId, contentSnapshot})`
-
-### Files Modified
-- `js/reports.js` (new)
-- `workers/rekindle-moderate/worker.js` — added report handler + Discord notification
-- `kindlechat.html` — report buttons on messages
-- `neighbourhood.html` — report buttons on posts and comments
-- `topics.html` — report buttons on topics and comments
-- `moderation.html` — added "User Reports" panel with pending/resolved/dismissed filters
-- `firestore-social.rules` — added `reports` collection rules
-
-### Discord Bot Setup
-Set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` as Cloudflare Worker environment variables. **No fallback** — if not set, notifications are silently skipped. Never commit the bot token to the repository — use environment variables.
-
-**Setup Steps:**
-1. Create a Discord bot at [Discord Developer Portal](https://discord.com/developers/applications)
-2. Go to "Bot" tab → Click "Reset Token" → Copy the token
-3. Invite the bot to your server with "Send Messages", "Embed Links", and "Use Application Commands" permissions
-4. Set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` as Cloudflare Worker secrets
-
-**Auto-Deletion:** When 2 different users report the same content (same `contentType` + `contentId`), the content is automatically deleted and both reports are marked as "resolved". The Discord notification will show a green embed indicating the auto-deletion.
-
-**Discord Action Buttons:** Each Discord notification includes 3 buttons:
-- **Delete Content** — Manually deletes the reported content
-- **Timeout User (24h)** — Applies a 24-hour timeout to the reported user
-- **Dismiss Report** — Marks the report as resolved without action
-
-To enable buttons, you must set up Discord Interactions:
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications) → Your Application
-2. Go to "General Information" → Set "Interactions Endpoint URL" to: `https://rekindle-moderate.timjarnott.workers.dev/discord-interaction`
-3. Set `DISCORD_PUBLIC_KEY` as a Cloudflare Worker environment variable (found in Discord Developer Portal under "General Information")
-
-### RTDB Indexes Required
-Reports live under `/reports` in the social RTDB. The dashboard reads from RTDB and filters/sorts in memory, but the worker query for existing reports uses `orderByChild('contentId').equalTo(...)`, so an index on `contentId` is required for performance at scale.
-
-1. **Reports node:**
-    - **Path:** `/reports`
-    - **Index fields:** `contentId`
-
-### Auto-Delete Behaviour
-When 2 different users report the same content (same `contentType` + `contentId`), the worker attempts to automatically delete the content. If deletion succeeds, both reports are marked as `resolved`. If deletion fails (e.g. RTDB permission issue), both reports remain `pending` so moderators can review them manually. The Discord notification will indicate whether the auto-delete succeeded or failed.
-
-### Security: Escaping for JS String Literals
-When passing user-generated text into `onclick` HTML attributes, **never rely solely on `escapeHtml()`**. HTML entity decoding happens before JS execution, so `&#039;` becomes `'` and breaks out of the string literal.
-
-**Correct pattern** (used in all report buttons):
-```javascript
-var safeText = userText
-    .replace(/\\/g, '\\\\\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\u0026/g, '\u0026amp;')
-    .replace(/\u003c/g, '\u0026lt;')
-    .replace(/\u003e/g, '\u0026gt;')
-    .replace(/"/g, '\u0026quot;');
-```
-
-### Guarding Optional Firebase / CDN Dependencies
-If an app can function without Firebase (e.g., local-only games), wrap Firebase initialization and all `auth`/`db` usage in feature checks. A blocked or failed CDN script must not prevent the rest of the page script from running. Use `typeof firebase !== 'undefined' && typeof firebase.auth === 'function' && typeof firebase.firestore === 'function'` before initializing, and guard every `db.collection(...)` / `auth.onAuthStateChanged(...)` call. See `nonograms.html` for the pattern used in this codebase.
-
-## 🏉 NRL Scores (scores.html)
-
-ESPN's JSON scoreboard API (`site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard`) supports NFL/NBA/MLB/NHL/soccer/AFL but **does not expose NRL**. To add NRL, `scores.html` uses a dedicated Cloudflare Pages Function at `functions/api/nrl-scores.js` that scrapes `https://www.espn.com/nrl/scoreboard` and returns ESPN-compatible JSON.
-
-*   The scraper is regex-based and relies on ESPN's current server-rendered HTML structure. If ESPN changes their markup, the parser will return empty events.
-*   Only games where both teams are in the known NRL team list are returned (filters out State of Origin / Tests).
-*   The response is cached for 2 minutes via `caches.default`, but only when games are successfully parsed.
-*   In `scores.html`, NRL is added to `LEAGUES` with `source: "nrl-scores"`, and `fetchFromAPI()` routes it to `/api/nrl-scores` instead of the ESPN proxy.
-
-## 📚 Comic Reader (comics.html) — Internet Archive, not MangaDex/Manga Plus
-
-`comics.html` (dashboard id `comics`, formerly `manga.html`) was rewritten (2026-07) to remove MangaDex (unlicensed scanlations = piracy). It is now a **public domain / openly licensed comic reader** backed by the Internet Archive. The original MangaDex app survives untouched as `manga.html` (a copy of the old `mangadex.html`, still redirecting to `index`); it is not linked from the dashboard.
-
-### Why not Manga Plus (official Shueisha)?
-Manga Plus was evaluated and is **technically unusable** for this project:
-1.  **Datacenter IP ban:** `jumpg-webapi.tokyo-cdn.com` returns a protobuf "Account Banned (10900)" error for ALL Cloudflare egress IPs (verified via the deployed `/api/proxy`) and VPN/unknown IPs. It only works from clean residential IPs.
-2.  **CORS-locked:** the API only sends `access-control-allow-origin: https://mangaplus.shueisha.co.jp`, so the Kindle browser cannot call it directly.
-3.  **Protobuf-only:** responses are `application/x-protobuf`; there is no JSON mode.
-
-### Internet Archive integration (what the app uses)
-*   **Catalog search:** `https://archive.org/advancedsearch.php?q=mediatype:texts AND collection:comics* AND licenseurl:*&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&rows=20&page=N&sort[]=downloads desc&output=json`. The `licenseurl:*` filter is **mandatory** — the general `comics` collections are full of pirated Disney/manga scans; only items with an explicit license (public domain mark, CC) are legal. Sends `access-control-allow-origin: *`, so it is fetched **directly** (no proxy).
-*   **Metadata:** `https://archive.org/metadata/{id}` — also CORS-open, direct fetch. Used to find the `*_scandata.xml` file. Note: `metadata.imagecount` is often absent, so page count must come from scandata.
-*   **Scandata:** `https://archive.org/download/{id}/{file}_scandata.xml` — **does NOT send CORS headers**, so it is fetched through `/api/proxy` (IA does not ban cloud IPs). Parse with `DOMParser`, collect `<page leafNum="N">` where `addToAccessFormats != false`.
-*   **Page images:** `https://archive.org/download/{id}/page/n{leaf}_w1080.jpg` — 302-redirects to `ia*.us.archive.org/BookReader/BookReaderImages.php`. Used as direct `<img src>` (no CORS needed for images).
-*   **Covers:** `https://archive.org/services/img/{id}` — direct `<img src>`.
-*   Items without scandata (CBZ-only uploads) cannot be read in-app; the reader shows an "Open on archive.org" fallback link.
-
-### Library migration
-Library items are stored in localforage key `manga_library` and must have `source: 'ia'` (IA identifier as `id`). Legacy MangaDex entries (UUID ids) are silently dropped on load with a status-bar notice.
-
-### Dashboard entry
-The `icons.js` entry uses `id: 'comics'` (file `comics.html`) with `name: 'Comics'`. All locale files translate `manga.title` as their word for "Comics".
-
-## KindleChat Translations Listener Must Be Key-Scoped
-
-**Never attach a bare-ref listener to `kindlechat/translations_by_lang/{lang}`.** Each language node holds every translation ever written (~25,000 entries / ~1.2 MB per language as of 2026-07, growing unboundedly). A bare `.on('child_added')` forces every client to download ~1 MB and process ~25k callbacks on every page load, which effectively kills the Kindle browser — this was the root cause of "translations not showing" even though the `rekindle-translate` worker was writing them correctly.
-
-**Pattern (implemented in `kindlechat.html` `loadGeneralFromRTDB()`):**
-- Push IDs sort chronologically, so scope the listener to the rendered window: `ref.orderByKey().startAt(oldestGeneralKey)` where `oldestGeneralKey` is the first (oldest) key from the initial `limitToLast(50)` messages load. This covers the live window plus all future messages (new keys are always greater).
-- Paginated older messages (`loadMoreGeneralFromRTDB()`) are older than `startAt`, so fetch their translations individually on demand: `translations_by_lang/{lang}/{msgId}.once('value')`, cache into `langTranslations`, then re-render that bubble.
-- New translation features that add listener paths must follow the same scoping rule.
-
-To audit translation pipeline health, query RTDB directly with `service-account-social.json` (in repo root) via firebase-admin: compare `kindlechat/messages` timestamps against `kindlechat/translations_by_lang` keys.
-
-## KindleChat Translation Worker Pipeline (rebuilt 2026-07-22)
-
-**Regression lesson:** the June 2026 "confidence score" commit added an `isProbablyEnglish()` early-bail in `translateToAllLanguages()` that wrote **zero translations in any language** for English messages. Non-English coverage collapsed from ~78% of messages to <1% overnight ("translation never works" for non-English readers). **Never skip translating entirely based on detected source language** — only suppress the same-language target.
-
-Current design in `workers/rekindle-translate/worker.js`:
-
-- **Canonical source detection:** `detectLanguageInfo()` makes ONE Google call (`sl=auto&tl=en`) that returns the detected language, a confidence score (`data[6]`), AND the English translation. `resolveSourceLang()` picks the source: `isProbablyEnglish()` heuristics → `'en'`, otherwise the detected code. All target translations then use explicit `sl=sourceLang` (never 10 independent auto-detects).
-- **Identity entries:** the entry for the source language itself is always the original text (e.g. `es: <original>` for a Spanish message). Clients already suppress translations identical to the original, so source-language readers see the original and every other language gets a real translation.
-- **Detect/en merge:** for non-English sources, the detect call's English output (`translatedToEn`) is reused as the `en` entry — non-English messages cost 9 Google calls total, not 10-11.
-- **Sequential targets:** the remaining 8-9 target calls run sequentially with a 75ms stagger. Do **NOT** `Promise.all` them — Google's gtx endpoint 429s parallel bursts from shared Cloudflare egress IPs (verified 2026-07: a parallel fan-out got all 9 target calls rate-limited while the identity entry still wrote, producing en-only coverage). `translateWithGoogle()` makes 3 attempts with jittered exponential backoff (600ms, 1800ms) and returns `retryable: true` only for 429/5xx/network failures (not for identical/suppressed results — those must never be retried).
-- **Client-scheduled retries (no cron — deliberate, to avoid idle Firebase usage):** every worker response includes `missing: [...]` (languages that failed retryably) and `sourceLang`. `fireTranslationRequest()` in `kindlechat.html` re-fires with `missingLangs` + `sourceLang` in the body after 20s/60s/180s (max 4 attempts), and the worker then translates ONLY those languages without re-detecting. Retries live and die with the sender's browser session — if the sender leaves, remaining languages stay untranslated. Google's per-IP 429s come in multi-minute bursts, so spreading retries over minutes is what fills the gaps; in-request backoff alone cannot.
-- **Confidence thresholds in `isProbablyEnglish()`:** `detectedLang === 'en'` → English; `confidence >= 0.85` → trust the non-English detection; identical/contained after stripping punctuation → English; `confidence < 0.85` with >85% Latin/ASCII chars → English (the `< 0.85` bound deliberately covers the 0.75-0.85 mid-confidence window where English slang was being force-translated from a mis-detected language into garbage `en` output).
-- **Every message should now produce all 10 language entries** (immediately in clear windows, within ~4 minutes via client retries during 429 storms). If an audit shows English messages stuck at en-only with no other entries appearing over time, the client retry loop is broken — that is the signature to look for.
-
-## KindleChat Art Gallery & `kindlechat/art_index`
-
-The KindleChat gallery (`kindlechat.html`) shows only pixel art and flipbooks. To avoid downloading every chat message, the gallery reads from a dedicated RTDB index at `kindlechat/art_index`.
-
-### Architecture
-
-- `kindlechat/art_index/{messageId}` stores a lightweight record for every art post:
-  - `type`: `"pixel_art"` or `"flipbook"`
-  - `uid`: author UID
-  - `timestamp`: server timestamp
-  - `thumbnail`: data URL (pixel art image or first flipbook frame)
-  - `text`: caption text
-- The gallery queries `art_index` ordered by `timestamp` and paginates with `limitToLast` + `endAt`.
-- Clicking a gallery item fetches the full message from `kindlechat/messages/{messageId}` to show the large pixel art or play the full flipbook.
-- Pixel-art saves from the gallery reuse `savePixelArtData()` with the current message cached in `window.galleryPixelArtData`; never put the base64 image URL into an inline `onclick` handler.
-- `showPixelArtModal()` replaces `#generic-modal-content.innerHTML`, which destroys the default `#modal-message` and `#modal-btns` children. `showModal()` must rebuild those nodes and reset the generic modal's inline width/max-width before displaying another message.
-- Both viewer modals reuse `#generic-modal-content` (a `.modal-box` with `padding: 20px`), so `showPixelArtModal()` and `showFlipbookModal()` must set `modalBox.style.padding = '0'` (hideModal/showModal reset it back to ''). Without this the flipbook viewer keeps the 20px modal padding.
-- Chat-view pixel art and flipbook bubbles open the same gallery viewer via `openGalleryItem(msgId)` (it fetches the full message from `kindlechat/messages` and handles deleted messages). Inline `playFlipnote()` is now only used for the auto-play-on-render; clicking a flipbook thumbnail opens the modal.
-- The moderation worker automatically writes the index entry when a pixel art or flipbook message is posted, and deletes it when a message is auto-deleted from a report.
-
-### Files involved
-- `workers/rekindle-moderate/worker.js` — writes/deletes index entries.
-- `rtdb-social-rules.json` — security rules for `kindlechat/art_index`.
-- `kindlechat.html` — gallery view reads from `art_index`.
-- `scripts/backfill-art-index.js` — one-time migration to populate the index for existing art posts.
-
-### Backfill
-
-Existing pixel art and flipbook posts do not automatically appear in the index. Run the migration once:
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/rekindle-socials-service-account.json
-node scripts/backfill-art-index.js
-```
-
-### Important rule for future art features
-
-Any new feature that posts pixel art or flipbooks to KindleChat must also write an entry to `kindlechat/art_index/{messageId}` with the same shape, or update the moderation worker to do it on the feature's behalf. Otherwise the gallery will not show those posts.
-
-
-## KindleChat Pixel Art Duplicate Prevention
-
-To stop users from reposting the exact same pixel art repeatedly in KindleChat, duplicate prevention is enforced both client-side and server-side.
-
-### Client-side `postedToKindleChat` flag (`pixel.html`)
-
-Each drawing in the user's manifest can carry a `postedToKindleChat: true` flag.
-
-*   When a drawing is successfully posted to KindleChat, `postToPixelChat()` sets `item.postedToKindleChat = true` on the current manifest item and saves the manifest.
-*   Before posting, `postToPixelChat()` checks the flag and shows a modal if the drawing has already been posted unchanged.
-*   Any modification to the drawing (saved via `performSave()`) clears the flag to `false`, so the edited drawing can be posted again.
-*   Translation key: `pixel.status.already_posted` — "This pixel art has already been posted to KindleChat. Modify it to post again."
-*   Blank (all-white) pixel art is also blocked from posting. Use `pixel.status.blank` — "Blank pixel art cannot be posted."
-
-### Server-side duplicate detection (`workers/rekindle-moderate/worker.js`)
-
-*   Pixel art posts skip the text-only duplicate check (the placeholder text `"Shared a pixel art!"` would otherwise block different pixel art).
-*   Instead, the worker hashes `body.grid_data` and checks `kindlechat/user_recent/{uid}/kindlechat_pixel_art/{hash}` for a 5-minute duplicate window.
-*   After a successful post, the grid data hash is recorded under `kindlechat_pixel_art` for duplicate detection.
-*   No RTDB rule changes are required: `kindlechat/user_recent/{uid}` is already writable by the social service account for any child path.
-
-
-## 🎮 Single-Player Games Catalog
-
-The dashboard (`index.html`) reads the app registry from `icons.js`. Games are grouped by the `cat` property:
-
-| Category | Purpose |
+| What changed | What to do |
 | :--- | :--- |
-| `games` | Single-player / solitaire games |
-| `two_player` | Local pass-and-play multiplayer |
-| `live_game` | Firebase real-time online multiplayer |
+| A versioned shared script (`theme.js`, `icons.js`, `bad_words.js`, `js/gamerules.js`, `js/promo-ban.js`, …) | Bump `?v=N` **in every HTML file that includes it**, and in `sw.js` `ASSETS_TO_CACHE` if listed there. |
+| A shared script with no `?v=` yet | Add `?v=1` (or `?v=2` if it already shipped unversioned) on the deploy that first changes it. |
+| `sw.js` `ASSETS_TO_CACHE` / cached HTML | Normally nothing — `build-automation.js` stamps a unique `CACHE_NAME` into every deploy. Bump the source value only when serving the source tree without a build. |
+| A deleted file | Nothing works except a Cloudflare cache purge — a removed URL can keep serving for 7 days. |
 
-### Single-player vs multiplayer split
+**Build-time SW cache stamping (2026-10-20):** `build-automation.js` rewrites
+`CACHE_NAME` in each deploy target's `sw.js` to `rekindle-cache-<short SHA>-<run id>`
+(a timestamp for local builds) before minification. Every GitHub Actions push
+therefore ships a new service-worker cache, and the `activate` handler deletes the
+previous one. Manual `CACHE_NAME` bumps are only needed for source-only/static
+testing; the build output always wins.
 
-Several games exist as both a single-player file and a multiplayer file. The single-player version is the canonical game name (e.g. `chess.html`), and the local/online variants add a prefix (`2pchess.html`, `livechess.html`). Following this convention keeps the catalog consistent and avoids confusing users.
+Do **not** rely on the service worker's stale-while-revalidate branch to roll a change out: it returns the cached copy on the first load, and the background revalidation can itself be answered by the edge cache. Only a new URL is guaranteed to miss both caches.
 
-### Single-player games added
+Shared-asset URL bumps still require `_deploy/` to be rebuilt (`npm run build`) before deploying — the deploy copies `_deploy/main`, so a stale build publishes old files even when the source is current.
 
-*   **Tic-Tac-Toe** — `tictactoe.html` (vs CPU with Easy/Hard). Based on `2ptictactoe.html`; uses a minimax AI on Hard and random on Easy.
-*   **Connect 4** — `connect4.html` (vs CPU with Easy/Hard). Based on `2pconnect4.html`; supports the same 4-in-a-row and 5-in-a-row toggle. Hard mode uses minimax with alpha-beta pruning to depth 4 plus a heuristic window evaluation.
-*   **Dots & Boxes** — `dotsandboxes.html` (vs CPU with Easy/Hard). Based on `2pdotsandboxes.html`. Easy is greedy-box. Hard completes boxes, avoids giving the opponent a 3-sided box, and prefers moves that set up future boxes.
-*   **Battleship** — `battleship.html` (vs CPU). Based on `2pbattleships.html`. Player places ships manually or with Auto; CPU places ships randomly and fires using hunt/target mode after a hit.
-*   **Uno** — `uno.html` (solo vs bots). A wrapper that launches `liveuno.html?single=1`. The live game detects the `single=1` parameter and automatically hosts a 4-player match with 3 bots, starting immediately. The `liveuno.html` menu also has a "Play Solo vs Bots" button for the same mode.
-*   **Jumpy** — `jumpy.html` (Doodle Jump-style vertical platformer). See its own section below.
-
-All new single-player files disable CSS animations/transitions (`* { transition: none !important; animation: none !important; }`) and reuse the same System 7 window/title-bar patterns as their 2-player counterparts.
-
-### Game mode badges and folder grouping
-
-Games that exist in multiple modes are grouped by name in the dashboard (`index.html` → `getGroupedApps()`). The folder modal uses mode badges instead of mode names as the icon labels:
-
-| Mode | Property | Badge |
-| :--- | :--- | :--- |
-| Single-player | `single: true` in `icons.js` | `1P` (`one-p-label`) |
-| Local 2-player | `cat: 'two_player'` | `2P` (`two-p-label`) |
-| Live online | `live: true` | `LIVE` (`live-label`) |
-| New app | `new: true` in `icons.js` | `NEW` (`new-label`) |
-
-Single-player entries that have a multiplayer counterpart (e.g. `chess`, `checkers`, `pool`, `yahtzee`, `battleship`, `connect4`, `dotsandboxes`, `tictactoe`, `uno`) should set `single: true` so the folder items are labeled with the game name and the correct badge.
-
-**Important:** Do **not** add `single: true` to games that are single-player-only and have no multiplayer variant in the project (e.g. `crossy`, `dino`). That flag is only for the folder-grouping badge system. For solid pixel-art icons, use `filled: true` instead.
-
-## 🟦 Cube Dash (cubedash.html)
-
-An original cube/ship platformer inspired by Geometry Dash. It started as a port of kindle-geometrydash.netlify.app but was rewritten (2026-07) with **original branding, original level designs, and new mechanics** — do not reintroduce the reference's level strings or names. All 10 levels are original and were verified completable (with all gears reachable) by a headless bot harness.
-
-### Mechanics (beyond the reference)
-*   **Ship mode:** `w`/`q` portals switch between cube and ship. Ship physics: hold input to thrust (`SHIP_RISE -0.85` vs `SHIP_FALL 0.65`, terminal ±6.5), floor/ceiling contact is safe, any solid obstacle kills. `inputHeld` drives ship thrust AND cube auto-hop (holding = repeated jumps, like GD).
-*   **Gears (`*`):** collectible, saved per-level as a bitmask in `cubedash_save_v1`. Hitbox is `x-60, w 70, top 76, h 110` — deliberately offset so a gear one char after a spike is grabbed mid jump-arc, and NOT collectable while running grounded. **If you change jump physics, re-verify gear reachability.**
-*   **Obstacle grammar:** `s` spike / `d` double / `3` triple, `b` block / `h` tall block, `S` block+spike (pure kill zone), `c` ceiling spike, `P` floor pillar 88 / `U` hanging pillar 88 / `B` floating platform (top 124 — landable from a floor jump; do not move it lower), `p` pad, `r` ring, `g`/`n` gravity, `f`/`o` speed, `w`/`q` ship portals, `*` gear, `e` end gate.
-*   **Physics:** 60Hz fixed timestep; gravity 1.0, jump -14, terminal 13, 80% hitbox, coyote 6 / buffer 7. Triple spikes have only a ~3-frame jump window (authentic GD tightness, do not "fix"). Portals/gates/end flag span the full corridor (`CEIL_Y 40`..`FLOOR_Y 216`) so they trigger at any altitude.
-*   **Rendering is strict 1-bit — Simple Mode is FORCED ON and settings are removed** (2026-07). Like Surfer, any anti-aliased canvas pixel forces full e-ink grayscale refreshes (constant flashing), so `drawFrame()` may only use integer `fillRect` via the `fillB`/`fillW`/`rectB` helpers, Bresenham `lineB()` for diagonals, and midpoint `circleB()`/`discB()` for circles. **Banned:** `arc()`, `stroke()`/`strokeRect()`, `beginPath`/`lineTo` strokes, `ctx.rotate`/`translate` for gameplay sprites, and fractional coordinates. The cube's spin is faked with a quantized 8-direction spoke; the ship tilts via `rotPts()` + scanline `fillPolyW()` on integer-rounded points; the ring pulse steps integer radii 10–12. There is no parallax, no death particles, no settings overlay — do not reintroduce them without keeping the 1-bit rule.
-
-### Level design & validation
-Level strings live in `LEVELS` (char = 130px grid, start x 520). **Any level edit must be re-validated headlessly**: stub the DOM, `eval` the inline script, and auto-play — cube bot jumps at gap 58 (single) / 46 (double+S) / 20 (triple) / 105 (block family) measured from obstacle-left to player-right (123); ship bot holds when `y+13 > targetY` where targetY is the gap center of the nearest solid. Rules learned: gears belong exactly one char after spike-family hazards; never put floor spikes inside ship sections; after `q` (cube portal) leave ≥3 chars before the next hazard (ship-exit fall distance).
-
-### Saves
-`localStorage` `cubedash_save_v1` = `{progress[], gears[]}`. The old `gdash_*` keys, `gdash.html`, and the `cubedash_simple_v1` simple-mode key are all deleted; there is no migration (progress was trivial to re-earn). No Firebase/leaderboard — if one is added, update `firestore.rules` per the rule checklist.
-
-## 🐸 Jumpy (jumpy.html) — Doodle Jump-Style Platformer (2026-07)
-
-Portrait canvas (256×384 buffer, 2:3), pure B&W primitives drawn with `fillRect` (no sprite assets). Fixed 60Hz timestep with an rAF accumulator (dt clamped to 250 ms) so physics are identical on 7fps e-ink and 144Hz desktop. **`TIME_SCALE = 0.55`** scales real→simulated ms in the accumulator — this is THE e-ink pacing knob (bounce period ~1.9s, move speed ~119 px/s at 0.55; users reported 1.0 as "way too fast" on e-ink). Always tune speed via `TIME_SCALE`, never via gravity/jump velocity, so the spatial invariants below stay valid. Input: holdable ◀ ▶ buttons, arrow keys/A-D, or touch halves of the canvas (multi-source flags synced via `syncMove()`). Leaderboard `leaderboard_jumpy` (rules in `firestore.rules`); localStorage key `jumpy_highscore_v1`.
-
-### Generator invariants (found via headless bot harness — do NOT break)
-The platform generator tracks the last **bouncable** platform (`lastBouncableY/X/Type`) because breakable platforms don't bounce, and constraint checks must apply to the bouncable chain, not consecutive platforms:
-
-1. **Vertical:** every bouncable platform ≤ 100px above the previous bouncable one (max jump height is ~166px at `GRAVITY 0.35` / `JUMP_V -10.8`). Enforced by clamping `y = lastBouncableY - 100`, NOT by converting types — converting a breakable to normal when >100px above the last bouncable does NOT help (the new platform itself ends up too far). This bug appeared twice before the clamp was added.
-2. **Breakables:** only spawn ≤55px above the last bouncable platform, leaving ≥45px room for the next bouncable one. This also prevents two breakables in a row.
-3. **Horizontal:** bouncable-to-bouncable center distance ≤110px. Constraining only consecutive platforms lets dx chain through breakables up to ±240px — beyond the ~173px horizontal range of a max-gap jump (verified unreachable by bot).
-4. **No consecutive moving platforms** in the bouncable chain — at speed a moving pair can phase away together and become untimeable on a ~7-15fps e-ink screen. Moving speed capped at 1.2 px/step (72 px/s) for the same reason.
-5. The full-width start platform never breaks, so a no-input player idles forever at score 0 — intentional, not a bug.
-
-### Validation harness
-Validated like Oregon Trail: DOM-stub + `eval` the inline script + auto-play bot that commits to a target platform on each bounce (naive per-frame targeting dithers and bounces in place on the full-width start platform — a bot flaw, not a game flaw). Assertions: no NaN, platform array stays bounded (~≤20), and **every death must have had a reachable platform at the last bounce** (`hadReachable` check) — deaths are bot skill, walls are generator bugs. 30 seeded runs passed. Note: `hadReachable` can false-positive on spring bounces (spring range ~389px vs normal 166px).
+**2026-10-20 incident:** `theme.js` changed in `c5631c5` but every page still loaded `theme.js?v=18` (the v18 bump predated the change). Edge/SW caches kept serving the old theme.js to up to 7 days of traffic. Fixed by bumping all 137 pages to `?v=19`, `js/gamerules.js` to `?v=2` (its Oregon Trail rules text changed in `8ab5b20`), `icons.js` v2 → v3 on the three pages still on v2, and `sw.js` `CACHE_NAME` to `rekindle-cache-v25` (2026-10 re-audit also versioned the previously unversioned shared scripts).
 
 ## Local Testing Gotcha: Service Worker Forces Extensionless URLs
 
-`js/i18n.js` registers a service worker that reloads the page to the extensionless URL (`/jumpy.html` → `/jumpy`) on first load. `python3 -m http.server` then 404s, showing an "Error response" page with no `.title-text` — looks like a broken page, but isn't. Test locally with a static server that falls back to `.html` (try file, then file + '.html'), or use query params (`?lang=de`) which also bypass the reload. Production (Cloudflare Pages) serves extensionless URLs natively.
-
-## 🏃 Surfer (surfer.html) — Subway Surfers-Style Runner (2026-07)
-
-3-lane pseudo-3D endless runner built for e-ink: portrait canvas 256×320, fixed 10Hz timestep that **only redraws on ticks** (never per-rAF). Obstacles: barrier (jump), overhead sign (roll), train (lane-change only). Coins: low + high (jump-arc over barriers). Leaderboard: `leaderboard_surfer` (rules in `firestore.rules`); localStorage key `surfer_highscore`.
-
-### ⚠ Canvas anti-aliasing forces full e-ink refreshes (applies to ALL canvas games)
-**Any anti-aliased pixel (gray) in the canvas makes the Kindle do a full grayscale screen refresh every frame** — visible as constant flashing. Canvas AA sources: `arc()`, `stroke()`/`strokeRect()` (stroke is centered on the path → half-pixel coverage), diagonal `lineTo()`, `fillText()`, round `lineCap`, and fractional `fillRect` coordinates. Surfer's renderer is strict **1-bit**: only integer `fillRect`, Bresenham `pixelLine()` for diagonals, precomputed midpoint-circle row masks (`FILL_MASKS`/`OUTLINE_MASKS`, radii 1–12) for circles, a 3×5 `GLYPHS` pixel font for HUD text, and a static offscreen background canvas (`bgCanvas`, drawn once: skyline + track edges) blitted 1:1 per frame with `imageSmoothingEnabled = false`. Quantizing scaled geometry to integers causes minor 1px stepping as objects grow — acceptable, grays are not. Reuse this pattern for any new animated canvas game.
-
-### Tuning invariants (found via headless bot harness — do NOT change blindly)
-*   **`JUMP_DUR` (0.6s) must be SHORTER than the minimum spawn gap** (`speed * 0.55` in `spawnRow`). With 0.85s jumps, consecutive barrier rows forced land-into-death with no re-jump window — the bot died every run. Same reason `ROLL_DUR` is 0.9s (must outlast the approach + tick quantization at max speed 15).
-*   **`JUMP_SAFE = 0.3` is the 1-tick reaction floor.** At 10Hz, a jump started one tick before impact gives `jumpFrac() = sin(π·0.1/0.6) ≈ 0.36`. Any threshold above ~0.35 kills players who jumped on the last valid tick. Grounded = frac 0, so barriers still kill non-jumpers.
-*   **`COLLIDE_Z = 0.5`** resolves hits at the visual contact plane. 1.2 resolved ~25px before the obstacle visually reached the player ("I wasn't touching it" deaths); resolution is a monotonic `z <= COLLIDE_Z` crossing check, so there is no tunneling even at dz=1.5/tick.
-*   **Spawn fairness rules in `spawnRow()`:** never 3 trains in one row (at least one lane is always jumpable/rollable/open); triple rows (train+barrier+sign) only at speed ≥ 9.5; no obstacles at all for the first 50 units. Inputs mutate `player.lane` instantly (no per-tick queue), so double-tap lane escapes are legal — don't add an input queue.
-*   **Speed ramp:** `6 + min(9, distance/120)` → cap 15 at ~1080 distance. Gap formula keeps obstacle *time* spacing (~0.55–0.8s) constant at all speeds.
-
-### Validation harness
-Validated like Oregon Trail: DOM-stub + `eval` + auto-play bot (perfect play survived 25×180s with 0 deaths; idle player dies at ~17s; ~135 coins/run collected). **Any change to jump/roll physics, `COLLIDE_Z`, spawn gaps, or speed ramp must re-run a survival bot** — fairness regressions are invisible to eyeball testing. Harness pattern: capture rAF manually, step 100ms frames, bot dodges/jumps/rolls from a state export.
-
-## 🐂 Oregon Trail (oregontrail.html) — Full Rebuild (2026-07)
-
-Rebuilt from scratch as a faithful classic-style trail sim. The previous version (single health stat, four buttons, no party/landmarks/forts) was replaced entirely; its `rekindle_oregontrail_save` key was superseded by `rekindle_oregontrail_save_v2` (old saves are ignored, not migrated).
-
-### Structure
-*   **Screens:** setup (profession/party names/departure month) → general store → trail → win/game-over. Forts and hunting are overlay screens on top of the trail.
-*   **Day engine:** everything runs through `advanceDay(opts)` (`{travel, resting, fixedMiles, log}`) which rolls weather, consumes food, applies pace/climate/affliction damage, fires random events, checks landmarks and game end, saves, renders, and drains the modal queue.
-*   **Modal sequencing:** two queues — `deathQueue` (filled by `hurtMember` whenever a member hits 0 HP, merged into `modalQueue` by `advanceDay`) and `modalQueue` (events, deaths, river/fort/landmark/dalles arrivals, win, gameover). `processQueue()` shifts ONE item per call; each modal's close handler calls `processQueue()` again. Never show two modals at once outside this queue.
-*   **The Dalles multi-day road:** `state._dallesActive` flag + empty-queue branch in `processQueue()` chains the next `dallesRoadStep()` only after any event/death modal from the previous day has been dismissed. Do not replace this with a plain loop or a `modalQueue.length === 0` check right after `advanceDay()` — `processQueue` shifts items synchronously, so the queue is empty while a modal is still on screen.
-*   **Balance invariants** (found by simulation — see below): resting while `food <= 0` gives NO healing (otherwise a starving party rests forever); repair without parts has a pity timer (`repairFails`, 25%→100% over 4 attempts) so `wagonBroken + 0 parts` can't softlock; blizzard travel multiplier is 0.25, not lower, or winter mountains become unfinishable.
-*   **Landmarks/rivers** are data-driven from the `LANDMARKS` array (distance, type, ferry flag, fort price multiplier). `checkLandmarks()` caps distance at the landmark and must early-return when `state.riverPending` — otherwise waiting at a river re-rolls its depth every day.
-*   **Hunting minigame:** canvas, step-based (`setInterval` 700 ms hops, not rAF) to stay readable on e-ink. The page uses the standard canvas zoom-exemption CSS block (section 6) so tap coordinates line up. **Sizing:** on open, set `canvas.width/height` from `canvas.clientWidth/clientHeight` (flex-computed) so the drawing buffer matches layout pixels 1:1 — never let CSS stretch a fixed-size canvas buffer (that was the "graphics are stretched" bug). All draw/spawn coordinates are derived from `hunt.W`/`hunt.H`, never hard-coded.
-*   **Trail scene SVG:** viewBox `0 0 300 64` with `.art-scene svg { width: 100%; height: auto; }` so the scene fills the window width at any size. A narrow viewBox (e.g. 100 wide) with fixed CSS height letterboxes into a tiny centered strip on wide windows.
-*   **i18n:** short UI strings are translated in all 10 locale files (`oregontrail.*`); long narrative strings (event/log text) live in `en.json` + in-code fallbacks elsewhere. Dynamic interpolated text goes through the local `tpl()` helper (manual `${var}` replace) — never `window.t(key, vars)`. **Gotcha:** when a rebuilt feature reuses an *existing* locale key but changes the value to include `${...}` placeholders, an add-only-if-missing locale update will keep the old static value and silently show wrong numbers (bit us on `event.fruit` "Gain 30 food"). Overwrite those keys in all 10 locales instead.
-
-### Testing narrative games headlessly
-The game was balance-tested with a Node DOM-stub harness: stub `document`/`localStorage`/`window` (memoized `getElementById`, classList via `Set`, no-op canvas 2d context via `Proxy`), `eval` the extracted `<script>`, then auto-play full runs draining modals each day. This caught: party-wide simultaneous deaths from uniform damage (fixed with per-member `variedDamage`), the starving-rest exploit, repair softlocks, and winter death spirals. Target outcome for a "reasonable player" harness: ~90% win rate with occasional mid-trail wipes; reckless play should still lose. If you change difficulty knobs, re-run a few dozen simulated playthroughs rather than guessing.
-
-## 📓 Flipbook (flipbook.html) — Frame Corruption & Performance Fixes (2026-07)
-
-A user report ("multiple clicks to open, drastic lag, flipbooks merge together, frames double") traced to four bugs, all now fixed:
-
-1. **Doubled frames (re-entrancy):** `openAnimation()` had no loading feedback and no guard, so impatient extra taps re-entered it. Interleaved async decode loops each did `frames = []` then pushed into the shared global → 2N frames, persisted by autosave. Fix: `isOpening` guard, a `showLoadingModal()`/`hideLoadingModal()` overlay, and decoding into **local arrays** via `Promise.all(data.frames.map(decodeFrame))`, swapping the globals atomically only after all frames decode.
-2. **Merged flipbooks (async ID race):** old `performSave()` read the global `currentAnimationId` *after* `await`ing thumbnail generation, so switching animations mid-save wrote A's frames under B's ID; a pending 1s autosave timer could also fire after `openAnimation` had assigned the new ID. Fix: `performSave()` is now fully synchronous up to the fire-and-forget Firestore write, captures `animId` up front, and `openAnimation()` clears the autosave timer + flushes `performSave()` for the old animation *before* assigning the new ID (`currentAnimationId = id` now happens only after a successful load).
-3. **Lag (autosave re-encoding):** every autosave (1s after each stroke) re-encoded **every** frame to a 256×256 PNG data URL. Fix: `frameUrlCache[]` parallel to `frames[]` holds encoded PNGs; `saveCurrentFrame()` marks the edited index dirty (`null`), `getAllFrameUrls()` re-encodes only dirty frames, and `openAnimation()` seeds the cache from the stored base64 (an open-then-repost now encodes nothing). `createThumbnail()` is synchronous and reuses module-level scratch canvases.
-4. **Lag (per-pointermove allocation):** `renderCanvas()` allocated a new 256×256 canvas on every pointermove for onion skin. Fix: one reusable `onionCanvas`, only re-`putImageData` when `currentFrameIndex` changes (`onionLoadedIndex`).
-
-Also: `requirePro()` gates create/open — if the Firestore subscription check hasn't resolved yet (`subChecked === false`) it shows "Verifying subscription..." instead of flashing the paywall, which was part of the "multiple clicks" complaint. `localStorage.setItem` of animation data is wrapped in try/catch (64MB cache limit). When touching frame add/delete/save logic, keep `frameUrlCache` spliced/pushed in sync with `frames`.
-
-### Fill bucket & undo/redo (2026-07, both pixel.html and flipbook.html)
-
-*   **Flipbook `floodFill` must match on ALPHA ONLY** (`data[idx+3] < 240`), not on color+alpha tolerance vs the tapped pixel. Strokes are opaque black on a transparent buffer with anti-aliased (partial-alpha) edges; color/tolerance matching stops at the AA fringe and leaves visible "gap" pixels between the fill and the stroke. Alpha-threshold matching lets the fill flow under the AA edge. The fill sets alpha 255, so filled cells never re-match (no infinite loop).
-*   **Pixel `floodFill` must compare grid values with a tolerance (0.05)**, not exact float equality. The shade slider is continuous, so regions that look uniform on e-ink can differ by 0.01–0.02 and silently block an exact-match fill. Guard `if (Math.abs(targetValue - newValue) <= tolerance) return;` — this also prevents filled cells (now > tolerance from target) from re-matching forever.
-*   **Flipbook undo/redo** uses action descriptors in `undoStack`/`redoStack` (`MAX_HISTORY = 10`, each ≤ one 256×256 ImageData ≈ 256 KB): `{type:'edit', index, image}` (stroke/fill/clear — snapshot via `bufferCtx.getImageData` BEFORE mutating), `{type:'insert', index}` (add/duplicate frame), `{type:'delete', index, image}`. `resetHistory()` is called in `createNew()` and `openAnimation()`. Stroke snapshots are pushed in `startDrawing`; fill snapshots only when `floodFill` returns true (it no-ops on solid-stroke taps). After any undo/redo, reset `onionLoadedIndex = -1` and mark `frameUrlCache[index] = null` (dirty). `saveCurrentFrame()` is called at the top of `undo()`/`redo()`/`deleteFrame()` so snapshots reflect pending buffer state.
-
-
+`theme.js` registers a service worker that reloads the page to the extensionless URL (`/jumpy.html` → `/jumpy`) on first load. `python3 -m http.server` then 404s, showing an "Error response" page with no `.title-text` — looks like a broken page, but isn't. Test locally with a static server that falls back to `.html` (try file, then file + '.html'), or use query params (`?lang=de`) which also bypass the reload. Production (Cloudflare Pages) serves extensionless URLs natively.

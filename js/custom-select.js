@@ -3,6 +3,10 @@
  * Replaces native <select> elements with custom DOM elements to support rotation.
  */
 
+// Instances, so host pages can resync the painted label after setting a
+// native <select>.value programmatically (that does not fire 'change').
+const customSelectInstances = [];
+
 class CustomSelect {
     constructor(selectElement) {
         this.selectElement = selectElement;
@@ -13,6 +17,7 @@ class CustomSelect {
         this.observer = null;
 
         this.init();
+        customSelectInstances.push(this);
     }
 
     init() {
@@ -200,6 +205,13 @@ window.addEventListener('DOMContentLoaded', () => {
     // Also optional: Listen for new selects added to DOM? 
     // For now, manual init is enough for settings.html static content.
 });
+
+// Called by pages (e.g. settings.html) that change a select's value in JS.
+window.rekindleRefreshCustomSelect = function () {
+    customSelectInstances.forEach(function (instance) {
+        try { instance.updateFromOriginal(); } catch (e) { }
+    });
+};
 
 function initCustomSelects() {
     document.querySelectorAll('select').forEach(el => {

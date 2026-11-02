@@ -7,7 +7,7 @@ import { rtdb, valueHash } from './rtdb.js';
 import * as fsStore from './firestore.js';
 import * as storage from './storage.js';
 import { currentSeq, waitForChanges } from './events.js';
-import { invokeCallable, errorStatus } from './functions-host.js';
+import { invokeCallable, errorStatus, hasRequestFunction, handleRequestFunction } from './functions-host.js';
 import { handleWorker } from './workers-host.js';
 import * as manhuagui from './manhuagui.js';
 import * as mhgAccount from './manhuagui-account.js';
@@ -390,6 +390,11 @@ export async function handleApi(req, res, url) {
             const handled = await handleWorker(req, res, name, rest, url.search, publicOrigin(req));
             if (!handled) send(res, 404, { error: { code: 'not-found', message: `Service ${name} is not available on this server.` } });
             return;
+        }
+        if (section === 'fn') {
+            // Upstream's HTTP Cloud Functions (Substack and Standard Ebooks relays).
+            if (!hasRequestFunction(parts[2])) return send(res, 404, { error: { code: 'not-found', message: 'Not found' } });
+            return await handleRequestFunction(req, res, parts[2], url);
         }
         if (section === 'st') return await handleStorage(req, res, parts[2], parts.slice(3).join('/'), url);
         if (section === 'manga') return await handleManga(req, res, url, parts);

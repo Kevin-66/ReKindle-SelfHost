@@ -5,14 +5,17 @@
     <meta charset="UTF-8">
     <title data-i18n="app.livechess.name">Chess</title>
     <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" integrity="sha384-v3Z/Xdw1sCeo6M/geW7sn1Lt9obIm7MhAk8laVV+rvYFmzuWDELOiygx7dVte2dX" crossorigin="anonymous"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" integrity="sha384-v3Z/Xdw1sCeo6M/geW7sn1Lt9obIm7MhAk8laVV+rvYFmzuWDELOiygx7dVte2dX" crossorigin="anonymous"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" integrity="sha384-p62xBRve8PdqGDGASZtZMuHgPsyPcT5VsFwgmz2p4zaFdEtt5ZzNqxK+CLzQS7xP" crossorigin="anonymous"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" integrity="sha384-fuqdSwJXSvcAuKu5FbSJcHqHK474liv5ji8tuDnHz1rpfrnuXZPdM0oRaSK6c95L" crossorigin="anonymous"></script>
     
     <!-- Chess logic -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" integrity="sha384-aH7F59TKSh8OEAivbclch9UUnWn/Uy8AQlYYKzpVaQkAp8W6IF2VocW/knEeRwT0" crossorigin="anonymous"></script>
 
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="theme.js?v=35"></script>
 
     <style>
         /* SYSTEM 7 AESTHETICS */
@@ -155,6 +158,59 @@
             transform: translate(3px, 3px);
         }
 
+        /* Compact System 7 lobby menu */
+        .lobby-menu {
+            flex: 1;
+            justify-content: center;
+            text-align: center;
+            padding: 24px 18px;
+        }
+
+        .lobby-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 0.04em;
+            margin: 0 0 4px;
+        }
+
+        .lobby-sub {
+            font-size: 0.82rem;
+            line-height: 1.35;
+            color: #333;
+            max-width: 260px;
+            margin: 0 0 18px;
+        }
+
+        .lobby-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .lobby-actions .sys-btn {
+            width: 100%;
+            min-height: 48px;
+            margin: 0;
+        }
+
+        .sys-btn.primary {
+            background: black;
+            color: white;
+        }
+
+        .sys-btn.primary:active {
+            background: white;
+            color: black;
+        }
+
+        .sys-btn.ghost {
+            border-width: 1px;
+            box-shadow: none;
+            font-weight: normal;
+        }
+
         #status-bar {
             width: 100%;
             text-align: center;
@@ -251,7 +307,8 @@
             background: white;
         }
     </style>
-<script src="js/gamerules.js"></script>
+<script src="js/gamerules.js?v=3"></script>
+    <link rel="stylesheet" href="js/system-dialog.css?v=2">
 </head>
 <body>
     <div class="window">
@@ -261,11 +318,13 @@
             <div class="title-text" data-i18n="app.livechess.name">Chess</div>
         </div>
 
-        <div class="window-content" id="screen-menu">
-            <h1 style="font-size: 3rem; margin: 10px 0;">CHESS</h1>
-            <p>Real-time Multiplayer.</p>
-            <button class="sys-btn" onclick="hostGame()">Host Game</button>
-            <button class="sys-btn" onclick="goHome()">Back</button>
+        <div class="window-content lobby-menu" id="screen-menu">
+            <h1 class="lobby-title">CHESS</h1>
+            <p class="lobby-sub">Real-time Multiplayer.</p>
+            <div class="lobby-actions">
+                <button class="sys-btn primary" onclick="hostGame()">Host Game</button>
+                <button class="sys-btn ghost" onclick="goHome()">Back</button>
+            </div>
         </div>
         
         <div class="window-content" id="screen-loading" style="display:none; justify-content:center;">
@@ -308,9 +367,11 @@
         </div>
         
         <div id="winner-modal" class="modal-overlay">
-            <div class="modal-box">
-                <h2 id="winner-text">Game Over</h2>
-                <button class="sys-btn" onclick="leaveMatch()">Return to Menu</button>
+            <div class="modal-box rk-dialog">
+                <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="winner-text">Game Over</span></div>
+                <div class="rk-dialog-body">
+                    <button class="sys-btn" onclick="leaveMatch()">Return to Menu</button>
+                </div>
             </div>
         </div>
 
@@ -326,10 +387,12 @@
         </div>
 
         <div id="custom-alert-modal" class="modal-overlay">
-            <div class="modal-box">
-                <h3 id="custom-alert-title">Notice</h3>
-                <p id="custom-alert-msg" style="margin: 15px 0;"></p>
-                <button class="sys-btn" onclick="closeAlert()">OK</button>
+            <div class="modal-box rk-dialog">
+                <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="custom-alert-title">Notice</span></div>
+                <div class="rk-dialog-body">
+                    <p id="custom-alert-msg"></p>
+                    <button class="sys-btn" onclick="closeAlert()">OK</button>
+                </div>
             </div>
         </div>
     </div>
@@ -488,7 +551,9 @@
             initialGame.players[currentUser.uid] = { name: currentUser.name, joinedAt: Date.now(), color: 'w' };
             
             mmRef.onDisconnect().remove();
-            matchRef.onDisconnect().remove();
+            // Do NOT remove matchRef on disconnect: a brief host network hiccup
+            // would destroy the match and kick every remaining player.
+            // Host migration in listenToMatch() keeps the game alive.
             
             await matchRef.set(initialGame);
             listenToMatch();
@@ -576,6 +641,23 @@
                     return;
                 }
                 gameState = data;
+
+                // Host migration (AGENTS §10): a host that leaves or drops must not
+                // kill the match. Promote the oldest remaining human, and let every
+                // client re-derive isHost from the node it just received.
+                if (gameState.players && gameState.host && !gameState.players[gameState.host]) {
+                    var _humans = Object.keys(gameState.players)
+                        .filter(function (uid) { return !gameState.players[uid].isBot; })
+                        .sort(function (a, b) { return (gameState.players[a].joinedAt || 0) - (gameState.players[b].joinedAt || 0); });
+                    if (_humans.length > 0 && currentUser && _humans[0] === currentUser.uid) {
+                        matchRef.update({ host: _humans[0] });
+                        rtdb.ref('matchmaking/chess/' + matchId).update({
+                            hostUid: _humans[0],
+                            hostName: gameState.players[_humans[0]].name
+                        });
+                    }
+                }
+                isHost = !!(currentUser && gameState.host === currentUser.uid);
                 
                 if (gameState.status === 'lobby') {
                     updateLobbyUI();
@@ -827,6 +909,6 @@
 
         if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" integrity="sha384-nhrsdECZledRaozO3oR4Yu+cq4ACLwBiZ/azuVbm3o9QGzXLdLaRx+r/zDUQ6bLl" crossorigin="anonymous"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" integrity="sha384-nhrsdECZledRaozO3oR4Yu+cq4ACLwBiZ/azuVbm3o9QGzXLdLaRx+r/zDUQ6bLl" crossorigin="anonymous" defer></script>
 </body>
 </html>

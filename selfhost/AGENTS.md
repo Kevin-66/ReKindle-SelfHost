@@ -23,15 +23,40 @@ as possible so `git merge upstream/main` stays clean.
 
 - `time.js` – automatic time-zone detection before the city prompt.
 - `js/i18n.js`, `settings.html` – Canada (CA) no longer maps to French.
-- Dark mode is OFF, exactly as upstream has it (`theme.js` forces light, Settings greys
-  out Theme); `theme.js`, `index.html`, `index_old.html` are upstream's files again, and
-  `settings.html` differs only by the Canada line. The fork re-enabled dark mode
-  (2d411d7: whole-page `invert(1) hue-rotate(180deg)`, an early `DARK_HEAD` snippet
-  against the white flash) and fixed what a patrol of every app found (1f31ec6: canvases
-  going dark, true-colour chess/checkers/Connect 4 boards, map tiles, notice pages, dark
-  dialog backdrops via `darkBackdrops()`), then the owner switched it off again
-  (2026-10-06, "too troublesome... revert to the author's way") and all of that was
-  removed. Both commits are the place to start if dark mode comes back.
+- Dark mode follows upstream ("the author's way", owner 2026-10-06): upstream switched it
+  back on on 2026-10-26 (89752b2, Settings > Theme, marked BETA; images, video and canvases
+  are re-inverted), and that came in with the 2026-11-01 merge. `theme.js`, `index.html`,
+  `index_old.html` are upstream's files, and `settings.html` differs only by the Canada
+  line. The fork's own dark mode (2d411d7, 1f31ec6: `darkBackdrops()`, true-colour boards,
+  map tiles) was removed on 2026-10-06; look there if upstream's misses something.
+
+## Merging upstream (last: 2026-11-01, upstream 6cf122e)
+
+`git merge upstream/main` merged cleanly. What needed care, and should be checked again
+next time:
+- Patches in `transform.js` fail silently when upstream changes the page. Check each one
+  still matches (and drop the ones upstream made unnecessary): transform every page with
+  `String.prototype.replace` instrumented, before and after the merge, and compare which
+  patterns hit anything. Dropped on 2026-11-01 because upstream fixed the bugs itself:
+  the `window.t` fallback rewrites (raw i18n keys) and the Substack subscriptions and
+  Following fixes (see Substack).
+- Backend addresses upstream added: Workers on a second account
+  (`*.rekindle-social.workers.dev`) and HTTP Cloud Functions on
+  `us-central1-rekindle-dd1fa.cloudfunctions.net/<name>`. `rewriteWorkerUrls` sends both
+  here (`/__rk/w/...`, `/__rk/fn/...`); list what transformed pages still call with a
+  search for `workers.dev|cloudfunctions.net|code.run|run.app`. Only Akinator's remains.
+- `firebase-functions/` is now several files (`require('./substack')`, ...):
+  `functions-host.js` loads each relative require itself with the same stand-ins, and
+  the Dockerfile copies `firebase-functions/*.js`. A `require` it has no stand-in for
+  (2026-11: `firebase-functions/v2/scheduler`) stops the server from starting.
+- `build-automation.js` now checks the minified main page still routes Kobo -> legacy
+  and old Kindles -> lite by hostname, so `rewriteTrafficCop` keeps the hostnames as
+  strings (`"https://lite.rekindle.ink/".replace(..., "/lite/")`), not in a comment.
+- Akinator: upstream replaced the dead CORS proxies with its own relay
+  (`akinator-service/`, Chrome TLS via got-scraping, on Northflank) that only answers
+  rekindle.ink origins, so Akinator doesn't work on this server (it didn't before either).
+  Hosting it would mean running `akinator-service` as another service like the Z-Library
+  browser and pointing `BACKEND_URL` at it.
 
 ## E-ink refresh on the Kindle (measured 2026-10-06)
 
@@ -86,15 +111,12 @@ measurements use a local server: e.g. a page can report timings as
   70% of the screen, so that whole area flashed on every page turn). `transform.js`
   adds `html{-webkit-tap-highlight-color:rgba(0,0,0,0)}` to every page; pages in
   `selfhost/site/` set it themselves.
-- Raw i18n keys on screen ("MANGA.BTN.CONTINUE"): upstream often writes
-  `window.t('key') || 'Text'`, but `window.t` returns the key itself until the language
-  file has loaded, so the fallback never shows. `fixTranslationFallbacks()` in
-  `transform.js` rewrites these to `window.t('key', 'Text')` in every page and script
-  (25 places in 2026-10: Manga, Comics, ...). The other common form,
-  `window.t ? window.t('key') : 'Text'` (388 places in 53 apps, e.g. Breathing's
-  "BREATHING.STEP.INHALE"), has the same problem and is rewritten to
-  `window.t ? window.t('key', 'Text') : 'Text'`. Only a lone string literal that ends the
-  expression is moved. Write new code as `window.t('key', 'Text')`.
+- Raw i18n keys on screen ("MANGA.BTN.CONTINUE"): `window.t('key') || 'Text'` and
+  `window.t ? window.t('key') : 'Text'` never show 'Text', because `window.t` returns the
+  key itself until the language file has loaded. `transform.js` used to rewrite both
+  forms (`fixTranslationFallbacks`, 2026-10); upstream fixed every place itself by
+  2026-10-27, so the rewrite was dropped in the 2026-11-01 merge. Write new code as
+  `window.t('key', 'Text')`.
 - `js/emoji-render.js` (`renderEmojis`, used by Substack and others) scans any text node
   with a character above U+2600, and Chinese text counts. It then swapped EVERY
   character found in `EMOJI_SVG_MAP` for an OpenMoji picture, and the map has about 60
@@ -495,12 +517,15 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
 
 `transform.js` edits the page at build time (upstream file untouched):
 
-- Substack's subscriptions API changed (2026-10): a signed-in
-  `GET /api/v1/subscriptions` without `?tvOnly=` answers 400 `{"param":"tvOnly","msg":"Invalid
-  value"}` (signed out it answers 401 first, so a fake cookie never shows this). With
-  `?tvOnly=false` the owner's account got `subscriptions: []` and 7 `publications`, so the
-  feed is now built from both lists (publications without a subscription entry become
-  `{ publication_id, publication }`). The app only uses `sub.publication.*` fields.
+- The relay: since 2026-10-24 upstream's page calls a Cloud Function
+  (`firebase-functions/substack.js`: `GET ...?path=/api/v1/...&host=<publication>`,
+  `Authorization: Bearer <ID token>`, cookie in `X-Substack-SID`) instead of the
+  `rekindle-substack` Worker (kept upstream only for rollback). It runs here unchanged at
+  `/__rk/fn/substack` (functions-host.js); the Worker isn't used.
+- Superseded by upstream and dropped on 2026-11-01: our `?tvOnly=false` subscriptions
+  fix and merging `publications` into the list (upstream now calls
+  `/subscriptions/page_v2`, which Substack's own web app uses), and the Following fix
+  (`subOffset += 50` skipped posts 16-50; upstream now steps by `AGG_PAGE_SIZE`).
 - Publication addresses may be bare domains (`custom_domain_optional`), and `new URL()`
   threw on them, silently dropping that publication from the feed; `rkAbsUrl()` adds
   `https://`.
@@ -514,12 +539,12 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   `rss_icon.png` does not exist in ReKindle; `rkNoIcon()` swaps in an outlined square
   once (clearing `onerror`, so a failing fallback can't loop).
 - "Following" is the author's aggregation (15 newest posts from each publication, merged
-  by date) and stays that way: the owner rejected a reworked timeline. Only its bug is
-  fixed: the next batch started at post 50 (`subOffset += 50`), skipping posts 16-50.
-- `workers-host.js` caches the Substack relay's successful JSON answers for 1 hour
-  (`WORKER_CACHE_MS`), keyed by path, query, `X-Substack-Target` and a hash of the cookie,
-  because the app re-requests every publication each time a view opens. The Refresh
-  button therefore shows answers up to an hour old (owner's choice).
+  by date) and stays that way: the owner rejected a reworked timeline.
+- `functions-host.js` caches the relay's successful JSON answers for 1 hour
+  (`REQUEST_CACHE_MS`), keyed by query, the signed-in account and a hash of the cookie
+  (a cached answer goes only to a valid ID token of the same account), because the app
+  re-requests every publication each time a view opens. The Refresh button therefore
+  shows answers up to an hour old (owner's choice). Upstream's relay caches nothing.
 - The cookie is sent exactly as pasted. The owner asked NOT to add parsing of a whole
   Cookie line; the settings text says to copy only the `substack.sid` value.
 - Article view font and formatting: `selfhost/site/css/rk-substack.css` (Georgia, heading
@@ -548,8 +573,8 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   transform.js adds is `css/rk-substack.css?v=N`: bump N whenever the file changes, or
   Kindles keep the old styles for up to a day.
 - Debugging: the page hides failed requests behind "No posts found." Temporary logging
-  of each worker request's path, status and error message in `handleWorker` found the
-  `tvOnly` 400 (removed afterwards at the owner's request; add it back locally when
+  of each relay request's path, status and error message (then in `handleWorker`, now
+  `handleRequestFunction`) found the `tvOnly` 400 (removed afterwards at the owner's request; add it back locally when
   needed). Don't use the owner's Substack cookie yourself; ask them to run requests
   (they did, with a Terminal one-liner that hid the cookie).
 

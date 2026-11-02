@@ -32,7 +32,7 @@ const APPS = [
         featuredOrder: 3,
 
         plus: true,
-        desc: 'Now supporting all mail!',
+        desc: 'All your mailboxes in one place.',
         icon: '<rect x="4" y="8" width="24" height="16" rx="2" stroke="black" stroke-width="2" fill="none"/><path d="M4 10 L16 18 L28 10" fill="none" stroke="black" stroke-width="2"/>'
     },
     {
@@ -80,6 +80,7 @@ const APPS = [
         cat: 'tools',
         beta: true,
         plus: true,
+        desc: 'Your Dropbox files on Kindle.',
         icon: '<g transform="translate(4, 4)"><path d="M6 1.807L0 5.629l6 3.822 6.001-3.822L6 1.807zM18 1.807l-6 3.822 6 3.822 6-3.822-6-3.822zM0 13.274l6 3.822 6.001-3.822L6 9.452l-6 3.822zM18 9.452l-6 3.822 6 3.822 6-3.822-6-3.822zM6 20.371l6.001 3.822 6-3.822-6-3.822L6 20.371z" fill="black"/></g>'
     },
     {
@@ -87,6 +88,7 @@ const APPS = [
         name: 'AI Assistant',
         cat: 'tools',
         plus: true,
+        desc: 'Ask questions, get answers.',
         icon: '<path d="M16 3 L19 11 L27 14 L19 17 L16 25 L13 17 L5 14 L13 11 Z M6 3 L8 7 L12 8 L8 9 L6 13 L4 9 L0 8 L4 7 Z" fill="black" stroke="none"/>'
     },
     {
@@ -112,6 +114,7 @@ const APPS = [
         name: 'Files',
         plus: true,
         cat: 'tools',
+        desc: 'Cloud storage for your documents.',
         // Folder Icon
         icon: '<path d="M4 6 h8 l2 2 h14 v16 h-24 z" fill="white" stroke="black" stroke-width="2"/><line x1="4" y1="11" x2="28" y2="11" stroke="black" stroke-width="2"/>'
     },
@@ -120,6 +123,7 @@ const APPS = [
         name: 'Docs',
         plus: true,
         cat: 'tools',
+        desc: 'Write and edit Word documents.',
         icon: '<path d="M6 4 h14 l6 6 v18 h-20 z" fill="white" stroke="black" stroke-width="2"/><polyline points="20 4 20 10 26 10" fill="none" stroke="black" stroke-width="2"/><line x1="10" y1="14" x2="22" y2="14" stroke="black" stroke-width="2"/><line x1="10" y1="18" x2="22" y2="18" stroke="black" stroke-width="2"/><line x1="10" y1="22" x2="18" y2="22" stroke="black" stroke-width="2"/>'
     },
     {
@@ -312,14 +316,6 @@ const APPS = [
         icon: '<path d="M6 4 h18 v24 h-18 z M6 4 l-2 2 v24 l2 -2 M24 4 l2 2 v24 l-2 -2" fill="none" stroke="black" stroke-width="2"/><path d="M15 12 v8 M11 16 h8" stroke="black" stroke-width="2" fill="none"/>'
     },
     {
-        id: 'standardebooks',
-        name: 'Standard eBooks',
-        cat: 'lifestyle',
-        beta: true,
-        desc: 'Free, high quality ebooks',
-        icon: '<rect x="8" y="4" width="18" height="24" rx="1" stroke="black" stroke-width="2" fill="none"/><line x1="12" y1="4" x2="12" y2="28" stroke="black" stroke-width="2"/><rect x="14" y="8" width="10" height="4" fill="black"/>'
-    },
-    {
         id: 'comics',
         name: 'Comics',
         cat: 'lifestyle',
@@ -489,15 +485,13 @@ const APPS = [
     },
 
     // --- GAMES ---
-    /*     {
-            id: 'oregontrail',
-            name: 'Oregon Trail',
-            cat: 'games',
-            new: true,
-            filled: true,
-            desc: 'Travel the trail to Oregon.',
-            icon: '<path d="M4 32 C 32 20 0 12 14 2 L 18 2 C 4 12 36 20 28 32 Z" fill="black"/>'
-        }, */
+    {
+        id: 'oregontrail',
+        name: 'Oregon Trail',
+        cat: 'games',
+        desc: 'Five people, 2,000 miles, one wagon.',
+        icon: '<path d="M4 23 V17 H28 V23 Z" fill="none" stroke="black" stroke-width="2"/><path d="M6 17 C6 7 26 7 26 17" fill="none" stroke="black" stroke-width="2"/><circle cx="10" cy="25" r="3" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="25" r="3" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="28" x2="31" y2="28" stroke="black" stroke-width="1.5"/>'
+    },
     {
         id: 'trivia',
         name: 'Trivia',
@@ -934,6 +928,27 @@ const APPS = [
         cat: 'games',
         new: true,
         icon: '<rect x="3" y="13" width="13" height="13" fill="white" stroke="black" stroke-width="2"/><rect x="6" y="16" width="7" height="7" fill="black" stroke="none"/><path d="M18 26 L23 13 L28 26 Z" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="29" x2="31" y2="29" stroke="black" stroke-width="2"/>'
+    },
+    /* HIDDEN 2026-10-24: Cookie Clicker is still directly playable at
+       /cookieclicker (and documented in Help), but the home-screen entry is
+       deliberately removed for now. Uncomment this block to show it again. */
+    /*
+    {
+        id: 'cookieclicker',
+        name: 'Cookie Clicker',
+        cat: 'games',
+        new: true,
+        desc: 'Bake cookies, or survive Stimulation mode.',
+        icon: '<circle cx="16" cy="16" r="12" fill="white" stroke="black" stroke-width="2"/><circle cx="11" cy="12" r="1.5" fill="black"/><circle cx="20" cy="10" r="1.2" fill="black"/><circle cx="22" cy="19" r="1.5" fill="black"/><circle cx="14" cy="22" r="1.2" fill="black"/><circle cx="9" cy="19" r="1" fill="black"/>'
+    },
+    */
+    {
+        id: 'cargames',
+        name: 'Car Games',
+        cat: 'games',
+        new: true,
+        desc: 'Ten games for the car, one Kindle.',
+        icon: '<path d="M3 22 H29 M6 22 V17 L10 11 H22 L26 17 V22" fill="none" stroke="black" stroke-width="2"/><circle cx="10" cy="24" r="3" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="24" r="3" fill="white" stroke="black" stroke-width="2"/><line x1="10" y1="11" x2="10" y2="17" stroke="black" stroke-width="1.5"/><line x1="22" y1="11" x2="22" y2="17" stroke="black" stroke-width="1.5"/>'
     }
 ];
 

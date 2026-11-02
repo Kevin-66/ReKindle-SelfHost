@@ -642,8 +642,8 @@
             box-shadow: none;
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
 </head>
 
 <body>
@@ -895,7 +895,7 @@
             hideAllViews();
             document.getElementById('welcome-view').style.display = 'flex';
             document.getElementById('header-back').style.display = 'none';
-            document.getElementById('lang-label').innerText = window.t ? window.t('language.title') : "Languages";
+            document.getElementById('lang-label').innerText = window.t ? window.t('language.title', "Languages") : "Languages";
             document.getElementById('stats-bar').style.display = 'none';
         }
 
@@ -903,7 +903,7 @@
             hideAllViews();
             document.getElementById('picker-view').style.display = 'flex';
             document.getElementById('header-back').style.display = 'flex';
-            document.getElementById('lang-label').innerText = window.t ? window.t('language.select.quiz') : "Select Quiz Language";
+            document.getElementById('lang-label').innerText = window.t ? window.t('language.select.quiz', "Select Quiz Language") : "Select Quiz Language";
             renderLessonsPicker();
         }
 
@@ -911,7 +911,7 @@
             hideAllViews();
             document.getElementById('sentence-picker-view').style.display = 'flex';
             document.getElementById('header-back').style.display = 'flex';
-            document.getElementById('lang-label').innerText = window.t ? window.t('language.select.practice') : "Select Practice Language";
+            document.getElementById('lang-label').innerText = window.t ? window.t('language.select.practice', "Select Practice Language") : "Select Practice Language";
             renderSentencePicker();
         }
 
@@ -943,7 +943,7 @@
             const scoreEl = document.getElementById('session-score');
             const total = (currentMode === 'sentences') ? sessionTotal : questions.length;
             if (total > 0) {
-                const correctText = window.t ? window.t('language.stats.correct') : 'Correct';
+                const correctText = window.t ? window.t('language.stats.correct', "Correct") : 'Correct';
                 scoreEl.innerText = `${sessionCorrect} / ${total} ${correctText}`;
             } else {
                 scoreEl.innerText = "";
@@ -1129,7 +1129,7 @@
                 }
 
                 const prompt = window.t
-                    ? window.t('language.prompt.translate_to', { lang: langName }) + `<br><br><b>"${english}"</b>`
+                    ? window.tFormat('language.prompt.translate_to', { lang: langName }, "Translate to {{lang}}:") + `<br><br><b>"${english}"</b>`
                     : `Translate to ${langName}:<br><br><b>"${english}"</b>`;
 
                 // Get distractors from other results
@@ -1206,7 +1206,7 @@
                 }
 
                 const prompt = window.t
-                    ? window.t('language.prompt.translate_to', { lang: langName }) + `<br><br><b>"${english}"</b>`
+                    ? window.tFormat('language.prompt.translate_to', { lang: langName }, "Translate to {{lang}}:") + `<br><br><b>"${english}"</b>`
                     : `Translate to ${langName}:<br><br><b>"${english}"</b>`;
 
                 let distractorsPool = [];
@@ -1282,10 +1282,10 @@
                 el.className = 'unit-card';
                 el.innerHTML = `
                 <div>
-                    <div class="unit-title">${unit.title} ${isCompleted ? '✅' : ''}</div>
+                    <div class="unit-title">${unit.title} ${isCompleted ? '[x]' : ''}</div>
                     <div class="unit-desc">${unit.desc}</div>
                 </div>
-                <div>${isCompleted ? '<span style="font-size:1.5rem;">🏆</span>' : '<button class="small-action-btn">START</button>'}</div>
+                <div>${isCompleted ? '<span style="font-size:1rem; font-weight:bold;">DONE</span>' : '<button class="small-action-btn">START</button>'}</div>
             `;
                 el.onclick = () => startUnit(unit);
                 list.appendChild(el);
@@ -1468,21 +1468,28 @@
 
             if (currentMode === 'sentences') {
                 const isCharBased = (targetLang === 'jpn' || targetLang === 'cmn');
-                html += `<div class="question-text">${q.prompt}</div>`;
+                html += `<div class="question-text">${escapeHtml(q.prompt)}</div>`;
                 html += `<div style="font-size:1.2rem; margin: 10px 0; border:1px dashed black; padding:15px; background:#f9f9f9; width:100%; box-sizing:border-box;">${q.sentence}</div>`;
                 html += `<div style="margin-bottom:20px; font-style:italic; color:#666;">Choose the missing ${isCharBased ? 'character' : 'word'}</div>`;
             } else {
-                html += `<div class="question-text">${q.prompt}</div>`;
+                html += `<div class="question-text">${escapeHtml(q.prompt)}</div>`;
             }
 
             // Choices
             html += `<div class="choices-grid">`;
-            q.choices.forEach(c => {
-                html += `<div class="choice-btn" onclick="selectChoice(this, '${escapeHtml(c).replace(/\\/g, '\\\\\\\\').replace(/'/g, "\\'")}')">${escapeHtml(c)}</div>`;
+            q.choices.forEach((c, i) => {
+                html += `<div class="choice-btn" data-choice-index="${i}">${escapeHtml(c)}</div>`;
             });
             html += `</div>`;
 
             container.innerHTML = html;
+            // Bind after render; only a numeric index travels through the DOM.
+            const choiceValues = q.choices.map(function (c) { return String(c); });
+            container.querySelectorAll('.choices-grid .choice-btn').forEach(btn => {
+                btn.onclick = function () {
+                    selectChoice(this, choiceValues[parseInt(this.dataset.choiceIndex, 10)]);
+                };
+            });
 
             // Update Progress
             const pct = (qIndex / questions.length) * 100;

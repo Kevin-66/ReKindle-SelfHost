@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <meta charset="UTF-8">
+    <title>Help &amp; FAQ</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+
+    <script src="js/i18n.js?v=4"></script>
+    <script src="theme.js?v=35"></script>
+
+    <style>
+        :root {
+            --shadow: 4px 4px 0px #000000;
+            --stripe-pattern: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+        }
+
+        *,
+        *::before,
+        *::after {
+            transition: none !important;
+            animation: none !important;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #e5e5e5;
+            background-repeat: repeat;
+            background-position: top left;
+            font-family: "Geneva", "Verdana", sans-serif;
+            image-rendering: pixelated;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+        }
+
+        /* WINDOW */
+        .window {
+            background: white;
+            border: 2px solid black;
+            box-shadow: var(--shadow);
+            width: 95%;
+            max-width: 980px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* TITLE BAR */
+        .title-bar {
+            height: 35px;
+            border-bottom: 2px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .title-stripes {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            background-image: var(--stripe-pattern);
+            z-index: 0;
+        }
+
+        .title-text {
+            background: white;
+            padding: 0 15px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            height: 100%;
+        }
+
+        .close-box {
+            position: absolute;
+            left: 10px;
+            width: 18px;
+            height: 18px;
+            border: 2px solid black;
+            background: white;
+            z-index: 2;
+            box-shadow: 2px 2px 0 black;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-family: sans-serif;
+            font-size: 0.9rem;
+            line-height: 1;
+        }
+
+        .close-box:active {
+            background: black;
+            color: white;
+            transform: translate(1px, 1px);
+            box-shadow: none;
+        }
+
+        .back-box {
+            position: absolute;
+            left: 36px;
+            height: 18px;
+            padding: 0 6px;
+            border: 2px solid black;
+            background: white;
+            z-index: 2;
+            box-shadow: 2px 2px 0 black;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-family: sans-serif;
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
+        .back-box:active {
+            background: black;
+            color: white;
+            transform: translate(1px, 1px);
+            box-shadow: none;
+        }
+
+        .title-controls {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            display: flex;
+            align-items: center;
+        }
+
+        .title-controls>*+* {
+            margin-left: 6px;
+        }
+
+        .text-btn {
+            height: 22px;
+            min-width: 28px;
+            border: 2px solid black;
+            background: white;
+            box-shadow: 2px 2px 0 black;
+            font-family: inherit;
+            font-size: 0.7rem;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+
+        .text-btn:active {
+            background: black;
+            color: white;
+            transform: translate(1px, 1px);
+            box-shadow: none;
+        }
+
+        /* LAYOUT */
+        .app-content {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 220px 1fr;
+        }
+
+        .sidebar {
+            min-width: 0;
+            border-right: 2px solid black;
+            background: #f7f7f7;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .sidebar-search {
+            padding: 10px;
+            border-bottom: 1px solid black;
+            flex-shrink: 0;
+        }
+
+        .search-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 5px;
+        }
+
+        .search-input {
+            width: 100%;
+            border: 2px solid black;
+            border-radius: 0;
+            background: white;
+            color: black;
+            padding: 8px 7px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .search-input:focus {
+            outline: 2px solid black;
+            outline-offset: 1px;
+        }
+
+        .category-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 7px;
+        }
+
+        .cat-btn {
+            display: block;
+            width: 100%;
+            border: 1px solid black;
+            background: white;
+            color: black;
+            text-decoration: none;
+            padding: 8px 7px;
+            margin-bottom: 5px;
+            font-family: inherit;
+            font-size: 0.78rem;
+            line-height: 1.25;
+            cursor: pointer;
+        }
+
+        .cat-btn:active {
+            background: black;
+            color: white;
+        }
+
+        .cat-btn.active {
+            background: black;
+            color: white;
+            font-weight: bold;
+        }
+
+        .cat-count {
+            float: right;
+            font-weight: normal;
+            opacity: 0.65;
+            margin-left: 4px;
+        }
+
+        .sidebar-foot {
+            border-top: 1px solid black;
+            padding: 8px 10px;
+            flex-shrink: 0;
+            font-size: 0.72rem;
+            line-height: 1.7;
+        }
+
+        .sidebar-foot a {
+            color: black;
+            text-decoration: none;
+            display: block;
+            font-weight: bold;
+        }
+
+        .sidebar-foot a:active {
+            background: black;
+            color: white;
+        }
+
+        /* MAIN SCROLL AREA */
+        .main {
+            min-width: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+            padding: 18px 24px 34px 24px;
+            font-size: 16px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .main:focus {
+            outline: none;
+        }
+
+        /* TYPOGRAPHY */
+        h1 {
+            font-size: 1.55em;
+            line-height: 1.15;
+            margin: 0 0 8px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid black;
+        }
+
+        h2 {
+            font-size: 1.12em;
+            margin: 24px 0 8px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid black;
+        }
+
+        h3 {
+            font-size: 0.98em;
+            margin: 18px 0 6px 0;
+        }
+
+        p,
+        li {
+            font-size: 0.94em;
+            line-height: 1.55;
+        }
+
+        p {
+            margin: 0 0 11px 0;
+        }
+
+        ul,
+        ol {
+            margin: 0 0 12px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        a {
+            color: black;
+            text-decoration: underline;
+        }
+
+        code {
+            font-family: "Courier New", monospace;
+            font-size: 0.88em;
+            background: #eeeeee;
+            border: 1px solid #999999;
+            padding: 0 3px;
+        }
+
+        .lead {
+            font-size: 1em;
+            line-height: 1.55;
+            color: #222;
+        }
+
+        .muted {
+            color: #555;
+            font-size: 0.85em;
+        }
+
+        .summary {
+            font-style: italic;
+            font-size: 0.98em;
+            line-height: 1.5;
+            margin: 0 0 10px 0;
+            color: #222;
+        }
+
+        /* HOME */
+        .hero {
+            border: 2px solid black;
+            background: white;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 6px;
+        }
+
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 9px;
+            margin-bottom: 20px;
+        }
+
+        .quick-card {
+            display: block;
+            border: 2px solid black;
+            background: #fafafa;
+            color: black;
+            text-decoration: none;
+            padding: 10px 11px;
+        }
+
+        .quick-card:active {
+            background: black;
+            color: white;
+        }
+
+        .quick-title {
+            display: block;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+
+        .quick-desc {
+            display: block;
+            font-size: 0.76em;
+            line-height: 1.35;
+        }
+
+        .cat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 9px;
+            margin-bottom: 20px;
+        }
+
+        .cat-card {
+            border: 2px solid black;
+            background: white;
+            color: black;
+            text-decoration: none;
+            padding: 10px 11px;
+        }
+
+        .cat-card:active {
+            background: black;
+            color: white;
+        }
+
+        .cat-card .cat-title {
+            display: block;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .cat-card .cat-desc {
+            display: block;
+            font-size: 0.75em;
+            line-height: 1.35;
+            margin-top: 4px;
+        }
+
+        .support-box {
+            border: 2px solid black;
+            background: #f4f4f4;
+            padding: 12px 14px;
+            margin-top: 20px;
+        }
+
+        .support-box h2 {
+            margin-top: 0;
+            font-size: 1em;
+        }
+
+        .support-box p {
+            margin-bottom: 6px;
+        }
+
+        .support-links {
+            margin-top: 8px;
+        }
+
+        .support-links a {
+            display: inline-block;
+            border: 2px solid black;
+            background: white;
+            box-shadow: 2px 2px 0 black;
+            padding: 6px 9px;
+            margin: 0 6px 6px 0;
+            font-size: 0.78em;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        .support-links a:active {
+            background: black;
+            color: white;
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+
+        /* LISTS AND CARDS */
+        .list {
+            border-top: 1px solid #999;
+            margin-top: 8px;
+        }
+
+        .list-row {
+            display: block;
+            border-bottom: 1px solid #999;
+            padding: 9px 2px;
+            text-decoration: none;
+            color: black;
+        }
+
+        .list-row:active {
+            background: black;
+            color: white;
+        }
+
+        .list-title {
+            display: block;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .list-desc {
+            display: block;
+            font-size: 0.78em;
+            line-height: 1.4;
+            margin-top: 2px;
+        }
+
+        .list-meta {
+            display: block;
+            font-size: 0.68em;
+            color: #555;
+            margin-top: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .list-row:active .list-meta {
+            color: #dddddd;
+        }
+
+        .group-heading {
+            font-size: 0.78em;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: #eeeeee;
+            border: 1px solid black;
+            padding: 4px 7px;
+            margin: 18px 0 0 0;
+        }
+
+        .az-letter {
+            font-size: 1.05em;
+            font-weight: bold;
+            border-bottom: 2px solid black;
+            margin: 18px 0 4px 0;
+            padding-bottom: 2px;
+        }
+
+        /* ARTICLE */
+        .crumbs {
+            font-size: 0.72em;
+            margin-bottom: 10px;
+            color: #444;
+        }
+
+        .crumbs a {
+            font-weight: bold;
+        }
+
+        .badges {
+            margin: 0 0 10px 0;
+        }
+
+        .badge {
+            display: inline-block;
+            border: 1px solid black;
+            background: white;
+            color: black;
+            font-size: 0.62em;
+            font-weight: bold;
+            padding: 1px 5px;
+            margin: 0 4px 4px 0;
+            vertical-align: middle;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .badge.plus {
+            background: black;
+            color: white;
+        }
+
+        .badge.new {
+            border-width: 2px;
+        }
+
+        .badge.exp {
+            border-width: 2px;
+            background: black;
+            color: white;
+            letter-spacing: 0.06em;
+        }
+
+        .article {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+
+        .article p,
+        .article li {
+            font-size: 0.94em;
+        }
+
+        .article table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0 14px 0;
+            font-size: 0.8em;
+        }
+
+        .article th,
+        .article td {
+            border: 1px solid black;
+            padding: 5px 6px;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.4;
+        }
+
+        .article th {
+            background: #eeeeee;
+            font-size: 0.95em;
+        }
+
+        .note {
+            border: 2px solid black;
+            background: #f4f4f4;
+            padding: 9px 11px;
+            margin: 12px 0;
+            font-size: 0.88em;
+            line-height: 1.5;
+        }
+
+        .note b:first-child {
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.03em;
+        }
+
+        .note.warn {
+            background: #ffffff;
+            border-left: 8px solid black;
+        }
+
+        .article-actions {
+            margin-top: 22px;
+            border-top: 2px solid black;
+            padding-top: 12px;
+        }
+
+        .app-open {
+            display: inline-block;
+            border: 2px solid black;
+            background: white;
+            color: black;
+            box-shadow: 2px 2px 0 black;
+            padding: 8px 13px;
+            margin: 0 8px 8px 0;
+            font-weight: bold;
+            font-size: 0.82em;
+            text-decoration: none;
+        }
+
+        .app-open:active {
+            background: black;
+            color: white;
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+
+        .app-open.secondary {
+            box-shadow: none;
+            font-weight: normal;
+        }
+
+        .related {
+            margin-top: 20px;
+        }
+
+        .related h2 {
+            font-size: 0.95em;
+        }
+
+        .empty {
+            border: 2px dashed #777;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .result-count {
+            font-size: 0.78em;
+            color: #555;
+            margin: 0 0 8px 0;
+        }
+
+        .search-clear {
+            margin-top: 6px;
+            border: 1px solid black;
+            background: white;
+            font-family: inherit;
+            font-size: 0.72em;
+            padding: 4px 7px;
+            cursor: pointer;
+            display: none;
+        }
+
+        .search-clear:active {
+            background: black;
+            color: white;
+        }
+
+        /* NARROW / KINDLE */
+        @media (max-width: 700px) {
+            .window {
+                width: 100%;
+                height: 95vh;
+                border-left: none;
+                border-right: none;
+            }
+
+            .app-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+            }
+
+            .sidebar {
+                border-right: none;
+                border-bottom: 2px solid black;
+                max-height: 218px;
+            }
+
+            .sidebar-search {
+                padding: 7px 8px;
+            }
+
+            .search-label {
+                display: none;
+            }
+
+            .category-list {
+                display: flex;
+                flex-wrap: wrap;
+                overflow-x: hidden;
+                overflow-y: auto;
+                max-height: 150px;
+                padding: 5px 6px;
+                flex: 0 1 auto;
+            }
+
+            .cat-btn {
+                display: inline-block;
+                width: auto;
+                white-space: nowrap;
+                margin: 0 5px 5px 0;
+                padding: 7px 8px;
+            }
+
+            .cat-count {
+                float: none;
+                margin-left: 3px;
+            }
+
+            .sidebar-foot {
+                display: none;
+            }
+
+            .main {
+                padding: 13px 14px 28px 14px;
+                font-size: 16px;
+            }
+
+            .quick-grid,
+            .cat-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.35em;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .title-controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-stripes"></div>
+            <div class="close-box" onclick="window.location.href='index.html'" title="Close">X</div>
+            <div class="back-box" onclick="goBack()">Back</div>
+            <span class="title-text" data-i18n="help.title">Help &amp; FAQ</span>
+            <div class="title-controls">
+                <button class="text-btn" id="font-down" data-i18n-title="help.font.smaller" title="Smaller text"
+                    onclick="changeTextSize(-1)">A-</button>
+                <button class="text-btn" id="font-up" data-i18n-title="help.font.larger" title="Larger text"
+                    onclick="changeTextSize(1)">A+</button>
+            </div>
+        </div>
+
+        <div class="app-content">
+            <aside class="sidebar">
+                <div class="sidebar-search">
+                    <label class="search-label" for="help-search" data-i18n="help.search.label">Search help</label>
+                    <input type="search" class="search-input" id="help-search" autocomplete="off"
+                        placeholder="Search apps, games..."
+                        data-i18n-placeholder="help.search.placeholder">
+                    <button class="search-clear" id="search-clear" onclick="clearSearch()">Clear search</button>
+                </div>
+                <nav class="category-list" id="category-list" aria-label="Help categories"></nav>
+                <div class="sidebar-foot">
+                    <a href="#all" data-i18n="help.nav.index">A-Z index</a>
+                    <a href="index.html" data-i18n="help.nav.home">ReKindle home</a>
+                </div>
+            </aside>
+
+            <main class="main" id="main" tabindex="-1"></main>
+        </div>
+    </div>
+
+    <script src="help-data.js?v=13"></script>
+    <script>
+        (function () {
+            var categories = window.HELP_CATEGORIES || [];
+            var articles = window.HELP_ARTICLES || [];
+            var mainEl = document.getElementById('main');
+            var searchEl = document.getElementById('help-search');
+            var clearEl = document.getElementById('search-clear');
+            var catListEl = document.getElementById('category-list');
+            var catById = {};
+            var artById = {};
+            var searchTimer = null;
+            var currentView = 'home';
+
+            var POPULAR = ['welcome', 'account', 'pro', 'troubleshooting', 'kindlechat', 'reader', 'wordle', 'oregontrail'];
+            var SUB_ORDER = {
+                'Start here': 0,
+                'Word games': 1,
+                'Logic & puzzle': 2,
+                'Cards & board': 3,
+                'Action & arcade': 4
+            };
+            var QUICK = [
+                { href: '#welcome', title: 'Start here', desc: 'What ReKindle is and how to set it up.' },
+                { href: '#account', title: 'Accounts & sync', desc: 'Guest mode, cloud sync, passwords and safety.' },
+                { href: '#pro', title: 'ReKindle+', desc: 'Plans, what is included, and managing a subscription.' },
+                { href: '#troubleshooting', title: 'Troubleshooting', desc: 'Fix blank pages, login loops and stale data.' },
+                { href: '#games-overview', title: 'Game guides', desc: 'How games work, controls and leaderboards.' },
+                { href: '#all', title: 'All apps A-Z', desc: 'Every app and game, in one alphabetical list.' }
+            ];
+
+            function escapeHtml(value) {
+                return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function stripTags(value) {
+                return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            }
+
+            function formatCount(n) {
+                return n === 1 ? '1 guide' : n + ' guides';
+            }
+
+            function badgeHtml(article) {
+                var badges = article.badges || [];
+                var html = '';
+                for (var i = 0; i < badges.length; i++) {
+                    var b = badges[i];
+                    var cls = 'badge';
+                    if (b === 'REKINDLE+') cls += ' plus';
+                    if (b === 'NEW') cls += ' new';
+                    if (b === 'HIGHLY EXPERIMENTAL') cls += ' exp';
+                    html += '<span class="' + cls + '">' + escapeHtml(b) + '</span>';
+                }
+                return html ? '<div class="badges">' + html + '</div>' : '';
+            }
+
+            function linkRow(article, showCategory) {
+                var meta = '';
+                if (showCategory) {
+                    var cat = catById[article.cat];
+                    meta = (cat ? cat.title : article.cat) + (article.sub ? ' / ' + article.sub : '');
+                } else {
+                    meta = article.sub || '';
+                }
+                return '<a class="list-row" href="#' + encodeURIComponent(article.id) + '">' +
+                    '<span class="list-title">' + escapeHtml(article.title) + '</span>' +
+                    '<span class="list-desc">' + escapeHtml(article.summary) + '</span>' +
+                    (meta ? '<span class="list-meta">' + escapeHtml(meta) + '</span>' : '') +
+                    '</a>';
+            }
+
+            function init() {
+                if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
+                for (var c = 0; c < categories.length; c++) {
+                    catById[categories[c].id] = categories[c];
+                }
+                for (var a = 0; a < articles.length; a++) {
+                    var art = articles[a];
+                    artById[art.id] = art;
+                    art._searchText = stripTags(art.title + ' ' + (art.keywords || '') + ' ' + (art.summary || '') + ' ' + (art.tags || '') + ' ' + art.body).toLowerCase();
+                    art._searchTitle = String(art.title).toLowerCase();
+                    art._searchTags = String(art.tags || '').toLowerCase();
+                    art._searchSummary = String(art.summary || '').toLowerCase();
+                }
+                buildCategoryList();
+                restoreTextSize();
+                searchEl.addEventListener('input', onSearchInput);
+                window.addEventListener('hashchange', route);
+                route();
+                var initialQuery = '';
+                try {
+                    initialQuery = new URLSearchParams(window.location.search).get('q') || '';
+                } catch (e) {
+                    initialQuery = '';
+                }
+                if (initialQuery) {
+                    searchEl.value = initialQuery;
+                    clearEl.style.display = 'inline-block';
+                    renderSearch(initialQuery);
+                }
+            }
+
+            function buildCategoryList() {
+                var html = '';
+                html += '<a class="cat-btn" href="#home" data-cat="home">Home</a>';
+                for (var i = 0; i < categories.length; i++) {
+                    var cat = categories[i];
+                    var count = 0;
+                    for (var j = 0; j < articles.length; j++) {
+                        if (articles[j].cat === cat.id) count++;
+                    }
+                    html += '<a class="cat-btn" href="#cat-' + cat.id + '" data-cat="' + cat.id + '">' +
+                        escapeHtml(cat.title) + ' <span class="cat-count">' + count + '</span></a>';
+                }
+                catListEl.innerHTML = html;
+            }
+
+            function setActiveCat(catId) {
+                var links = catListEl.querySelectorAll('.cat-btn');
+                for (var i = 0; i < links.length; i++) {
+                    links[i].className = links[i].getAttribute('data-cat') === catId ? 'cat-btn active' : 'cat-btn';
+                }
+            }
+
+            function route() {
+                if (searchEl.value.trim() !== '') {
+                    searchEl.value = '';
+                    clearEl.style.display = 'none';
+                }
+                var hash = window.location.hash.replace(/^#/, '');
+                try {
+                    hash = decodeURIComponent(hash);
+                } catch (e) {
+                    hash = '';
+                }
+                if (!hash || hash === 'home') {
+                    currentView = 'home';
+                    setActiveCat('home');
+                    renderHome();
+                    return;
+                }
+                if (hash === 'all') {
+                    currentView = 'all';
+                    setActiveCat('all');
+                    renderAll();
+                    return;
+                }
+                if (hash.indexOf('cat-') === 0) {
+                    currentView = 'category';
+                    var catId = hash.substring(4);
+                    setActiveCat(catId);
+                    renderCategory(catId);
+                    return;
+                }
+                if (artById[hash]) {
+                    currentView = 'article';
+                    setActiveCat(artById[hash].cat);
+                    renderArticle(artById[hash]);
+                    return;
+                }
+                currentView = 'missing';
+                setActiveCat('');
+                renderMissing(hash);
+            }
+
+            function scrollTop() {
+                mainEl.scrollTop = 0;
+            }
+
+            function renderHome() {
+                var html = '';
+                html += '<div class="hero">';
+                html += '<h1>ReKindle Help Centre</h1>';
+                html += '<p class="lead">Everything ReKindle can do, in one place. Browse by topic, search for an app or game, or start with a quick guide below.</p>';
+                html += '<p class="muted">' + articles.length + ' guides covering apps, games, accounts, sync, settings and troubleshooting. Updated October 2026.</p>';
+                html += '</div>';
+
+                html += '<div class="quick-grid">';
+                for (var q = 0; q < QUICK.length; q++) {
+                    html += '<a class="quick-card" href="' + QUICK[q].href + '">' +
+                        '<span class="quick-title">' + escapeHtml(QUICK[q].title) + '</span>' +
+                        '<span class="quick-desc">' + escapeHtml(QUICK[q].desc) + '</span></a>';
+                }
+                html += '</div>';
+
+                html += '<h2>Browse by topic</h2>';
+                html += '<div class="cat-grid">';
+                for (var i = 0; i < categories.length; i++) {
+                    var cat = categories[i];
+                    var count = 0;
+                    for (var j = 0; j < articles.length; j++) {
+                        if (articles[j].cat === cat.id) count++;
+                    }
+                    html += '<a class="cat-card" href="#cat-' + cat.id + '">' +
+                        '<span class="cat-title">' + escapeHtml(cat.title) + ' (' + count + ')</span>' +
+                        '<span class="cat-desc">' + escapeHtml(cat.desc || '') + '</span></a>';
+                }
+                html += '</div>';
+
+                html += '<h2>Popular guides</h2><div class="list">';
+                for (var p = 0; p < POPULAR.length; p++) {
+                    if (artById[POPULAR[p]]) html += linkRow(artById[POPULAR[p]], true);
+                }
+                html += '</div>';
+
+                html += '<div class="support-box">';
+                html += '<h2>Still stuck?</h2>';
+                html += '<p>Email <a href="mailto:support@rekindle.ink">support@rekindle.ink</a> or ask the community on Discord. Include your username, device model and what you tapped - it makes problems much faster to find.</p>';
+                html += '<p class="muted">Found a mistake in this help app? Use the report link at the bottom of any guide.</p>';
+                html += '<div class="support-links">';
+                html += '<a href="mailto:support@rekindle.ink">Email support</a>';
+                html += '<a href="suggestions.html">Suggestions</a>';
+                html += '<a href="privacy.html">Privacy policy</a>';
+                html += '<a href="index.html">Back to ReKindle</a>';
+                html += '</div></div>';
+
+                mainEl.innerHTML = html;
+                scrollTop();
+            }
+
+            function renderCategory(catId) {
+                var cat = catById[catId];
+                if (!cat) {
+                    renderMissing('cat-' + catId);
+                    return;
+                }
+                var list = [];
+                for (var i = 0; i < articles.length; i++) {
+                    if (articles[i].cat === catId) list.push(articles[i]);
+                }
+                list.sort(function (a, b) {
+                    var oa = Object.prototype.hasOwnProperty.call(SUB_ORDER, a.sub) ? SUB_ORDER[a.sub] : 99;
+                    var ob = Object.prototype.hasOwnProperty.call(SUB_ORDER, b.sub) ? SUB_ORDER[b.sub] : 99;
+                    if (oa !== ob) return oa - ob;
+                    return a.title.localeCompare(b.title);
+                });
+                var html = '<h1>' + escapeHtml(cat.title) + '</h1>';
+                html += '<p class="lead">' + escapeHtml(cat.desc || '') + '</p>';
+                html += '<p class="muted">' + formatCount(list.length) + '</p>';
+                var lastGroup = null;
+                for (var j = 0; j < list.length; j++) {
+                    var art = list[j];
+                    if (art.sub && art.sub !== lastGroup) {
+                        lastGroup = art.sub;
+                        html += '<div class="group-heading">' + escapeHtml(lastGroup) + '</div>';
+                    }
+                    html += linkRow(art, false);
+                }
+                mainEl.innerHTML = html;
+                scrollTop();
+            }
+
+            function renderAll() {
+                var apps = [];
+                for (var i = 0; i < articles.length; i++) {
+                    if (articles[i].appHref) apps.push(articles[i]);
+                }
+                apps.sort(function (a, b) {
+                    var na = (a.appName || a.title).toLowerCase();
+                    var nb = (b.appName || b.title).toLowerCase();
+                    return na.localeCompare(nb);
+                });
+                var html = '<h1>All apps &amp; games A-Z</h1>';
+                html += '<p class="lead">Every app and game guide, sorted by name. Tap one to read it, then use the Open button to launch the app.</p>';
+                html += '<p class="muted">' + formatCount(apps.length) + ' with app links. Some unlisted or administrator pages are described in <a href="#hidden-legacy">Unlisted &amp; legacy pages</a>.</p>';
+                var letter = '';
+                for (var j = 0; j < apps.length; j++) {
+                    var art = apps[j];
+                    var name = art.appName || art.title;
+                    var first = name.charAt(0).toUpperCase();
+                    if (first !== letter) {
+                        letter = first;
+                        html += '<div class="az-letter">' + escapeHtml(letter) + '</div>';
+                    }
+                    var cat = catById[art.cat];
+                    html += '<a class="list-row" href="#' + encodeURIComponent(art.id) + '">' +
+                        '<span class="list-title">' + escapeHtml(name) + '</span>' +
+                        '<span class="list-desc">' + escapeHtml(art.summary) + '</span>' +
+                        '<span class="list-meta">' + escapeHtml(cat ? cat.title : art.cat) + '</span></a>';
+                }
+                mainEl.innerHTML = html;
+                scrollTop();
+            }
+
+            function renderArticle(article) {
+                var cat = catById[article.cat];
+                var html = '<div class="crumbs"><a href="#home">Help</a> / <a href="#cat-' + article.cat + '">' +
+                    escapeHtml(cat ? cat.title : article.cat) + '</a> / ' + escapeHtml(article.title) + '</div>';
+                html += '<h1>' + escapeHtml(article.title) + '</h1>';
+                html += badgeHtml(article);
+                html += '<p class="summary">' + escapeHtml(article.summary) + '</p>';
+                html += '<div class="article">' + article.body + '</div>';
+
+                html += '<div class="article-actions">';
+                if (article.appHref) {
+                    html += '<a class="app-open" href="' + escapeHtml(article.appHref) + '.html">Open ' +
+                        escapeHtml(article.appName || article.title) + '</a>';
+                }
+                html += '<a class="app-open secondary" href="#cat-' + article.cat + '">Back to ' +
+                    escapeHtml(cat ? cat.title : 'category') + '</a>';
+                html += '<a class="app-open secondary" href="mailto:support@rekindle.ink?subject=' +
+                    encodeURIComponent('Help feedback: ' + article.title) + '">Report a problem</a>';
+                html += '</div>';
+
+                var related = [];
+                if (article.related && article.related.length) {
+                    for (var i = 0; i < article.related.length; i++) {
+                        if (artById[article.related[i]]) related.push(artById[article.related[i]]);
+                    }
+                } else {
+                    for (var j = 0; j < articles.length && related.length < 4; j++) {
+                        if (articles[j].cat === article.cat && articles[j].id !== article.id) related.push(articles[j]);
+                    }
+                }
+                if (related.length) {
+                    html += '<div class="related"><h2>Related guides</h2><div class="list">';
+                    for (var k = 0; k < related.length; k++) html += linkRow(related[k], false);
+                    html += '</div></div>';
+                }
+                mainEl.innerHTML = html;
+                scrollTop();
+            }
+
+            function renderMissing(hash) {
+                mainEl.innerHTML = '<h1>Guide not found</h1>' +
+                    '<p class="lead">There is no help page for "' + escapeHtml(hash) + '". It may have been renamed, or the link may be out of date.</p>' +
+                    '<div class="article-actions"><a class="app-open" href="#home">Help home</a>' +
+                    '<a class="app-open secondary" href="#all">All apps A-Z</a></div>';
+                scrollTop();
+            }
+
+            function onSearchInput() {
+                if (searchTimer) clearTimeout(searchTimer);
+                var query = searchEl.value.trim();
+                clearEl.style.display = query ? 'inline-block' : 'none';
+                if (!query) {
+                    route();
+                    return;
+                }
+                searchTimer = setTimeout(function () {
+                    renderSearch(query);
+                }, 140);
+            }
+
+            function renderSearch(query) {
+                var terms = query.toLowerCase().split(/\s+/);
+                var results = [];
+                for (var i = 0; i < articles.length; i++) {
+                    var art = articles[i];
+                    var text = art._searchText;
+                    var matches = true;
+                    for (var t = 0; t < terms.length; t++) {
+                        if (terms[t] && text.indexOf(terms[t]) === -1) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (!matches) continue;
+                    var score = 0;
+                    for (var s = 0; s < terms.length; s++) {
+                        var term = terms[s];
+                        if (!term) continue;
+                        if (art._searchTitle.indexOf(term) !== -1) score += 12;
+                        if (art._searchTitle.indexOf(term) === 0) score += 10;
+                        if (art._searchTags.indexOf(term) !== -1) score += 6;
+                        if (art._searchSummary.indexOf(term) !== -1) score += 4;
+                    }
+                    if (art._searchTitle.indexOf(query.toLowerCase()) !== -1) score += 20;
+                    results.push({ art: art, score: score });
+                }
+                results.sort(function (a, b) {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return a.art.title.localeCompare(b.art.title);
+                });
+                var html = '<h1>Search results</h1>';
+                html += '<p class="result-count">' + results.length + ' result' + (results.length === 1 ? '' : 's') +
+                    ' for "' + escapeHtml(query) + '"</p>';
+                if (!results.length) {
+                    html += '<div class="empty"><p><b>No matches.</b></p>' +
+                        '<p class="muted">Try a simpler word, an app name like "tasks", or browse the A-Z index.</p>' +
+                        '<p><a href="#all">Open the A-Z index</a></p></div>';
+                } else {
+                    html += '<div class="list">';
+                    var limit = Math.min(results.length, 60);
+                    for (var r = 0; r < limit; r++) html += linkRow(results[r].art, true);
+                    html += '</div>';
+                    if (results.length > limit) {
+                        html += '<p class="muted">Showing the first ' + limit + ' matches. Add another word to narrow the search.</p>';
+                    }
+                }
+                mainEl.innerHTML = html;
+                scrollTop();
+            }
+
+            function clearSearch() {
+                searchEl.value = '';
+                clearEl.style.display = 'none';
+                route();
+                searchEl.focus();
+            }
+
+            function changeTextSize(delta) {
+                var size = parseInt(localStorage.getItem('rekindle_help_font') || '16', 10);
+                if (isNaN(size)) size = 16;
+                size += delta;
+                if (size < 13) size = 13;
+                if (size > 22) size = 22;
+                localStorage.setItem('rekindle_help_font', String(size));
+                applyTextSize(size);
+            }
+
+            function applyTextSize(size) {
+                mainEl.style.fontSize = size + 'px';
+            }
+
+            function restoreTextSize() {
+                var size = parseInt(localStorage.getItem('rekindle_help_font') || '16', 10);
+                if (isNaN(size) || size < 13) size = 16;
+                if (size > 22) size = 22;
+                applyTextSize(size);
+            }
+
+            window.goBack = function () {
+                if (currentView === 'home') {
+                    window.location.href = 'index.html';
+                } else {
+                    window.location.hash = 'home';
+                }
+            };
+            window.clearSearch = clearSearch;
+            window.changeTextSize = changeTextSize;
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+</body>
+
+</html>

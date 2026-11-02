@@ -260,7 +260,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(0,0,0,0.45);
             z-index: 100;
             align-items: center;
             justify-content: center;
@@ -275,9 +275,9 @@
             text-align: center;
         }
     </style>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -507,9 +507,9 @@
             if (game.in_checkmate()) {
                 const winnerColor = (game.turn() === 'w') ? 'black' : 'white';
                 const winnerName = window.t ? window.t('chess2p.status.' + winnerColor) : (winnerColor === 'black' ? 'Black' : 'White');
-                status = window.t ? window.t('chess2p.msg.checkmate', { winner: winnerName }) : `Checkmate! ${winnerName} wins.`;
+                status = window.t ? window.tFormat('chess2p.msg.checkmate', { winner: winnerName }, "Checkmate! ${winner} wins.") : `Checkmate! ${winnerName} wins.`;
             } else if (game.in_draw()) {
-                status = window.t ? window.t('chess2p.msg.draw') : 'Draw.';
+                status = window.t ? window.t('chess2p.msg.draw', "Draw.") : 'Draw.';
             } else {
                 // Normal turn
                 const turnColor = (game.turn() === 'w') ? 'white' : 'black';
@@ -518,7 +518,7 @@
 
                 // check?
                 if (game.in_check()) {
-                    status += (window.t ? window.t('chess2p.msg.check') : " (Check!)");
+                    status += (window.t ? window.t('chess2p.msg.check', " (Check!)") : " (Check!)");
                 }
             }
             statusEl.innerText = status;
@@ -567,7 +567,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" integrity="sha384-nhrsdECZledRaozO3oR4Yu+cq4ACLwBiZ/azuVbm3o9QGzXLdLaRx+r/zDUQ6bLl" crossorigin="anonymous"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" integrity="sha384-nhrsdECZledRaozO3oR4Yu+cq4ACLwBiZ/azuVbm3o9QGzXLdLaRx+r/zDUQ6bLl" crossorigin="anonymous" defer></script>
 
 
 </body></html>

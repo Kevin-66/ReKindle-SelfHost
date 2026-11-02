@@ -380,12 +380,14 @@
     </style>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -444,9 +446,9 @@
                 <div class="modal-title" data-i18n="sudoku.btn.new_game">New Game</div>
                 <p data-i18n="sudoku.label.select_difficulty">Select Difficulty</p>
                 <div class="modal-btns">
-                    <button class="modal-btn" onclick="startNewGame(30)" data-i18n="sudoku.diff.easy">Easy</button>
-                    <button class="modal-btn" onclick="startNewGame(50)" data-i18n="sudoku.diff.medium">Medium</button>
-                    <button class="modal-btn" onclick="startNewGame(64)" data-i18n="sudoku.diff.hard">Hard</button>
+                    <button class="modal-btn" onclick="startNewGame('easy')" data-i18n="sudoku.diff.easy">Easy</button>
+                    <button class="modal-btn" onclick="startNewGame('medium')" data-i18n="sudoku.diff.medium">Medium</button>
+                    <button class="modal-btn" onclick="startNewGame('hard')" data-i18n="sudoku.diff.hard">Hard</button>
                     <button class="modal-btn" style="border: 1px solid #999; box-shadow: none;" onclick="closeModal('new-game-modal')" data-i18n="sudoku.btn.cancel">Cancel</button>
                 </div>
             </div>
@@ -499,7 +501,7 @@
                 } else {
                     // Guest: Try local storage
                     if (!loadGame()) {
-                        startNewGame(30);
+                        startNewGame(DEFAULT_DIFFICULTY);
                     }
                 }
             });
@@ -582,11 +584,11 @@
                         renderBoard();
                     } else {
                         // No cloud save found, fallback to local or new
-                        if (!loadGame()) startNewGame(30);
+                        if (!loadGame()) startNewGame(DEFAULT_DIFFICULTY);
                     }
                 }).catch(() => {
                     // If offline or error
-                    if (!loadGame()) startNewGame(30);
+                    if (!loadGame()) startNewGame(DEFAULT_DIFFICULTY);
                 });
         }
 
@@ -598,14 +600,25 @@
         }
 
         // --- BOARD GENERATION ---
+        // Difficulty is stored as named levels so the HTML never carries magic
+        // numbers; each value is how many cells get blanked out of a solved board.
+        const DIFFICULTY_LEVELS = { easy: 30, medium: 50, hard: 64 };
+        const DEFAULT_DIFFICULTY = 'easy';
+
+        function cellsToClearFor(difficulty) {
+            const cells = DIFFICULTY_LEVELS[difficulty];
+            return typeof cells === 'number' ? cells : DIFFICULTY_LEVELS[DEFAULT_DIFFICULTY];
+        }
+
         function openNewGameModal() {
             document.getElementById('new-game-modal').style.display = 'flex';
         }
 
         /**
-         * @param {number} cellsToRemove The number of cells to remove from the completed board
+         * @param {string} difficulty One of the keys in DIFFICULTY_LEVELS.
          */
-        function startNewGame(cellsToRemove) {
+        function startNewGame(difficulty) {
+            const cellsToRemove = cellsToClearFor(difficulty);
             closeModal('new-game-modal');
             closeModal('modal-overlay');
 
@@ -770,11 +783,11 @@
 
             // Feedback
             if (!isClean) {
-                showToast(window.t ? window.t('sudoku.msg.errors') : "Errors Found!");
+                showToast(window.t ? window.t('sudoku.msg.errors', "Errors Found!") : "Errors Found!");
             } else if (hasEmpty) {
-                showToast(window.t ? window.t('sudoku.msg.correct_so_far') : "Looks correct so far!");
+                showToast(window.t ? window.t('sudoku.msg.correct_so_far', "Looks correct so far!") : "Looks correct so far!");
             } else {
-                showToast(window.t ? window.t('sudoku.msg.perfect') : "Perfect!");
+                showToast(window.t ? window.t('sudoku.msg.perfect', "Perfect!") : "Perfect!");
             }
         }
 
@@ -819,7 +832,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" defer></script>
 
 
 </body></html>

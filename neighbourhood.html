@@ -7,7 +7,6 @@
     <meta charset="UTF-8">
 
     <title>Neighbourhood</title>
-    <script src="js/reports.js"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -208,6 +207,16 @@
             box-shadow: 3px 3px 0 #999;
         }
 
+        /* Translation controls read as small buttons, not tiny buried links. */
+        [id^="toggle-"], [id^="translate-"], [id^="cmt-toggle-"], [id^="cmt-translate-"] {
+            display: inline-block;
+            border: 1px solid #666;
+            background: #fff;
+            padding: 1px 4px;
+            margin-top: 3px;
+            text-decoration: none !important;
+        }
+
         .post-card {
             border: 2px solid black;
             padding: 10px;
@@ -216,6 +225,7 @@
             box-shadow: 3px 3px 0 #ccc;
             position: relative;
             overflow: hidden;
+            contain: content;
         }
 
         .card-content {
@@ -333,28 +343,43 @@
 
         /* Report button - matches kindlechat circular style */
         .report-btn {
-            width: 20px;
-            height: 20px;
-            border: 1px solid black;
-            border-radius: 50%;
-            background: white;
+            /* Full 48x48 touch target (AGENTS section 3) with the familiar 20px
+               dot inside. It takes real layout space so the hit area cannot
+               overlap the timestamp / Edit button next to it. */
+            width: 48px;
+            height: 48px;
+            margin: 0 0 0 4px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
             cursor: pointer;
-            text-align: center;
-            line-height: 18px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            box-shadow: 1px 1px 0 #999;
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1;
             flex-shrink: 0;
-            opacity: 0.5;
-            color: #cc0000;
-            margin-left: 4px;
         }
 
-        .report-btn:hover {
+        .report-btn .report-dot {
+            width: 20px;
+            height: 20px;
+            border: 1px solid black;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 1px 1px 0 #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            line-height: 1;
+            font-weight: bold;
+            opacity: 0.5;
+            color: #cc0000;
+        }
+
+        .report-btn:hover .report-dot,
+        .report-btn:active .report-dot {
             opacity: 1.0;
             background: #ffe6e6;
         }
@@ -368,13 +393,26 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(0,0,0,0.45);
             z-index: 10;
             align-items: center;
             justify-content: center;
             flex-direction: column;
             text-align: center;
             padding: 20px;
+        }
+
+        #login-overlay .modal-box {
+            text-align: center;
+        }
+
+        #login-overlay .sys-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 10px 20px;
+            margin: 10px auto 0;
         }
 
         .badge-plus {
@@ -474,6 +512,7 @@
             border: 1px solid black;
             position: relative;
             overflow: hidden;
+            contain: content;
         }
 
         .post-name-row {
@@ -743,19 +782,14 @@
     </style>
 
     <!-- FIREBASE (WITH RTDB) -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="bad_words.js?v=4"></script>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
-    <script src="js/age-verification.js?v=2"></script>
-    <script src="js/emoji-render.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<link rel="preconnect" href="https://rekindle-socials-default-rtdb.firebaseio.com">
+    <script src="theme.js?v=35"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="js/i18n.js?v=4"></script>
+    <link rel="stylesheet" href="js/system-dialog.css?v=2">
 </head>
 
 <body>
@@ -882,8 +916,7 @@
                                     data-i18n="neighbourhood.btn.clear_avatar"
                                     style="font-size:0.75rem; padding:6px 12px;; margin-top: 8px">Clear</button>
                                 <button class="sys-btn" id="btn-toggle-privacy" onclick="toggleProfilePrivacy()"
-                                    style="font-size:0.75rem; padding:6px 12px; margin-top:5px;; margin-top: 8px">🔓
-                                    Public</button>
+                                    style="font-size:0.75rem; padding:6px 12px; margin-top:5px;; margin-top: 8px">Public</button>
                             </div>
                         </div>
 
@@ -1157,13 +1190,40 @@
         </div>
     </div>
     <div id="login-overlay" style="display: none;"> <!-- Hidden by default, shown by JS -->
-        <h2 id="login-overlay-title" data-i18n="suggestions.msg.login_required">Please Log In</h2>
-        <p id="login-overlay-desc" data-i18n="suggestions.msg.login_desc">You need to be logged in to enable suggestions.</p>
-        <p id="login-overlay-message" style="font-size: 0.9rem; color: #666; margin: 10px 0; max-width: 300px;"></p>
-        <button class="sys-btn" onclick="window.location.href='index?login=true'" data-i18n="suggestions.btn.login">Log
-            In</button>
+        <div class="modal-box rk-dialog">
+            <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="login-overlay-title" data-i18n="neighbourhood.login.title">Log in to join the neighbourhood</span></div>
+            <div class="rk-dialog-body">
+                <p id="login-overlay-desc" data-i18n="neighbourhood.login.desc">Post, comment and connect with other ReKindle readers.</p>
+                <p id="login-overlay-message" style="font-size: 0.9rem; color: #666; margin: 10px 0; max-width: 300px;"></p>
+                <button class="sys-btn rk-primary" onclick="window.location.href='index?login=true'" data-i18n="login.btn.login">Log
+                    In</button>
+            </div>
+        </div>
     </div>
 
+
+    <!-- Loaded here, after the markup, so the shell paints before the
+         Firebase SDK downloads and parses (2026-10-26 load-path pass).
+         Order is unchanged: this block still runs before the app script. -->
+    <script src="js/reports.js?v=4"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/social-token-cache.js?v=1"></script>
+    <script src="time.js?v=5"></script>
+    <script src="bad_words.js?v=4"></script>
+    <script src="js/promo-ban.js?v=1"></script>
+    <script src="js/link-guard.js?v=1"></script>
+    <script src="js/social-endpoints.js?v=1"></script>
+    <script src="js/worker-client.js?v=1"></script>
+    <script src="js/translate-client.js?v=3"></script>
+    <script src="js/post-language.js?v=1"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <script src="js/custom-select.js?v=2"></script>
+    <script src="js/age-verification.js?v=2"></script>
+    <script src="js/emoji-render.js?v=1"></script>
 
     <script>
         // CONFIG
@@ -1195,7 +1255,8 @@
         const mainDb = firebase.firestore();
         const socialDb = socialApp.firestore();
         const socialAuth = socialApp.auth();
-        const MODERATION_WORKER_URL = "https://rekindle-moderate.timjarnott.workers.dev";
+        const MODERATION_WORKER_URL = (window.rekindleSocialEndpoints && window.rekindleSocialEndpoints.moderation)
+            || "https://rekindle-moderate.rekindle-social.workers.dev";
 
         // Mock Kindle+ check (In real app, check claims or subscription status)
         // For now, let's treat everyone as potentially plus if they have the flag, 
@@ -1216,7 +1277,8 @@
         let isPlus = false;
         let myProfile = {};
 
-        var TRANSLATION_WORKER_URL = "https://rekindle-translate.timjarnott.workers.dev";
+        var TRANSLATION_WORKER_URL = (window.rekindleSocialEndpoints && window.rekindleSocialEndpoints.translation)
+            || "https://rekindle-translate.rekindle-social.workers.dev";
         function resolveUserLanguage() {
             var lang = localStorage.getItem('rekindle_language') || 'auto';
             if (lang === 'auto') {
@@ -1251,12 +1313,49 @@
         }
         var userLang = resolveUserLanguage();
 
+        // Language detection is lazy (see js/post-language.js). Start it when a
+        // post/comment composer is focused, and once more after the feed settles.
+        function detectPostLang(text) {
+            var pl = window.rekindlePostLanguage;
+            if (!pl || typeof pl.isReady !== 'function' || !pl.isReady()) return '';
+            return pl.detectLang(text);
+        }
+
+        function loadPostLanguageSoon() {
+            if (!window.rekindlePostLanguage) return;
+            setTimeout(function () { window.rekindlePostLanguage.load(); }, 4000);
+        }
+
+        function normalizeUserLang(code) {
+            if (!code) return '';
+            var client = window.rekindleTranslateClient;
+            if (client && typeof client.normalizeLang === 'function') return client.normalizeLang(code);
+            return String(code).toLowerCase().replace(/_/g, '-').split('-')[0];
+        }
+
+        function postLangDiffers(detected) {
+            var left = normalizeUserLang(detected);
+            if (!left) return true; // unknown -> keep the Translate link
+            return left !== normalizeUserLang(userLang);
+        }
+
         let currentDrawMode = 1;
         let isDrawing = false;
         let tempPixelData = new Array(64).fill(0);
         let supporterUsers = {}; // Store supporter usernames as object for ES5 compatibility
 
         function fetchSupporters() {
+            try {
+                var cachedSupporters = localStorage.getItem('rekindle_supporters_cache');
+                if (cachedSupporters) {
+                    var parsedSupporters = JSON.parse(cachedSupporters);
+                    if (parsedSupporters && parsedSupporters.ts && parsedSupporters.data && (Date.now() - parsedSupporters.ts) < 3600000) {
+                        supporterUsers = parsedSupporters.data;
+                        return Promise.resolve();
+                    }
+                }
+            } catch (e) { }
+
             return mainDb.collection('config').doc('supporters').get().then(function (doc) {
                 if (doc.exists) {
                     var data = doc.data();
@@ -1296,6 +1395,9 @@
                             }
                         }
                     }
+                    try {
+                        localStorage.setItem('rekindle_supporters_cache', JSON.stringify({ ts: Date.now(), data: supporterUsers }));
+                    } catch (e) { }
                 }
             }).catch(function (e) {
                 console.error("Error loading supporters:", e);
@@ -1364,10 +1466,7 @@
             // Age verification check (server-side enforced)
             ensureAgeVerified(auth, { closable: false }).then(function () {
                 // Authenticate with social project before loading social data
-                var getSocialToken = firebase.functions().httpsCallable('getSocialToken');
-                return getSocialToken({}).then(function (result) {
-                    return socialAuth.signInWithCustomToken(result.data.token);
-                });
+                return window.rekindleEnsureSocialAuth(auth, socialAuth);
             }).then(function () {
                 fetchSupporters().then(function () {
                     renderSuggestedInterests();
@@ -1407,8 +1506,8 @@
                 var msgEl = document.getElementById('login-overlay-message');
                 if (titleEl) {
                     titleEl.textContent = (typeof window.t === 'function')
-                        ? window.t('suggestions.msg.login_required', 'Please Log In')
-                        : 'Please Log In';
+                        ? window.t('neighbourhood.login.title', 'Log in to join the neighbourhood')
+                        : 'Log in to join the neighbourhood';
                 }
                 if (msgEl) msgEl.textContent = '';
             }
@@ -1442,7 +1541,6 @@
                 const newIsPlus = (e.newValue !== 'false');
                 if (newIsPlus !== isPlus) {
                     isPlus = newIsPlus;
-                    console.log("Pro Status Sync (Neighbourhood): ", isPlus);
                     reRenderRecentPosts();
                 }
             }
@@ -1587,6 +1685,15 @@
             Object.keys(profileData.socialLinks).forEach(function(key) {
                 badWordFields.push(profileData.socialLinks[key]);
             });
+
+            // Banned competitor mentions are blocked everywhere in the profile
+            for (var p = 0; p < badWordFields.length; p++) {
+                if (containsPromotedTerm(badWordFields[p])) {
+                    statusEl.innerText = window.t('neighbourhood.msg.promo', "Promotional content is not allowed. Please remove any mention of competing services.");
+                    statusEl.style.color = '#cc0000';
+                    return;
+                }
+            }
 
             for (var i = 0; i < badWordFields.length; i++) {
                 if (profileContainsBadWords(badWordFields[i])) {
@@ -1771,9 +1878,20 @@
             return 'Anonymous';
         }
 
+        function censorUsername(username) {
+            if (!username) return username;
+            if (window.rekindleCensorPromotedUsername) return window.rekindleCensorPromotedUsername(username);
+            return username;
+        }
+
         function censorProfileText(text) {
-            if (!text || !window.filterBadWords) return text || '';
-            return window.filterBadWords(String(text));
+            if (!text) return '';
+            var out = String(text);
+            // Banned competitor mentions are masked for display as well as blocked
+            // on write, so old profile bios cannot advertise them either.
+            if (window.rekindleCensorPromotedTerms) out = window.rekindleCensorPromotedTerms(out);
+            if (window.filterBadWords) out = window.filterBadWords(out);
+            return out;
         }
 
         function profileContainsBadWords(text) {
@@ -1811,7 +1929,7 @@
                 badgeHtml = '<svg class="supporter-crown" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 4L5 18H19L22 4L15 11L12 4L9 11L2 4Z" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
             }
 
-            document.getElementById('profile-view-name').innerHTML = badgeHtml + escapeHtml(kName);
+            document.getElementById('profile-view-name').innerHTML = badgeHtml + escapeHtml(censorUsername(kName));
 
             const pronouns = profile.pronouns ? `(${censorProfileText(profile.pronouns)})` : '';
             const pronunciation = profile.pronunciation ? `• /${censorProfileText(profile.pronunciation)}/` : '';
@@ -2285,10 +2403,10 @@
             const btn = document.getElementById('btn-toggle-privacy');
             if (btn) {
                 if (myProfile.isPrivate) {
-                    btn.innerText = '🔒 Private';
+                    btn.innerText = 'Private';
                     btn.style.background = '#fee';
                 } else {
-                    btn.innerText = '🔓 Public';
+                    btn.innerText = 'Public';
                     btn.style.background = '';
                 }
             }
@@ -2485,8 +2603,10 @@
                 badgeHtml = '<svg class="supporter-crown" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 4L5 18H19L22 4L15 11L12 4L9 11L2 4Z" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
             }
 
-            const fullName = (dName === kName) ? escapeHtml(dName) :
-                `${escapeHtml(dName)} <span style="font-size:0.8em; font-weight:normal; color:#666; margin-left:5px;">@${escapeHtml(kName)}</span>`;
+            const safeDName = censorUsername(dName);
+            const safeKName = censorUsername(kName);
+            const fullName = (dName === kName) ? escapeHtml(safeDName) :
+                `${escapeHtml(safeDName)} <span style="font-size:0.8em; font-weight:normal; color:#666; margin-left:5px;">@${escapeHtml(safeKName)}</span>`;
 
             document.getElementById('popup-view-name').innerHTML = badgeHtml + fullName;
 
@@ -2565,15 +2685,22 @@
                 msgBtn.onclick = () => {
                     // Open KindleChat with this user's UID and name for faster loading
                     const chatName = getKindleName(user);
-                    window.location.href = `kindlechat.html?chat_with_uid=${user.uid}&name=${encodeURIComponent(chatName)}`;
+                    window.location.href = `kindlechat.html?chat_with_uid=${encodeURIComponent(user.uid)}&name=${encodeURIComponent(chatName)}`;
                 };
             }
         }
 
         function addSocialLink(container, text, url) {
             const a = document.createElement('a');
-            // Validate social link URL to prevent javascript: injection
-            const safeUrl = (/^(https?:|mailto:)/i.test(url)) ? url : '#';
+            // Parse and whitelist the scheme; a regex prefix test can be fooled
+            // by control characters and does not normalise the URL.
+            let safeUrl = '#';
+            try {
+                const parsed = new URL(String(url || ''));
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:') {
+                    safeUrl = parsed.href;
+                }
+            } catch (e) { /* invalid URL -> '#' */ }
             a.href = safeUrl;
             a.target = '_blank';
             a.className = 'social-icon';
@@ -2675,19 +2802,44 @@
                 .replace(/'/g, "&#039;");
         }
 
+        // Escape a value that will sit inside a single-quoted JS string in an
+        // HTML attribute. Backslashes/quotes/newlines are JS-escaped and the
+        // HTML metacharacters are entity-encoded so the attribute survives.
+        function escapeJsString(text) {
+            if (text === null || text === undefined) return "";
+            return String(text)
+                .replace(/\\/g, "\\\\")
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
         function containsUrl(text) {
             if (!text) return false;
+            // js/link-guard.js normalises obfuscated links ("netlify,app",
+            // "netlify dot app", "[.]", full-width dots) before matching, so a
+            // domain split by commas/spaces cannot dodge the filter. The
+            // legacy checks below stay as a fallback if the helper failed to load.
+            if (window.rekindleContainsLink) return window.rekindleContainsLink(text);
             var t = String(text).toLowerCase();
-            var protocolLike = /h\s*t\s*t\s*p\s*s?\s*[:/]{1,4}/.test(t);
-            var wwwLike = /\bwww\./.test(t);
-            var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link)\b/.test(t);
-            var ipLike = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(t);
+            var protocolLike = /h\s*[xt]\s*[xt]\s*p\s*s?\s*[:/]{1,4}/.test(t);
+            var wwwLike = /\bwww\s*\./.test(t);
+            var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link|ly|sh)\b/.test(t);
+            var ipLike = /\b\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\b/.test(t);
             return protocolLike || wwwLike || domainLike || ipLike;
         }
 
         function containsPromotedTerm(text) {
             if (!text) return false;
-            return /\b(?:unreader|un-reader|inkchat|kindlehub)\b/i.test(String(text));
+            // js/promo-ban.js folds homoglyphs, leetspeak, "DOT" and separators
+            // before matching, so "kindlеhub", "khub" and "kindlehubDOTpro" are
+            // all caught. Fallback keeps a basic net if the helper failed to load.
+            if (window.rekindleContainsPromotedTerm) return window.rekindleContainsPromotedTerm(text);
+            return /\b(?:unreader|un-reader|inkchat|kindlehub|khub)\b/i.test(String(text));
         }
 
         function escapeJs(text) {
@@ -2748,12 +2900,17 @@
         // --- POSTS FEATURE ---
         let postsListener = null;
         let recentPosts = [];
+        // Every post we have ever rendered, including paginated pages, so admin
+        // mode and editPost() still work after they drop out of recentPosts.
+        const postsById = new Map();
         let isAdminMode = false;
         let isCurrentUserMod = false;
         let isModeratorMode = false;
         let openCommentsPosts = new Set();
         const commentListeners = new Map();
         const PAGE_SIZE = 10;
+        // Matches the comments query limit in loadComments().
+        const COMMENT_PAGE_SIZE = 100;
         const renderedPostKeys = new Set();
         let oldestPostKey = null;
         let oldestPostDoc = null;
@@ -2801,6 +2958,7 @@
                         docs.forEach(doc => {
                             const post = { id: doc.id, ...doc.data() };
                             recentPosts.push(post);
+                            postsById.set(post.id, post);
                             renderedPostKeys.add(doc.id);
                         });
                         if (recentPosts.length > 0) {
@@ -2810,7 +2968,7 @@
                         if (docs.length < PAGE_SIZE) allPostsLoaded = true;
                         recentPosts.forEach(post => renderPostItem(post, feed));
                     } else {
-                        feed.innerHTML = '<div style="text-align:center; color:#666;" data-empty="true">No posts yet. Be the first!</div>';
+                        feed.innerHTML = emptyFeedHtml();
                         allPostsLoaded = true;
                     }
                     updateEndOfFeed(feed);
@@ -2822,12 +2980,42 @@
                             if (!renderedPostKeys.has(change.doc.id)) {
                                 renderedPostKeys.add(change.doc.id);
                                 recentPosts.unshift(post);
+                                postsById.set(post.id, post);
                                 const emptyEl = feed.querySelector('[data-empty]');
                                 if (emptyEl) emptyEl.remove();
                                 renderPostItem(post, feed, true);
                             }
+                        } else if (change.type === 'modified') {
+                            // Edits (editPost) and translation-worker writes both
+                            // arrive as `modified`. Without this branch an admin
+                            // edit did nothing on screen and a fresh post stayed in
+                            // its original language until a reload.
+                            const previous = postsById.get(post.id);
+                            const idx = recentPosts.findIndex(p => p.id === change.doc.id);
+                            if (idx !== -1) recentPosts[idx] = post;
+                            postsById.set(post.id, post);
+                            const existingCard = feed.querySelector('[data-post-id="' + change.doc.id + '"]');
+                            if (existingCard) {
+                                // A new comment bumps commentCount on the post doc,
+                                // which arrives as `modified` for every viewer.
+                                // Rebuilding the card would throw away the open
+                                // comment list and re-read it, so only refresh the
+                                // number when nothing else changed.
+                                if (previous && postRenderSignature(previous) === postRenderSignature(post)) {
+                                    setCommentCount(post.id, post.commentCount);
+                                    return;
+                                }
+                                const nextNode = existingCard.nextSibling;
+                                existingCard.remove();
+                                renderPostItem(post, feed);
+                                const fresh = feed.querySelector('[data-post-id="' + change.doc.id + '"]');
+                                if (fresh && nextNode && nextNode.parentNode === feed) {
+                                    feed.insertBefore(fresh, nextNode);
+                                }
+                            }
                         } else if (change.type === 'removed') {
                             renderedPostKeys.delete(change.doc.id);
+                            postsById.delete(change.doc.id);
                             recentPosts = recentPosts.filter(p => p.id !== change.doc.id);
                             const card = feed.querySelector('[data-post-id="' + change.doc.id + '"]');
                             if (card) card.remove();
@@ -2837,7 +3025,7 @@
                                 commentListeners.delete(change.doc.id);
                             }
                             if (recentPosts.length === 0) {
-                                feed.innerHTML = '<div style="text-align:center; color:#666;" data-empty="true">No posts yet. Be the first!</div>';
+                                feed.innerHTML = emptyFeedHtml();
                             }
                         }
                     });
@@ -2845,12 +3033,31 @@
             }, err => {
                 console.error('[Posts] snapshot error:', err);
                 loader.style.display = 'none';
+                // A rejected read used to leave an empty feed that looked like
+                // "no posts yet" (the common cause is an exhausted Firestore
+                // quota or an auth problem, not an empty feed).
+                if (feed.children.length === 0) {
+                    const msg = window.t ? window.t('neighbourhood.msg.posts_failed', 'Could not load posts. Please try again later.') : 'Could not load posts. Please try again later.';
+                    feed.innerHTML = '<div style="text-align:center;padding:20px;font-size:0.8rem;color:#666;">' + msg + '</div>';
+                }
             });
 
             // Infinite scroll — listen on the scrollable view panel
             const panel = document.getElementById('view-posts');
             panel.addEventListener('scroll', onPostsPanelScroll);
         }
+
+        // Nothing used to detach these: a bfcache-restored page kept receiving
+        // snapshots and the whole feed DOM stayed retained.
+        window.addEventListener('pagehide', function () {
+            if (postsListener) {
+                try { postsListener(); } catch (e) { }
+                postsListener = null;
+            }
+            detachAllCommentListeners();
+            var panel = document.getElementById('view-posts');
+            if (panel) panel.removeEventListener('scroll', onPostsPanelScroll);
+        });
 
         function onPostsPanelScroll() {
             if (loadingMore || allPostsLoaded) return;
@@ -2889,7 +3096,11 @@
                     if (olderPosts.length < PAGE_SIZE) allPostsLoaded = true;
                     oldestPostDoc = snap.docs[snap.docs.length - 1];
                     oldestPostKey = olderPosts[olderPosts.length - 1].id;
-                    olderPosts.forEach(post => renderPostItem(post, feed));
+                    olderPosts.forEach(post => {
+                        recentPosts.push(post);
+                        postsById.set(post.id, post);
+                        renderPostItem(post, feed);
+                    });
                 }
             } catch (e) {
                 console.error('[Posts] loadMore error:', e);
@@ -2897,6 +3108,13 @@
 
             loadingMore = false;
             updateEndOfFeed(feed);
+        }
+
+        function emptyFeedHtml() {
+            return '<div data-empty="true">' + window.rekindleEmptyState(
+                window.t('neighbourhood.msg.no_posts', 'No posts yet. Be the first!'),
+                { icon: 'chat', compact: true }
+            ) + '</div>';
         }
 
         function updateEndOfFeed(feed) {
@@ -2917,15 +3135,74 @@
             // Rerender list
             const feed = document.getElementById('posts-feed');
             feed.innerHTML = '';
+            detachAllCommentListeners();
             recentPosts.forEach(post => renderPostItem(post, feed));
+            updateEndOfFeed(feed);
         }
 
         function toggleModeratorMode(enabled) {
             isModeratorMode = enabled;
             const feed = document.getElementById('posts-feed');
             feed.innerHTML = '';
+            detachAllCommentListeners();
             recentPosts.forEach(post => renderPostItem(post, feed));
+            updateEndOfFeed(feed);
         }
+
+        // Everything renderPostItem() paints. commentCount is deliberately not
+        // part of the signature: a new comment bumps it and must refresh just
+        // the number, not rebuild the card (which would drop the open comment
+        // list and re-read it through the listener).
+        function postRenderSignature(post) {
+            if (!post) return '';
+            return (post.uid || '') + '\u0001' + (post.text || '') + '\u0001' +
+                (post.lang || '') + '\u0001' +
+                (post.translation ? JSON.stringify(post.translation) : '');
+        }
+
+        // Comment counts are denormalised onto the post document (the worker
+        // increments it when it creates a comment) so the feed can show
+        // "Comments (3)" without subscribing to the comments subcollection of
+        // every visible post. Keep the cached post objects in step as well so a
+        // later re-render does not fall back to the old number.
+        function setCommentCount(postId, count) {
+            const n = (typeof count === 'number' && isFinite(count)) ? Math.max(0, Math.round(count)) : 0;
+            const cached = postsById.get(postId);
+            if (cached) cached.commentCount = n;
+            for (let i = 0; i < recentPosts.length; i++) {
+                if (recentPosts[i].id === postId) recentPosts[i].commentCount = n;
+            }
+            const countEl = document.getElementById('comments-count-' + postId);
+            if (countEl) countEl.innerText = n > 0 ? ' (' + n + ')' : '';
+        }
+
+        // Comments are deleted client-side (firestore-social rules allow the
+        // author, moderators and the developer), so the count has to be
+        // decremented client-side too. The transaction clamps at 0 so a legacy
+        // post without a counter, or a double delete, cannot go negative.
+        function adjustPostCommentCount(postId, delta) {
+            if (!postId || !delta) return;
+            const postRef = socialDb.collection('neighbourhood_posts').doc(postId);
+            socialDb.runTransaction(function (tx) {
+                return tx.get(postRef).then(function (snap) {
+                    if (!snap.exists) return null;
+                    const data = snap.data() || {};
+                    const current = (typeof data.commentCount === 'number') ? data.commentCount : 0;
+                    const next = Math.max(0, current + delta);
+                    tx.update(postRef, { commentCount: next });
+                    return next;
+                });
+            }).then(function (next) {
+                if (next === null || next === undefined) return;
+                setCommentCount(postId, next);
+            }).catch(function (e) {
+                console.error('[Comments] Failed to adjust commentCount:', e);
+            });
+        }
+
+        var postTranslations = {};
+        var commentTranslations = {};
+        var pendingCommentTranslations = {};
 
         function renderPostItem(post, container, prepend = false) {
             const div = document.createElement('div');
@@ -2951,8 +3228,18 @@
             let isTranslatedDisplay = false;
             let toggleBtnHtml = '';
             var translationText = "";
+            var postLang = normalizeUserLang(post.lang || '');
+            var myLang = normalizeUserLang(typeof userLang !== 'undefined' ? userLang : 'en');
+            var langDiffers = postLangDiffers(postLang);
+            var postKnownForeign = !!postLang && postLang !== myLang;
 
-            if (post.translation) {
+            if (postTranslations[post.id]) {
+                isTranslatedDisplay = true;
+                translationText = postTranslations[post.id];
+                displayText = translationText;
+                const autoLabel = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+                toggleBtnHtml = `<div style="margin-top: 5px;"><span id="toggle-${escapeHtml(post.id)}" onclick="toggleTranslation('${escapeHtml(post.id)}')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer;">${autoLabel}</span></div>`;
+            } else if (post.translation) {
                 var originalTextLowercase = (post.text || "").toLowerCase().trim();
                 if (typeof post.translation === 'string') {
                     if (originalTextLowercase !== post.translation.toLowerCase().trim()) {
@@ -2981,12 +3268,33 @@
                 toggleBtnHtml = `<div style="margin-top: 5px;"><span id="toggle-${escapeHtml(post.id)}" onclick="toggleTranslation('${escapeHtml(post.id)}')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer;">${trLabel}</span></div>`;
             }
 
+            // Show the Translate link only when the stored detected language
+            // differs from this reader's language. Unknown old posts keep it.
+            let translateBtnHtml = '';
+            if (!isTranslatedDisplay && currentUser && post.uid && post.uid !== currentUser.uid && post.text && postKnownForeign) {
+                // Visible only for a known foreign post. Unknown legacy posts
+                // are auto-detected on view without a manual button.
+                const tlLabel = window.t ? window.t('translate.btn.translate', 'Translate') : 'Translate';
+                translateBtnHtml = `<div style="margin-top: 5px;"><span id="translate-${escapeHtml(post.id)}" onclick="requestPostTranslation('${escapeHtml(post.id)}')" style="display:none; font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer;">${tlLabel}</span></div>`;
+            }
+
             if (window.filterBadWords) {
                 displayText = window.filterBadWords(displayText);
             }
 
             // Resolve user card and build full HTML
             window.rekindleFetchUserCard(db, post.uid, function (card) {
+                // A translation may have landed while the card lookup was in
+                // flight; re-check before building the HTML so the card shows
+                // the translation and its Show Original control immediately.
+                if (postTranslations[post.id]) {
+                    isTranslatedDisplay = true;
+                    translationText = postTranslations[post.id];
+                    displayText = translationText;
+                    const lateLabel = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+                    toggleBtnHtml = `<div style="margin-top: 5px;"><span id="toggle-${escapeHtml(post.id)}" onclick="toggleTranslation('${escapeHtml(post.id)}')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer;">${lateLabel}</span></div>`;
+                    translateBtnHtml = '';
+                }
                 const username = (card && card.username) ? card.username : (post.uid ? post.uid.substring(0, 8) : 'Unknown');
                 const isDev = (username === 'ukiyo');
                 const isPro = supporterUsers[username] || false;
@@ -3014,18 +3322,10 @@
                 // Report controls (visible to all authenticated users) - circular ! style
                 let reportControls = '';
                 if (currentUser && post.uid && post.uid !== currentUser.uid) {
-                    var safePostId = escapeHtml(post.id);
-                    var safeReportedUid = escapeHtml(post.uid);
-                    var postSnapshot = (post.text || '')
-                        .replace(/\\/g, '\\\\\\\\')
-                        .replace(/'/g, "\\'")
-                        .replace(/\n/g, '\\n')
-                        .replace(/\r/g, '\\r')
-                        .replace(/\u0026/g, '\u0026amp;')
-                        .replace(/\u003c/g, '\u0026lt;')
-                        .replace(/\u003e/g, '\u0026gt;')
-                        .replace(/"/g, '\u0026quot;');
-                    reportControls = `<div class="report-btn" onclick="rekindleOpenReportModal({contentType:'neighbourhood_post',contentId:'${safePostId}',contentPath:'neighbourhood_posts/${safePostId}',reportedUserId:'${safeReportedUid}',contentSnapshot:'${postSnapshot}'})" title="Report">!</div>`;
+                    var safePostId = escapeJsString(post.id);
+                    var safeReportedUid = escapeJsString(post.uid);
+                    var postSnapshot = escapeJsString(post.text || '');
+                    reportControls = `<div class="report-btn" onclick="rekindleOpenReportModal({contentType:'neighbourhood_post',contentId:'${safePostId}',contentPath:'neighbourhood_posts/${safePostId}',reportedUserId:'${safeReportedUid}',contentSnapshot:'${postSnapshot}'})" title="Report"><span class="report-dot">!</span></div>`;
                 }
 
                 let nameBadge = '';
@@ -3035,6 +3335,8 @@
                     nameBadge = '<svg class="supporter-crown" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 4L5 18H19L22 4L15 11L12 4L9 11L2 4Z" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
                 }
 
+                const commentCount = (typeof post.commentCount === 'number' && post.commentCount > 0) ? Math.round(post.commentCount) : 0;
+
                 div.innerHTML = `
                     ${adminControls}
                     <div style="display:flex; align-items:flex-start;">
@@ -3043,22 +3345,22 @@
                              <div style="display:flex; justify-content:space-between; align-items:center; min-width:0;">
                                 <div class="post-name-row" onclick="openUserProfile('${escapeHtml(post.uid)}')">
                                     ${nameBadge ? `<span style="margin-right:4px; display:flex; align-items:center; flex-shrink:0;">${nameBadge}</span>` : ''}
-                                    <strong style="font-size:0.95rem; margin-right:4px;">${escapeHtml(username)}</strong>
+                                    <strong style="font-size:0.95rem; margin-right:4px;">${escapeHtml(censorUsername(username))}</strong>
                                 </div>
                                 <div style="display:flex; align-items:center; flex-shrink:0; margin-left:5px; margin-right:${isAdminMode ? '100px' : '0'};">
                                     <small style="color:#666; font-size:0.75rem; white-space:nowrap;">${timeStr}</small>
                                     ${modPostControls}${reportControls}
                                 </div>
                              </div>
-                             <div id="post-text-${post.id}" data-state="${isTranslatedDisplay ? 'translated' : 'original'}" data-original="${escapeHtml(post.text)}" data-translated="${escapeHtml(translationText || '')}" style="white-space:pre-wrap; font-size:0.9rem; line-height:1.4; margin-top:5px; ${isTranslatedDisplay ? 'font-style:italic;' : ''}">${escapeHtml(displayText)}</div>
-                             ${toggleBtnHtml}
+                             <div id="post-text-${post.id}" data-state="${isTranslatedDisplay ? 'translated' : 'original'}" data-lang="${escapeHtml(postLang)}" data-original="${escapeHtml(censorProfileText(post.text))}" data-translated="${escapeHtml(censorProfileText(translationText || ''))}" style="white-space:pre-wrap; font-size:0.9rem; line-height:1.4; margin-top:5px; ${isTranslatedDisplay ? 'font-style:italic;' : ''}">${escapeHtml(censorProfileText(displayText))}</div>
+                             <div id="post-trans-${escapeHtml(post.id)}">${toggleBtnHtml}${translateBtnHtml}</div>
                         </div>
                     </div>
                     <!-- COMMENTS SECTION -->
                     <div class="comments-section">
                         <span class="comments-toggle" onclick="toggleComments('${post.id}', this)">
                             <svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align: middle; margin-right: 2px; display: inline-block;"><rect x="3" y="3" width="18" height="14" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7 17v4l4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-                            <span class="toggle-text">${openCommentsPosts.has(post.id) ? 'Hide Comments' : 'Comments'}</span><span id="comments-count-${post.id}"></span>
+                            <span class="toggle-text">${openCommentsPosts.has(post.id) ? 'Hide Comments' : 'Comments'}</span><span id="comments-count-${post.id}">${commentCount > 0 ? ' (' + commentCount + ')' : ''}</span>
                         </span>
                         <div id="comments-area-${post.id}" style="display:${openCommentsPosts.has(post.id) ? 'block' : 'none'};">
                             <div id="comments-list-${post.id}" class="comments-list"></div>
@@ -3078,9 +3380,15 @@
                 const cvs = document.getElementById(avatarId);
                 if (cvs) cvs.onclick = () => openUserProfile(post.uid);
 
-                // Load comments for this post
-                const commentsContainer = div.querySelector(`#comments-list-${post.id}`);
-                if (commentsContainer) loadComments(post.id, commentsContainer);
+                if (!isTranslatedDisplay && currentUser && post.uid && post.uid !== currentUser.uid && langDiffers && !postTranslations[post.id]) {
+                    queuePostAutoTranslation(post, postLang || 'auto', myLang);
+                }
+
+                // Only re-attach comments if this post was re-rendered while expanded
+                if (openCommentsPosts.has(post.id)) {
+                    const commentsContainer = div.querySelector(`#comments-list-${post.id}`);
+                    if (commentsContainer) loadComments(post.id, commentsContainer);
+                }
             });
         }
 
@@ -3093,12 +3401,31 @@
 
             if (isHidden) {
                 openCommentsPosts.add(postId);
+                loadComments(postId);
             } else {
                 openCommentsPosts.delete(postId);
+                unloadComments(postId);
+                const listContainer = document.getElementById('comments-list-' + postId);
+                if (listContainer) listContainer.innerHTML = '';
             }
 
             const textEl = toggleEl.querySelector('.toggle-text');
             if (textEl) textEl.innerText = isHidden ? 'Hide Comments' : 'Comments';
+        }
+
+        function unloadComments(postId) {
+            if (commentListeners.has(postId)) {
+                const { unsubscribe } = commentListeners.get(postId);
+                unsubscribe();
+                commentListeners.delete(postId);
+            }
+        }
+
+        function detachAllCommentListeners() {
+            commentListeners.forEach(function (entry) {
+                entry.unsubscribe();
+            });
+            commentListeners.clear();
         }
 
         function loadComments(postId, specificContainer = null) {
@@ -3114,51 +3441,101 @@
 
             const commentsRef = socialDb.collection('neighbourhood_posts').doc(postId).collection('comments')
                 .orderBy('timestamp', 'desc')
-                .limit(100);
+                .limit(COMMENT_PAGE_SIZE);
+            let isFirstSnapshot = true;
             const unsubscribe = commentsRef.onSnapshot(snapshot => {
-                listContainer.innerHTML = '';
-                if (snapshot.empty) return;
-
-                const comments = [];
-                snapshot.forEach(doc => {
-                    comments.push({ id: doc.id, ...doc.data() });
-                });
-
-                // Update count in toggle
-                const countEl = document.getElementById('comments-count-' + postId);
-                if (countEl) {
-                    countEl.innerText = comments.length > 0 ? ' (' + comments.length + ')' : '';
+                // The open list is authoritative, so it also repairs a counter
+                // that drifted (a failed worker increment) and fills in a missing
+                // one on posts that predate the field. Skipped at the query cap
+                // because snapshot.size is then only a lower bound.
+                if (snapshot.size < COMMENT_PAGE_SIZE) {
+                    const cached = postsById.get(postId);
+                    const stored = (cached && typeof cached.commentCount === 'number') ? cached.commentCount : null;
+                    setCommentCount(postId, snapshot.size);
+                    // Only the first snapshot is written back. Re-checking on
+                    // every incremental snapshot would race the worker's own
+                    // increment and cost one extra write per comment for every
+                    // viewer with the section open.
+                    if (stored === null || (isFirstSnapshot && stored !== snapshot.size)) {
+                        socialDb.collection('neighbourhood_posts').doc(postId)
+                            .update({ commentCount: snapshot.size })
+                            .catch(function (e) { console.error('[Comments] count repair failed:', e); });
+                    }
                 }
+                isFirstSnapshot = false;
 
-                // Render oldest first
-                comments.reverse();
+                // Incremental updates: query is newest-first, DOM is oldest-first,
+                // so each doc is inserted before the element of the doc one index newer.
+                snapshot.docChanges().forEach(change => {
+                    const commentId = change.doc.id;
+                    const existing = listContainer.querySelector('[data-comment-id="' + commentId + '"]');
 
-                // Render each comment
-                for (const comment of comments) {
-                    renderComment(comment, postId, listContainer);
+                    if (change.type === 'removed') {
+                        if (existing) existing.remove();
+                        return;
+                    }
+
+                    if (change.type === 'added' && existing) return;
+                    if (change.type === 'modified' && existing) existing.remove();
+
+                    const comment = { id: commentId, ...change.doc.data() };
+                    const newerDoc = change.newIndex > 0 ? snapshot.docs[change.newIndex - 1] : null;
+                    const beforeEl = newerDoc ? listContainer.querySelector('[data-comment-id="' + newerDoc.id + '"]') : null;
+                    renderComment(comment, postId, listContainer, beforeEl);
+                });
+            }, err => {
+                // Without this the toggle silently stayed empty when the read was
+                // rejected (permission, quota, offline) and looked like "no
+                // comments" rather than a failure.
+                console.error('[Comments] snapshot error:', err);
+                if (listContainer) {
+                    const msg = window.t ? window.t('neighbourhood.msg.comments_failed', 'Could not load comments.') : 'Could not load comments.';
+                    listContainer.innerHTML = '<div style="font-size:0.75rem;color:#666;padding:4px 0;">' + msg + '</div>';
                 }
             });
             commentListeners.set(postId, { unsubscribe: unsubscribe });
         }
 
-        function renderComment(comment, postId, container) {
+        function renderComment(comment, postId, container, beforeEl) {
             const date = new Date(getTimestampMillis(comment.timestamp));
             const timeStr = window.rekindleFormatTime ? window.rekindleFormatTime(date, { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // Profanity filter
-            let displayText = comment.text;
-            if (window.filterBadWords) {
-                displayText = window.filterBadWords(displayText);
+            // Profanity + banned competitor mentions
+            let displayText = censorProfileText(comment.text);
+            var commentLang = normalizeUserLang(comment.lang || '');
+            var commentMyLang = normalizeUserLang(typeof userLang !== 'undefined' ? userLang : 'en');
+            var commentLangDiffers = postLangDiffers(commentLang);
+            var commentKnownForeign = !!commentLang && commentLang !== commentMyLang;
+            var commentKey = postId + '/' + comment.id;
+            var commentIsTranslated = false;
+            var commentToggleHtml = '';
+            var commentTranslateHtml = '';
+            if (commentTranslations[commentKey]) {
+                commentIsTranslated = true;
+                displayText = censorProfileText(commentTranslations[commentKey]);
+                var cmtToggleLabel = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+                commentToggleHtml = '<span id="cmt-toggle-' + escapeHtml(comment.id) + '" onclick="toggleCommentTranslation(\'' + escapeJsString(postId) + '\', \'' + escapeJsString(comment.id) + '\')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;">' + cmtToggleLabel + '</span>';
+            } else if (commentKnownForeign && currentUser && comment.uid && comment.uid !== currentUser.uid) {
+                var cmtTlLabel = window.t ? window.t('translate.btn.translate', 'Translate') : 'Translate';
+                commentTranslateHtml = '<span id="cmt-translate-' + escapeHtml(comment.id) + '" onclick="requestCommentTranslation(\'' + escapeJsString(postId) + '\', \'' + escapeJsString(comment.id) + '\')" style="display:none; font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;">' + cmtTlLabel + '</span>';
             }
 
             const commentDiv = document.createElement('div');
             commentDiv.className = 'comment-item';
             commentDiv.dataset.uid = comment.uid;
+            commentDiv.dataset.commentId = comment.id;
             commentDiv.style.position = 'relative';
-            container.appendChild(commentDiv);
+            container.insertBefore(commentDiv, beforeEl || null);
 
             // Resolve user card and build HTML
             window.rekindleFetchUserCard(db, comment.uid, function (card) {
+                if (commentTranslations[commentKey]) {
+                    commentIsTranslated = true;
+                    displayText = censorProfileText(commentTranslations[commentKey]);
+                    var lateCmtLabel = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+                    commentToggleHtml = '<span id="cmt-toggle-' + escapeHtml(comment.id) + '" onclick="toggleCommentTranslation(\'' + escapeJsString(postId) + '\', \'' + escapeJsString(comment.id) + '\')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;">' + lateCmtLabel + '</span>';
+                    commentTranslateHtml = '';
+                }
                 const username = (card && card.username) ? card.username : (comment.uid ? comment.uid.substring(0, 8) : 'Unknown');
                 const isDev = (username === 'ukiyo');
                 if (!isDev && currentUser && comment.uid === currentUser.uid && currentUser.email === 'ukiyo@rekindle.ink') isDev = true;
@@ -3191,18 +3568,10 @@
                 // Report controls for comments (visible to all authenticated users) - circular ! style
                 let reportCommentControls = '';
                 if (currentUser && comment.uid && comment.uid !== currentUser.uid) {
-                    var safeCommentId = escapeHtml(comment.id);
-                    var safeReportedCommentUid = escapeHtml(comment.uid);
-                    var commentSnapshot = (comment.text || '')
-                        .replace(/\\/g, '\\\\\\\\')
-                        .replace(/'/g, "\\'")
-                        .replace(/\n/g, '\\n')
-                        .replace(/\r/g, '\\r')
-                        .replace(/\u0026/g, '\u0026amp;')
-                        .replace(/\u003c/g, '\u0026lt;')
-                        .replace(/\u003e/g, '\u0026gt;')
-                        .replace(/"/g, '\u0026quot;');
-                    reportCommentControls = `<div class="report-btn" onclick="rekindleOpenReportModal({contentType:'neighbourhood_comment',contentId:'${safeCommentId}',contentPath:'neighbourhood_posts/${escapeHtml(postId)}/comments/${safeCommentId}',reportedUserId:'${safeReportedCommentUid}',contentSnapshot:'${commentSnapshot}'})" title="Report">!</div>`;
+                    var safeCommentId = escapeJsString(comment.id);
+                    var safeReportedCommentUid = escapeJsString(comment.uid);
+                    var commentSnapshot = escapeJsString(comment.text || '');
+                    reportCommentControls = `<div class="report-btn" onclick="rekindleOpenReportModal({contentType:'neighbourhood_comment',contentId:'${safeCommentId}',contentPath:'neighbourhood_posts/${escapeHtml(postId)}/comments/${safeCommentId}',reportedUserId:'${safeReportedCommentUid}',contentSnapshot:'${commentSnapshot}'})" title="Report"><span class="report-dot">!</span></div>`;
                 }
 
                 commentDiv.innerHTML = `
@@ -3210,16 +3579,125 @@
                     <div style="display:flex; align-items:center; min-width:0;">
                         <div class="comment-name-row" onclick="openUserProfile('${escapeHtml(comment.uid)}')">
                             ${nameBadge ? '<span style="margin-right:3px; display:inline-flex; align-items:center; flex-shrink:0;">' + nameBadge + '</span>' : ''}
-                            <strong style="font-size:0.85rem;">${escapeHtml(username)}</strong>
+                            <strong style="font-size:0.85rem;">${escapeHtml(censorUsername(username))}</strong>
                         </div>
                         <small style="color:#666; font-size:0.7rem; white-space:nowrap; flex-shrink:0; margin-left:5px;">${timeStr}</small>
                         ${modCommentControls}${reportCommentControls}
                     </div>
-                    <div style="margin-top:2px; font-size:0.85rem; line-height:1.3;">${escapeHtml(displayText)}</div>
+                    <div id="cmt-text-${escapeHtml(comment.id)}" data-lang="${escapeHtml(commentLang)}" data-state="${commentIsTranslated ? 'translated' : 'original'}" data-original="${escapeHtml(censorProfileText(comment.text))}" data-translated="${escapeHtml(censorProfileText(commentTranslations[commentKey] || ''))}" style="margin-top:2px; font-size:0.85rem; line-height:1.3; ${commentIsTranslated ? 'font-style:italic;' : ''}">${escapeHtml(displayText)}</div>
+                    ${(commentToggleHtml || commentTranslateHtml) ? '<div id="cmt-trans-' + escapeHtml(comment.id) + '">' + commentToggleHtml + commentTranslateHtml + '</div>' : ''}
                 `;
 
                 renderEmojis(commentDiv);
+
+                if (currentUser && comment.uid && comment.uid !== currentUser.uid && commentLangDiffers && !commentTranslations[commentKey]) {
+                    queueCommentAutoTranslation(postId, comment, commentLang || 'auto', commentMyLang);
+                }
             });
+        }
+
+        function applyCommentTranslation(postId, commentId, translated) {
+            var el = document.getElementById('cmt-text-' + commentId);
+            if (!el) return;
+            var safe = translated;
+            if (window.censorProfileText) safe = window.censorProfileText(safe);
+            if (window.filterBadWords) safe = window.filterBadWords(safe);
+            el.setAttribute('data-translated', safe);
+            el.setAttribute('data-state', 'translated');
+            el.style.fontStyle = 'italic';
+            el.textContent = safe;
+
+            var link = document.getElementById('cmt-translate-' + commentId);
+            if (link && link.parentNode) link.parentNode.removeChild(link);
+
+            var controls = document.getElementById('cmt-trans-' + commentId) || el.nextElementSibling;
+            if (controls && !document.getElementById('cmt-toggle-' + commentId)) {
+                var span = document.createElement('span');
+                span.id = 'cmt-toggle-' + commentId;
+                span.style.cssText = 'font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;';
+                span.textContent = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+                span.onclick = function () { toggleCommentTranslation(postId, commentId); };
+                controls.appendChild(span);
+            }
+        }
+
+        function toggleCommentTranslation(postId, commentId) {
+            var el = document.getElementById('cmt-text-' + commentId);
+            var toggle = document.getElementById('cmt-toggle-' + commentId);
+            if (!el || !toggle) return;
+            var state = el.getAttribute('data-state');
+            var original = el.getAttribute('data-original') || '';
+            var translated = el.getAttribute('data-translated') || '';
+            if (state === 'translated') {
+                el.setAttribute('data-state', 'original');
+                el.textContent = original;
+                el.style.fontStyle = 'normal';
+                toggle.textContent = window.t ? window.t('kindlechat.msg.show_translated', 'Show Translated') : 'Show Translated';
+            } else {
+                el.setAttribute('data-state', 'translated');
+                el.textContent = translated;
+                el.style.fontStyle = 'italic';
+                toggle.textContent = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+            }
+        }
+
+        function requestCommentTranslation(postId, commentId) {
+            var el = document.getElementById('cmt-text-' + commentId);
+            var link = document.getElementById('cmt-translate-' + commentId);
+            if (!el || !link || pendingCommentTranslations[commentId]) return;
+            var text = el.getAttribute('data-original') || '';
+            if (!text) return;
+            if (!window.rekindleTranslateClient) {
+                link.textContent = window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+                return;
+            }
+            var target = normalizeUserLang(typeof userLang !== 'undefined' ? userLang : 'en') || 'en';
+            var source = el.getAttribute('data-lang') || 'auto';
+            pendingCommentTranslations[commentId] = true;
+            link.textContent = window.t('translate.msg.translating', 'Translating...');
+            window.rekindleTranslateClient.translate(text, source, target).then(function (translated) {
+                delete pendingCommentTranslations[commentId];
+                if (!translated || String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                    link.textContent = window.t('translate.msg.same_language', 'Already in this language');
+                    return;
+                }
+                commentTranslations[postId + '/' + commentId] = translated;
+                applyCommentTranslation(postId, commentId, translated);
+            })['catch'](function (e) {
+                delete pendingCommentTranslations[commentId];
+                link.textContent = (e && e.code === 'budget')
+                    ? window.t('translate.msg.budget', 'Translation limit for this session reached. Try again later.')
+                    : window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+            });
+        }
+
+        function showCommentTranslateLink(commentId) {
+            var link = document.getElementById('cmt-translate-' + commentId);
+            if (link) link.style.display = 'inline-block';
+        }
+
+        function queueCommentAutoTranslation(postId, comment, source, target) {
+            var client = window.rekindleTranslateClient;
+            if (!client || typeof client.autoTranslate !== 'function') return;
+            var key = postId + '/' + comment.id;
+            var queued = client.autoTranslate({
+                id: 'neighbourhood-comment:' + key,
+                text: comment.text || '',
+                source: source,
+                target: target,
+                onFail: function () { showCommentTranslateLink(comment.id); },
+                apply: function (translated) {
+                    if (!translated) return;
+                    if (String(translated).toLowerCase().trim() === String(comment.text || '').toLowerCase().trim()) {
+                        var sameLink = document.getElementById('cmt-translate-' + comment.id);
+                        if (sameLink && sameLink.parentNode) sameLink.parentNode.removeChild(sameLink);
+                        return;
+                    }
+                    commentTranslations[key] = translated;
+                    applyCommentTranslation(postId, comment.id, translated);
+                }
+            });
+            if (!queued) showCommentTranslateLink(comment.id);
         }
 
         function submitComment(postId) {
@@ -3235,35 +3713,35 @@
             if (containsUrl(text)) { showAlertModal("Links and URLs are not allowed."); return; }
             if (containsPromotedTerm(text)) { showAlertModal("Promotional content is not allowed."); return; }
 
-            // Timeout check
-            db.ref('timeouts/' + currentUser.uid).once('value').then(function(snap) {
-                var t = snap.val();
-                console.log('[Timeout check] Data:', t);
-                if (t && t.until > Date.now()) {
-                    var remaining = Math.ceil((t.until - Date.now()) / 60000);
-                    showAlertModal('You are timed out. Please wait ' + remaining + ' minute(s) before posting.');
-                    return;
-                }
-                doSubmitComment(postId, input, text);
-            }).catch(function(err) {
-                console.error('[Timeout check] Error reading timeout:', err && err.code ? err.code : err);
-                doSubmitComment(postId, input, text);
-            });
+            doSubmitComment(postId, input, text);
         }
 
         function doSubmitComment(postId, input, text) {
             input.disabled = true;
 
             var tokenSource = socialAuth.currentUser || currentUser;
-            tokenSource.getIdToken(true).then(function (token) {
-                return fetch(MODERATION_WORKER_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
-                    },
-                    body: JSON.stringify({ type: 'neighbourhood_comment', postId: postId, text: text })
-                }).then(function (resp) { return resp.json(); });
+            // Cached token first; force a refresh only if the worker rejects it.
+            tokenSource.getIdToken().then(function (token) {
+                function postWith(t) {
+                    return fetch(MODERATION_WORKER_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + t
+                        },
+                        body: JSON.stringify({ type: 'neighbourhood_comment', postId: postId, text: text, lang: detectPostLang(text) })
+                    });
+                }
+                return postWith(token).then(function (resp) {
+                    if (resp.status === 401 || resp.status === 403) {
+                        return tokenSource.getIdToken(true).then(postWith);
+                    }
+                    return resp;
+                }).then(function (resp) {
+                    return window.rekindleWorkerClient
+                        ? window.rekindleWorkerClient.readJson(resp)
+                        : resp.json();
+                });
             }).then(function (result) {
                 if (result.error) {
                     showAlertModal(result.error);
@@ -3272,8 +3750,12 @@
                 }
                 input.value = '';
                 input.disabled = false;
+                loadPostLanguageSoon();
             }).catch(err => {
-                if (err && err.code === 'PERMISSION_DENIED') {
+                var outage = window.rekindleWorkerClient && window.rekindleWorkerClient.errorMessage(err);
+                if (outage) {
+                    showAlertModal(outage);
+                } else if (err && err.code === 'PERMISSION_DENIED') {
                     showAlertModal("Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.");
                 } else if (err && err.message && err.message.toLowerCase().indexOf('moderation') !== -1) {
                     showAlertModal(err.message);
@@ -3313,7 +3795,7 @@
             const deleteErrorEl = document.createElement('div');
             deleteErrorEl.style.cssText = 'min-height:16px;color:red;font-size:0.8rem;margin-bottom:8px;';
             const btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+            btnRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:end;gap:8px;';
             const cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = 'font-family:inherit;font-size:0.8rem;border:2px solid black;background:white;padding:4px 12px;cursor:pointer;box-shadow:2px 2px 0 black;';
@@ -3362,7 +3844,7 @@
             durLabel.style.cssText = 'display:block;font-weight:bold;font-size:0.8rem;margin-bottom:4px;';
             durLabel.textContent = 'Duration';
             const durRow = document.createElement('div');
-            durRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;';
+            durRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:start;gap:8px;align-items:center;margin-bottom:10px;';
             const durInput = document.createElement('input');
             durInput.type = 'number';
             durInput.min = '1';
@@ -3394,7 +3876,7 @@
             const errorEl = document.createElement('div');
             errorEl.style.cssText = 'min-height:16px;color:red;font-size:0.8rem;margin-bottom:8px;';
             const btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+            btnRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:end;gap:8px;';
             const cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = 'font-family:inherit;font-size:0.8rem;border:2px solid black;background:white;padding:4px 12px;cursor:pointer;box-shadow:2px 2px 0 black;';
@@ -3487,14 +3969,21 @@
                             undone: false
                         };
                         socialDb.collection('neighbourhood_posts').doc(postId).collection('comments').doc(commentId).delete().then(() => {
+                            adjustPostCommentCount(postId, -1);
                             return db.ref().update(updates);
                         }).catch(e => showAlertModal("Delete failed: " + e.message, "Error"));
                     });
                 });
             } else {
                 showConfirmModal("Delete this comment?", () => {
-                    socialDb.collection('neighbourhood_posts').doc(postId).collection('comments').doc(commentId).delete()
-                        .catch(e => showAlertModal("Delete failed: " + e.message, "Error"));
+                    const commentRef = socialDb.collection('neighbourhood_posts').doc(postId).collection('comments').doc(commentId);
+                    // Confirm it still exists first: a stale list (or a second
+                    // tab) could delete an already-removed comment, and the
+                    // decrement below would then be one too many.
+                    commentRef.get().then(doc => {
+                        if (!doc.exists) return;
+                        return commentRef.delete().then(() => adjustPostCommentCount(postId, -1));
+                    }).catch(e => showAlertModal("Delete failed: " + e.message, "Error"));
                 });
             }
         }
@@ -3551,20 +4040,7 @@
                 return;
             }
 
-            // CHECK 5: Timeout
-            db.ref('timeouts/' + currentUser.uid).once('value').then(function(snap) {
-                var t = snap.val();
-                console.log('[Timeout check] Data:', t);
-                if (t && t.until > Date.now()) {
-                    var remaining = Math.ceil((t.until - Date.now()) / 60000);
-                    showAlertModal('You are timed out. Please wait ' + remaining + ' minute(s) before posting.');
-                    return;
-                }
-                doSubmitPost(input, text);
-            }).catch(function(err) {
-                console.error('[Timeout check] Error reading timeout:', err && err.code ? err.code : err);
-                doSubmitPost(input, text);
-            });
+            doSubmitPost(input, text);
         }
 
         function doSubmitPost(input, text) {
@@ -3572,51 +4048,42 @@
             if (btn) btn.disabled = true;
 
             var tokenSource = socialAuth.currentUser || currentUser;
-            tokenSource.getIdToken(true).then(function (token) {
-                return fetch(MODERATION_WORKER_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
-                    },
-                    body: JSON.stringify({ type: 'neighbourhood_post', text: text })
-                }).then(function (resp) { return resp.json(); });
+            // Cached token first; force a refresh only if the worker rejects it.
+            tokenSource.getIdToken().then(function (token) {
+                function postWith(t) {
+                    return fetch(MODERATION_WORKER_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + t
+                        },
+                        body: JSON.stringify({ type: 'neighbourhood_post', text: text, lang: detectPostLang(text) })
+                    });
+                }
+                return postWith(token).then(function (resp) {
+                    if (resp.status === 401 || resp.status === 403) {
+                        return tokenSource.getIdToken(true).then(postWith);
+                    }
+                    return resp;
+                }).then(function (resp) {
+                    return window.rekindleWorkerClient
+                        ? window.rekindleWorkerClient.readJson(resp)
+                        : resp.json();
+                });
             }).then(function (result) {
                 if (result.error) {
                     if (btn) btn.disabled = false;
                     showAlertModal(result.error);
                     return;
                 }
-                var docRef = { id: result.id };
                 input.value = '';
                 if (btn) btn.disabled = false;
 
-                // Request translations asynchronously via worker
-                if (typeof TRANSLATION_WORKER_URL !== 'undefined' && TRANSLATION_WORKER_URL) {
-                    var tokenSource = socialAuth.currentUser || currentUser;
-                    tokenSource.getIdToken(true).then(function (token) {
-                        fetch(TRANSLATION_WORKER_URL, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + token
-                            },
-                            body: JSON.stringify({
-                                uid: currentUser.uid,
-                                text: text,
-                                msgId: docRef.id,
-                                app: 'neighbourhood',
-                                translateOnly: true
-                            })
-                        }).catch(function (err) {
-                            console.warn('Translation request failed:', err);
-                        });
-                    }).catch(function (err) {
-                        console.warn('Could not get token for translation:', err);
-                    });
-                }
             }).catch(function (err) {
-                if (err && err.code === 'PERMISSION_DENIED') {
+                var outage = window.rekindleWorkerClient && window.rekindleWorkerClient.errorMessage(err);
+                if (outage) {
+                    showAlertModal(outage);
+                } else if (err && err.code === 'PERMISSION_DENIED') {
                     showAlertModal("Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.");
                 } else if (err && err.message && err.message.toLowerCase().indexOf('moderation') !== -1) {
                     showAlertModal(err.message);
@@ -3628,6 +4095,109 @@
         }
 
         // --- ADMIN ACTIONS & TRANSLATION ---
+
+        // On-demand post translation (2026-10-26). Replaces the dead server
+        // fan-out: the reader translates in their own browser, one request per
+        // tap, using their own per-IP budget. See js/translate-client.js.
+        var pendingPostTranslations = {};
+
+        function requestPostTranslation(postId) {
+            var link = document.getElementById('translate-' + postId);
+            var textDiv = document.getElementById('post-text-' + postId);
+            if (!link || !textDiv || pendingPostTranslations[postId]) return;
+
+            var text = textDiv.getAttribute('data-original') || textDiv.textContent || '';
+            if (!text) return;
+
+            if (!window.rekindleTranslateClient) {
+                link.textContent = window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+                return;
+            }
+
+            var target = normalizeUserLang(typeof userLang !== 'undefined' ? userLang : 'en') || 'en';
+            var source = textDiv.getAttribute('data-lang') || 'auto';
+            pendingPostTranslations[postId] = true;
+            link.textContent = window.t('translate.msg.translating', 'Translating...');
+
+            window.rekindleTranslateClient.translate(text, source, target).then(function (translated) {
+                delete pendingPostTranslations[postId];
+                if (!translated || String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                    link.textContent = window.t('translate.msg.same_language', 'Already in this language');
+                    return;
+                }
+                postTranslations[postId] = translated;
+                applyPostTranslationToRendered(postId, translated);
+            })['catch'](function (e) {
+                delete pendingPostTranslations[postId];
+                link.textContent = (e && e.code === 'budget')
+                    ? window.t('translate.msg.budget', 'Translation limit for this session reached. Try again later.')
+                    : window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+            });
+        }
+
+        function applyPostTranslationToRendered(postId, translated) {
+            var textDiv = document.getElementById('post-text-' + postId);
+            if (!textDiv) return;
+            var safe = translated;
+            if (window.censorProfileText) safe = window.censorProfileText(safe);
+            if (window.filterBadWords) safe = window.filterBadWords(safe);
+
+            textDiv.setAttribute('data-translated', safe);
+            textDiv.setAttribute('data-state', 'translated');
+            textDiv.style.fontStyle = 'italic';
+            textDiv.textContent = safe; // textContent: no innerHTML sink
+
+            if (!document.getElementById('toggle-' + postId)) {
+                var span = document.createElement('span');
+                span.id = 'toggle-' + postId;
+                span.style.cssText = 'font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer;';
+                span.textContent = window.t ? window.t('kindlechat.msg.show_original', 'Show Original') : 'Show Original';
+                span.onclick = function () { toggleTranslation(postId); };
+                var bar = document.getElementById('post-trans-' + postId);
+                if (bar) {
+                    bar.appendChild(span);
+                } else {
+                    // Legacy/edge fallback: the stable container is always in the
+                    // card HTML, but keep the old sibling insertion if it is gone.
+                    var wrap = document.createElement('div');
+                    wrap.style.marginTop = '5px';
+                    wrap.appendChild(span);
+                    textDiv.parentNode.insertBefore(wrap, textDiv.nextSibling);
+                }
+            }
+            var link = document.getElementById('translate-' + postId);
+            if (link && link.parentNode) link.parentNode.removeChild(link);
+        }
+
+        function showPostTranslateLink(postId) {
+            var link = document.getElementById('translate-' + postId);
+            if (link) link.style.display = 'inline-block';
+        }
+
+        function queuePostAutoTranslation(post, source, target) {
+            var client = window.rekindleTranslateClient;
+            if (!client || typeof client.autoTranslate !== 'function') return;
+            var queued = client.autoTranslate({
+                // Keyed by text, not post id, so editing a post can translate
+                // again and two identical posts share one request.
+                text: post.text || '',
+                source: source,
+                target: target,
+                onFail: function () { showPostTranslateLink(post.id); },
+                apply: function (translated) {
+                    if (!translated) return;
+                    if (String(translated).toLowerCase().trim() === String(post.text || '').toLowerCase().trim()) {
+                        var sameLink = document.getElementById('translate-' + post.id);
+                        if (sameLink && sameLink.parentNode) sameLink.parentNode.removeChild(sameLink);
+                        return;
+                    }
+                    postTranslations[post.id] = translated;
+                    applyPostTranslationToRendered(post.id, translated);
+                }
+            });
+            if (!queued) showPostTranslateLink(post.id);
+        }
+
         function toggleTranslation(postId) {
             const textDiv = document.getElementById('post-text-' + postId);
             const toggleBtn = document.getElementById('toggle-' + postId);
@@ -3672,7 +4242,6 @@
             const text = textDiv.getAttribute('data-original');
             if (!text) return;
 
-            console.log("Reprocessing post:", postId);
 
             var tokenSource = socialAuth.currentUser || currentUser;
             tokenSource.getIdToken(true).then(function (token) {
@@ -3693,7 +4262,6 @@
                     .then(function (resp) { return resp.json(); })
                     .then(function (data) {
                         if (data.success) {
-                            console.log("Reprocess success:", data);
                             showAlertModal("Reprocess triggered. It should update shortly on refresh.");
                         } else {
                             console.error("Reprocess error:", data);
@@ -3743,14 +4311,27 @@
 
 
         function editPost(id) {
-            const post = recentPosts.find(p => p.id === id);
+            const post = postsById.get(id) || recentPosts.find(p => p.id === id);
             if (!post) return;
 
             showPromptModal("Edit Post Content:", post.text, (newText) => {
-                if (newText !== null && newText.trim() !== "") {
-                    socialDb.collection('neighbourhood_posts').doc(id).update({ text: newText.trim() })
-                        .catch(e => showAlertModal("Update failed: " + e.message, "Error"));
-                }
+                if (newText === null) return;
+                const trimmedEdit = newText.trim();
+                if (trimmedEdit === "") return;
+                // Edits write straight to Firestore (not through the moderation
+                // worker), so the same URL / promo / length checks must run here.
+                if (trimmedEdit.length > 280) { showAlertModal("Message too long (max 280 chars).", "Error"); return; }
+                if (containsUrl(trimmedEdit)) { showAlertModal("Links and URLs are not allowed.", "Error"); return; }
+                if (containsPromotedTerm(trimmedEdit)) { showAlertModal("Promotional content is not allowed.", "Error"); return; }
+                socialDb.collection('neighbourhood_posts').doc(id).update({ text: trimmedEdit, lang: detectPostLang(trimmedEdit) })
+                    .then(function () {
+                        // The cached auto-translation belongs to the old text.
+                        // Drop it so the re-render shows the edit; the queue's
+                        // text-keyed dedupe lets the new text translate again.
+                        delete postTranslations[id];
+                        loadPostLanguageSoon();
+                    })
+                    .catch(e => showAlertModal("Update failed: " + e.message, "Error"));
             });
         }
 

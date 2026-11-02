@@ -30,37 +30,32 @@ function workerName(sub) {
 }
 
 // "https://rekindle-x.timjarnott.workers.dev/path" -> same-origin "/__rk/w/rekindle-x/path".
+// Upstream's social Workers moved to their own account in 2026-10
+// (rekindle-moderate/rekindle-translate.rekindle-social.workers.dev).
 // Quoted literals become an absolute URL built at runtime, so `new URL(...)` keeps working.
+const WORKER_HOST = '([a-z0-9-]+)\\.(?:timjarnott|rekindle-social)\\.workers\\.dev';
+// Upstream's HTTP Cloud Functions that pages call directly (Substack, Standard Ebooks)
+// run in this server at /__rk/fn/<name> (functions-host.js).
+const FUNCTION_HOST = 'us-central1-rekindle-dd1fa\\.cloudfunctions\\.net\\/([A-Za-z0-9_]+)';
+
 function rewriteWorkerUrls(code) {
-    code = code.replace(/(['"`])https:\/\/([a-z0-9-]+)\.timjarnott\.workers\.dev([^'"`\n]*)\1/g,
+    code = code.replace(new RegExp(`(['"\`])https:\\/\\/${WORKER_HOST}([^'"\`\\n]*)\\1`, 'g'),
         (m, q, sub, rest) => `(location.protocol + '//' + location.host + ${q}/__rk/w/${workerName(sub)}${rest}${q})`);
-    return code.replace(/https:\/\/([a-z0-9-]+)\.timjarnott\.workers\.dev/g, (m, sub) => `/__rk/w/${workerName(sub)}`);
+    code = code.replace(new RegExp(`https:\\/\\/${WORKER_HOST}`, 'g'), (m, sub) => `/__rk/w/${workerName(sub)}`);
+    return code.replace(new RegExp(`(['"\`])https:\\/\\/${FUNCTION_HOST}([^'"\`\\n]*)\\1`, 'g'),
+        (m, q, name, rest) => `(location.protocol + '//' + location.host + ${q}/__rk/fn/${name}${rest}${q})`);
 }
 
 // The old-browser redirect sends Kobo / old Kindles to lite.rekindle.ink and
 // legacy.rekindle.ink. Those builds are served from /lite/ and /legacy/ here.
-// The comment keeps the hostname in the script so the build still strips the
-// redirect from the lite/legacy copies.
+// The hostname stays in the script as a string the page turns into the path when
+// it runs: the build strips the redirect from the lite/legacy copies by that name,
+// and (since 2026-10) checks the minified main page still routes Kobo -> legacy and
+// old Kindles -> lite, so a comment (minified away) no longer does.
 function rewriteTrafficCop(code) {
     return code
-        .replace(/(['"])https:\/\/legacy\.rekindle\.ink\/?\1/g, (m, q) => `${q}/legacy/${q} /* legacy.rekindle.ink lite.rekindle.ink */`)
-        .replace(/(['"])https:\/\/lite\.rekindle\.ink\/?\1/g, (m, q) => `${q}/lite/${q} /* lite.rekindle.ink */`);
-}
-
-// `window.t('key') || 'Text'` never reaches 'Text': before the language file has
-// loaded (pages often draw first), window.t returns the key itself, so screens show
-// "manga.btn.continue". window.t takes the fallback as its second argument. Only a
-// lone fallback literal that ends the expression is moved, so `|| 'a' + b` is left alone.
-const T_OR_FALLBACK = /window\.t\((['"])([\w.-]+)\1\)\s*\|\|\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")(?=\s*[),;:}\]\n])/g;
-// The other common form, `window.t ? window.t('key') : 'Text'` (388 places in 53 apps,
-// e.g. Breathing's "BREATHING.STEP.INHALE"), has the same problem: window.t always
-// exists, so the fallback only ever applies when i18n.js is missing.
-const T_TERNARY = /window\.t\s*\?\s*window\.t\((['"])([\w.-]+)\1\)\s*:\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")(?=\s*[),;:}\]\n])/g;
-
-function fixTranslationFallbacks(code) {
-    return code
-        .replace(T_OR_FALLBACK, (m, q, key, fallback) => `window.t(${q}${key}${q}, ${fallback})`)
-        .replace(T_TERNARY, (m, q, key, fallback) => `window.t ? window.t(${q}${key}${q}, ${fallback}) : ${fallback}`);
+        .replace(/(['"])https:\/\/legacy\.rekindle\.ink\/?\1/g, (m, q) => `${m}.replace(${m}, ${q}/legacy/${q})`)
+        .replace(/(['"])https:\/\/lite\.rekindle\.ink\/?\1/g, (m, q) => `${m}.replace(${m}, ${q}/lite/${q})`);
 }
 
 export const TEXT_SIZE_HEAD = '<link rel="stylesheet" href="css/rk-text.css">' +
@@ -137,7 +132,6 @@ export function transformHtml(html, fileName) {
     html = html.replace(/<head(\s[^>]*)?>/i, (tag) => tag + HEITI_HEAD);
     html = rewriteWorkerUrls(html);
     html = rewriteTrafficCop(html);
-    html = fixTranslationFallbacks(html);
 
     // No tap highlight: the browser paints a translucent box over whatever was tapped,
     // which e-ink shows as a flash (e.g. the Manga reader's invisible next-page area,
@@ -211,16 +205,6 @@ export function transformHtml(html, fileName) {
         // --rk-substack-margin before the page draws; rk-substack.css uses it.
         html = html.replace(/<\/head>/i, '<script>try{var rkM=localStorage.getItem("rk_substack_margin");' +
             'if(/^\\d+$/.test(rkM||""))document.documentElement.style.setProperty("--rk-substack-margin",rkM+"px")}catch(e){}</script>\n</head>');
-        // Substack's subscriptions API changed (2026-10), which left the app's feed empty:
-        // - a signed-in request without ?tvOnly= is rejected (HTTP 400 "Invalid value");
-        // - publications the reader follows come back in `publications` while
-        //   `subscriptions` can be empty, and the app only read `subscriptions`.
-        html = html.replace(/apiCall\((['"])\/subscriptions\1\)/, "apiCall('/subscriptions?tvOnly=false')");
-        html = html.replace('const rawSubs = subData.subscriptions || [];',
-            'const rawSubs = (subData.subscriptions || []).slice();\n' +
-            '                    (subData.publications || []).forEach(p => {\n' +
-            '                        if (!rawSubs.some(s => (s.publication_id || (s.publication && s.publication.id)) == p.id)) rawSubs.push({ publication_id: p.id, publication: p });\n' +
-            '                    });');
         // Publication addresses can be bare domains ("newsletter.example.com"), which
         // made `new URL()` throw and the publication drop out of the feed.
         html = html.replace('async function apiCall(endpoint, options = {}) {',
@@ -236,9 +220,6 @@ export function transformHtml(html, fileName) {
         html = html.replace(' || pub.cover_photo_url || "rss_icon.png";', ' || pub.cover_photo_url || "";');
         html = html.replace('new URL(resolvedBase)', 'new URL(rkAbsUrl(resolvedBase))');
         html = html.replace('new URL(baseUrl)', 'new URL(rkAbsUrl(baseUrl))');
-        // "Following" takes 15 posts from each publication, but the next batch started at
-        // post 50, so posts 16-50 of every publication were never shown.
-        html = html.replace('state.subOffset += 50;', 'state.subOffset += 15;');
         // Full articles: a publication's own domain (e.g. sinocism.com) does not know the
         // reader's substack.com login and sends only the free preview of paid posts (the
         // owner saw 1,300 of 16,700 words). substack.com/api/v1/posts/by-id/<id> does.
@@ -344,7 +325,6 @@ const ICONS_FILTER = `
 export function transformJs(code, fileName) {
     const base = fileName.split('/').pop();
     code = rewriteWorkerUrls(code);
-    code = fixTranslationFallbacks(code);
     code = addHeiti(code);
     if (base === 'icons.js' || base === 'icons-beta.js') code += ICONS_FILTER;
     if (base === 'emoji-render.js') {

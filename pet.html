@@ -3,11 +3,15 @@
     <meta charset="UTF-8">
     
     <title>Pet</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/score-submit.js?v=1" data-game="pet"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="theme.js?v=35"></script>
     <style>
         @font-face {
             font-family: 'PixelFont';
@@ -425,7 +429,7 @@
         <div class="title-bar">
             <div class="title-stripes"></div>
             <div class="close-box no-invert" onclick="window.location.href='index.html'">X</div>
-            <span class="title-text" onclick="handleSecretReset()" data-i18n="pet.title">Pet - 0 Years</span>
+            <span class="title-text" onclick="handleSecretReset()">Pet - 0 Years</span>
         </div>
         <button class="leaderboard-btn no-invert" onclick="openLeaderboard()" data-i18n="pet.btn.leaderboard">Leaderboard</button>
 
@@ -559,13 +563,8 @@
             return db.collection('leaderboard_pet_v1').doc(uid).get().then(function (doc) {
                 if (doc.exists && doc.data().score >= newAge) return;
 
-                return db.collection('leaderboard_pet_v1').doc(uid).set({
-                    username: username,
-                    score: newAge,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                return window.RekindleScores.submit('leaderboard_pet_v1', { score: newAge });
             }).then(function () {
-                console.log("Age synced to Firebase:", newAge);
             }).catch(function (e) {
                 console.error("Firebase sync error:", e);
             });
@@ -606,7 +605,7 @@
             modal.style.display = 'block';
             document.getElementById('modal-overlay').style.display = 'block';
             var list = document.getElementById('lb-content');
-            var loadingTxt = window.t ? window.t('pet.modal.leaderboard.loading') : 'Loading...';
+            var loadingTxt = window.t ? window.t('pet.modal.leaderboard.loading', "Loading...") : 'Loading...';
             list.innerHTML = loadingTxt;
 
             db.collection('leaderboard_pet_v1')
@@ -621,14 +620,14 @@
                         var isMe = (uid && doc.id === uid);
                         var row = document.createElement('div');
                         row.className = 'lb-row' + (isMe ? ' me' : '');
-                        var yearsTxt = window.t ? window.t('pet.modal.leaderboard.years').replace('${count}', data.score) : data.score + ' yrs';
+                        var yearsTxt = window.t ? window.t('pet.modal.leaderboard.years', "${count} yrs").replace('${count}', data.score) : data.score + ' yrs';
                         row.innerHTML = '<span>' + rank + '. ' + escapeHtml(data.username) + '</span><span>' + yearsTxt + '</span>';
                         list.appendChild(row);
                         rank++;
                     });
                 })
                 .catch(function (e) {
-                    var errorTxt = window.t ? window.t('pet.modal.leaderboard.error') : "Error loading scores.";
+                    var errorTxt = window.t ? window.t('pet.modal.leaderboard.error', "Error loading scores.") : "Error loading scores.";
                     list.innerHTML = errorTxt;
                     console.error(e);
                 });
@@ -661,8 +660,8 @@
         function handleInput(btn) {
             // Secret Reset always allowed
             if (state.stage === 'DEAD' && btn === 'C') {
-                var title = window.t ? window.t('pet.modal.newpet.title') : "New Pet";
-                var msg = window.t ? window.t('pet.modal.newpet.text') : "Do you want to start over with a new egg?";
+                var title = window.t ? window.t('pet.modal.newpet.title', "New Pet") : "New Pet";
+                var msg = window.t ? window.t('pet.modal.newpet.text', "Do you want to start over with a new egg?") : "Do you want to start over with a new egg?";
                 showConfirm(title, msg, function () {
                     hardReset();
                 });
@@ -702,7 +701,6 @@
         // Direct Icon Click
         function handleIconClick(idx) {
             if (idx === 5) return; // ATTN icon is not interactive
-            console.log("Icon Clicked:", idx);
             // Allow selection even if Egg, just don't execute
             ui.menuIndex = idx;
 
@@ -850,7 +848,7 @@
                 ctx.font = "bold 15px PixelFont"; // Match standard game font
                 ctx.textAlign = "center";
                 // Positioned above the grave (which is centered + 16)
-                var restartTxt = window.t ? window.t('pet.status.restart') : "RESTART";
+                var restartTxt = window.t ? window.t('pet.status.restart', "RESTART") : "RESTART";
                 ctx.fillText(restartTxt, CANVAS_W / 2, 35);
             }
         }
@@ -1020,7 +1018,6 @@
 
                         loaded++;
                         if (loaded === total) {
-                            console.log("All Assets Pre-rendered");
                             if (typeof buildSpriteGallery === 'function') buildSpriteGallery();
                         }
                     };
@@ -1091,12 +1088,11 @@
         var secretClicks = 0;
         var secretTimeout = null;
         function handleSecretReset() {
-            console.log("Secret reset click:", secretClicks + 1);
             secretClicks++;
             clearTimeout(secretTimeout);
             if (secretClicks >= 5) {
-                var title = window.t ? window.t('pet.modal.reset.title') : "Reset Game";
-                var text = window.t ? window.t('pet.modal.reset.text') : "Are you sure you want to delete all progress and start over?";
+                var title = window.t ? window.t('pet.modal.reset.title', "Reset Game") : "Reset Game";
+                var text = window.t ? window.t('pet.modal.reset.text', "Are you sure you want to delete all progress and start over?") : "Are you sure you want to delete all progress and start over?";
                 showConfirm(title, text, function () {
                     hardReset();
                 });
@@ -1334,6 +1330,16 @@
 
         // --- MAIN LOOP ---
 
+        var lastRenderSig = null;
+        var lastIconSig = null;
+        var cachedTitleEl = null;
+        var lastAgeTxt = null;
+
+        // The title is dynamic; force a re-render when translations arrive.
+        document.addEventListener('rekindle:i18n:ready', function () {
+            lastAgeTxt = null;
+        });
+
         function tick(timestamp) {
             if (isReloading) return;
 
@@ -1373,15 +1379,29 @@
                 }
             }
 
-            // Render
-            render();
-            updateIconUI();
+            // Render (skip frames where nothing visible changed - e-ink refreshes are expensive)
+            var animQuantum = Math.floor(ui.animFrame / 30);
+            var continuous = (ui.screen === 'ANIMATION') || ui.cleaning;
+            var renderSig = animQuantum + '|' + ui.screen + '|' + state.stage + '|' + state.sick + '|' + state.poops + '|' + state.lightOn;
+            if (continuous || renderSig !== lastRenderSig) {
+                lastRenderSig = renderSig;
+                render();
+            }
 
-            // Update title bar age
-            var titleEl = document.querySelector('.title-text');
-            if (titleEl) {
-                var ageTxt = window.t ? window.t('pet.title').replace('${count}', (state.age != null ? state.age : 0)) : 'Pet - ' + (state.age != null ? state.age : 0) + ' Years';
-                titleEl.innerText = ageTxt;
+            var iconSig = ui.menuIndex + '|' + state.attention + '|' + state.stage + '|' + (state.attention ? Math.floor(now / 300) % 2 : 0);
+            if (iconSig !== lastIconSig) {
+                lastIconSig = iconSig;
+                updateIconUI();
+            }
+
+            // Update title bar age (only when the text actually changes)
+            if (!cachedTitleEl) cachedTitleEl = document.querySelector('.title-text');
+            if (cachedTitleEl) {
+                var ageTxt = window.tFormat ? window.tFormat('pet.title', { count: (state.age != null ? state.age : 0) }, 'Pet - ${count} Years') : 'Pet - ' + (state.age != null ? state.age : 0) + ' Years';
+                if (ageTxt !== lastAgeTxt) {
+                    lastAgeTxt = ageTxt;
+                    cachedTitleEl.innerText = ageTxt;
+                }
             }
 
             if (window.requestAnimationFrame) window.requestAnimationFrame(tick);
@@ -1444,18 +1464,18 @@
 
             if (ui.statsPage === 0) {
                 // AGE & WEIGHT
-                var ageTxt = window.t ? window.t('pet.status.age').replace('${count}', (state.age != null ? state.age : 0)) : 'AGE: ' + (state.age != null ? state.age : 0);
-                var weightTxt = window.t ? window.t('pet.status.weight').replace('${count}', (state.weight != null ? state.weight : 5)) : 'WEIGHT: ' + (state.weight != null ? state.weight : 5) + 'G';
+                var ageTxt = window.t ? window.t('pet.status.age', "AGE: ${count}").replace('${count}', (state.age != null ? state.age : 0)) : 'AGE: ' + (state.age != null ? state.age : 0);
+                var weightTxt = window.t ? window.t('pet.status.weight', "WEIGHT: ${count}G").replace('${count}', (state.weight != null ? state.weight : 5)) : 'WEIGHT: ' + (state.weight != null ? state.weight : 5) + 'G';
                 ctx.fillText(ageTxt, centerX, centerY - 15);
                 ctx.fillText(weightTxt, centerX, centerY + 15);
             } else if (ui.statsPage === 1) {
                 // HUNGER
-                var hungryTxt = window.t ? window.t('pet.status.hungry') : 'HUNGRY';
+                var hungryTxt = window.t ? window.t('pet.status.hungry', "HUNGRY") : 'HUNGRY';
                 ctx.fillText(hungryTxt, centerX, centerY - 20);
                 drawHearts(state.hunger, centerX - 45, centerY + 5);
             } else if (ui.statsPage === 2) {
                 // HAPPY
-                var happyTxt = window.t ? window.t('pet.status.happy') : 'HAPPY';
+                var happyTxt = window.t ? window.t('pet.status.happy', "HAPPY") : 'HAPPY';
                 ctx.fillText(happyTxt, centerX, centerY - 20);
                 drawHearts(state.happiness, centerX - 45, centerY + 5);
             }
@@ -1534,7 +1554,7 @@
             } else {
                 ctx.fillStyle = '#000';
             }
-            var foodTxt = window.t ? window.t('pet.feed.food') : "FOOD";
+            var foodTxt = window.t ? window.t('pet.feed.food', "FOOD") : "FOOD";
             ctx.fillText(foodTxt, centerX + 10, centerY - 15);
 
             // SNACK
@@ -1545,7 +1565,7 @@
             } else {
                 ctx.fillStyle = '#000';
             }
-            var snackTxt = window.t ? window.t('pet.feed.snack') : "SNACK";
+            var snackTxt = window.t ? window.t('pet.feed.snack', "SNACK") : "SNACK";
             ctx.fillText(snackTxt, centerX + 10, centerY + 15);
 
             // Selector Arrow
@@ -1669,8 +1689,8 @@
 
         document.getElementById('gameCanvas').addEventListener('click', function (e) {
             if (state.stage === 'DEAD') {
-                var title = window.t ? window.t('pet.modal.newpet.title') : "New Pet";
-                var msg = window.t ? window.t('pet.modal.newpet.text') : "Do you want to start over with a new egg?";
+                var title = window.t ? window.t('pet.modal.newpet.title', "New Pet") : "New Pet";
+                var msg = window.t ? window.t('pet.modal.newpet.text', "Do you want to start over with a new egg?") : "Do you want to start over with a new egg?";
                 showConfirm(title, msg, function () {
                     hardReset();
                 });

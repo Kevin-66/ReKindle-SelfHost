@@ -35,7 +35,8 @@ COPY --from=site /build/_deploy/ /app/site/
 # Upstream backend code the server runs as-is.
 COPY workers/ /app/upstream/workers/
 COPY functions/ /app/upstream/functions/
-COPY firebase-functions/index.js /app/upstream/firebase-functions/index.js
+# index.js and the files it requires (./substack, ./account-deletion, ...).
+COPY firebase-functions/*.js /app/upstream/firebase-functions/
 COPY rtdb-rules.json /app/upstream/rtdb-rules.json
 
 RUN mkdir -p /data && chown -R node:node /data /app/selfhost/server

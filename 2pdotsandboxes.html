@@ -183,7 +183,6 @@
             width: 100%;
             max-width: 400px;
             margin-bottom: 20px;
-            aspect-ratio: 1/1;
             /* Modern CSS, fallback below */
         }
 
@@ -286,9 +285,9 @@
             box-shadow: none;
         }
     </style>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -533,9 +532,9 @@
                 // Add an explicit indicator if you want, but text is fine.
             } else {
                 let msg = "";
-                if (scores[1] > scores[2]) msg = window.t ? window.t('2pdotsandboxes.win.p1') : "Player 1 Wins!";
-                else if (scores[2] > scores[1]) msg = window.t ? window.t('2pdotsandboxes.win.p2') : "Player 2 Wins!";
-                else msg = window.t ? window.t('2pdotsandboxes.draw') : "It's a Draw!";
+                if (scores[1] > scores[2]) msg = window.t ? window.t('2pdotsandboxes.win.p1', "Player 1 Wins!") : "Player 1 Wins!";
+                else if (scores[2] > scores[1]) msg = window.t ? window.t('2pdotsandboxes.win.p2', "Player 2 Wins!") : "Player 2 Wins!";
+                else msg = window.t ? window.t('2pdotsandboxes.draw', "It's a Draw!") : "It's a Draw!";
                 turnEl.innerText = msg;
             }
         }

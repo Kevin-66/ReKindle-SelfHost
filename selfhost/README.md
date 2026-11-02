@@ -9,7 +9,7 @@ and replaces everything the public rekindle.ink depends on:
 | Firestore | SQLite document store with the same rules |
 | Realtime Database | In-memory tree saved to SQLite, live updates by long-polling |
 | Cloud Storage | Files on disk |
-| Cloud Functions | The repo's `firebase-functions/index.js`, run unchanged |
+| Cloud Functions | The repo's `firebase-functions/` (callables, and the Substack and Standard Ebooks relays), run unchanged |
 | Cloudflare Workers / Pages Functions | The repo's `workers/` and `functions/api/`, run unchanged |
 | Workers AI (handwriting) | Gemini, or any OpenAI-compatible vision model |
 
@@ -233,7 +233,8 @@ The only upstream files changed here are:
 - `time.js` – automatic time-zone detection
 - `js/i18n.js`, `settings.html` – Canada no longer defaults to French
 
-Dark mode stays off, as upstream has it.
+Dark mode follows upstream (Settings > Theme). `selfhost/AGENTS.md` ("Merging upstream")
+lists what to check after a merge.
 
 The Manga app is re-enabled at build time and gets its Manhuagui source from
 `site/js/rk-manga-sources.js`; `manga.html` itself is untouched.
@@ -272,8 +273,8 @@ not built.
   - `rtdb.js`, `rtdb-rules.js` – realtime database; evaluates `rtdb-rules.json` as-is
   - `storage.js` – file storage
   - `events.js` – change feed behind live listeners (long-polling)
-  - `functions-host.js`, `admin-shim.js` – run `firebase-functions/index.js` with a
-    local stand-in for `firebase-admin`
+  - `functions-host.js`, `admin-shim.js` – run `firebase-functions/` with a
+    local stand-in for `firebase-admin`; its HTTP functions answer at `/__rk/fn/<name>`
   - `workers-host.js`, `ai.js`, `netguard.js` – run the Cloudflare workers and `/api`
     functions, with outgoing requests limited to public addresses (and `PROXY_DOMAINS`
     sent through `PROXY_URL`)

@@ -1,0 +1,3057 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <meta charset="UTF-8">
+    <title>Car Games</title>
+    <style>
+        /* ============================================================
+           SYSTEM 7 BASE
+           ============================================================ */
+        * {
+            box-sizing: border-box;
+            transition: none !important;
+            animation: none !important;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --shadow: 4px 4px 0px #000000;
+            --stripe-pattern: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+            --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            --serif: Georgia, "Times New Roman", Times, serif;
+            --mono: "Courier New", Courier, monospace;
+            --paper: #ffffff;
+            --ink: #000000;
+            --quiet: #333333;
+            --wash: #f2f2f2;
+        }
+
+        html {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #e5e5e5;
+            color: var(--ink);
+            font-family: var(--sans);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            image-rendering: pixelated;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .window {
+            background: var(--paper);
+            border: 2px solid var(--ink);
+            box-shadow: var(--shadow);
+            width: 95%;
+            max-width: 600px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* ============================================================
+           TITLE BAR (canonical System 7 pattern)
+           ============================================================ */
+        .title-bar {
+            height: 36px;
+            border-bottom: 2px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            padding: 0 10px;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .title-stripes {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            background-image: var(--stripe-pattern);
+            z-index: 0;
+        }
+
+        .title-text {
+            background: white;
+            padding: 0 15px;
+            font-weight: bold;
+            z-index: 1;
+            font-size: 1.05rem;
+            letter-spacing: 0.01em;
+            display: inline-flex;
+            align-items: center;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .close-box {
+            position: absolute;
+            left: 10px;
+            width: 18px;
+            height: 18px;
+            border: 2px solid black;
+            background: white;
+            z-index: 2;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-family: sans-serif;
+            font-size: 0.9rem;
+            line-height: 1;
+            box-shadow: 2px 2px 0 black;
+        }
+
+        /* Enlarge the close-box hit area to 48px without changing the
+           canonical 18px System 7 look. */
+        .close-box::after {
+            content: "";
+            position: absolute;
+            top: -15px;
+            left: -15px;
+            right: -15px;
+            bottom: -15px;
+        }
+
+        .close-box:active {
+            background: black;
+            color: white;
+            box-shadow: none;
+        }
+
+        /* ============================================================
+           SCROLLABLE CONTENT AREA
+           ============================================================ */
+        .window-content {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 16px 18px 24px 18px;
+        }
+
+        /* ============================================================
+           SHARED CONTROLS
+           ============================================================ */
+        button,
+        input {
+            font-family: inherit;
+        }
+
+        button:focus,
+        input:focus,
+        .crew-row:focus-within {
+            outline: 3px solid var(--ink);
+            outline-offset: 2px;
+        }
+
+        .btn {
+            min-height: 48px;
+            padding: 8px 12px;
+            border: 2px solid var(--ink);
+            border-radius: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-size: 0.9rem;
+            font-weight: bold;
+            line-height: 1.15;
+            box-shadow: 2px 2px 0 var(--ink);
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .btn:disabled {
+            opacity: 0.35;
+            box-shadow: none;
+            cursor: default;
+            transform: none;
+        }
+
+        .btn.out {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .btn.out:active {
+            background: var(--paper);
+            color: var(--ink);
+        }
+
+        .btn.primary {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .btn.primary:active {
+            background: var(--paper);
+            color: var(--ink);
+        }
+
+        .btn.ghost {
+            border: 1px solid var(--ink);
+            box-shadow: none;
+            font-weight: normal;
+            font-size: 0.82rem;
+        }
+
+        .btn.ghost:active {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .btn.small {
+            min-height: 44px;
+            font-size: 0.78rem;
+        }
+
+        .btn.wide {
+            width: 100%;
+        }
+
+        /* Action rows are grids: Chromium 75 supports grid gap, not flex gap. */
+        .btn-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin: 10px 0 0 0;
+        }
+
+        .btn-row.two {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .btn-row.three {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: 1fr 132px;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .timer-row {
+            display: grid;
+            grid-template-columns: 92px 1fr 1fr 1fr;
+            gap: 8px;
+            align-items: stretch;
+            margin-bottom: 12px;
+        }
+
+        .timer-row.two-actions {
+            grid-template-columns: 92px 1fr 1fr;
+        }
+
+        .text-input {
+            min-width: 0;
+            height: 48px;
+            border: 2px solid var(--ink);
+            border-radius: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-size: 1rem;
+            padding: 0 10px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        /* ============================================================
+           SMALL TYPE / RULES
+           ============================================================ */
+        .mini-label,
+        .howto-label {
+            display: block;
+            font-family: var(--sans);
+            font-size: 0.58rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            margin: 0 0 5px 0;
+        }
+
+        .hint {
+            font-family: var(--serif);
+            font-size: 0.78rem;
+            line-height: 1.35;
+            color: var(--quiet);
+            margin: 4px 0 10px 0;
+            min-height: 18px;
+        }
+
+        .hint.bad {
+            color: var(--ink);
+            font-weight: bold;
+        }
+
+        .muted {
+            color: #444444;
+        }
+
+        .banner {
+            border: 2px solid var(--ink);
+            background: var(--ink);
+            color: var(--paper);
+            padding: 9px 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.88rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .btn-row + .mini-label,
+        .btn-row + .hint,
+        .btn-row + .chips {
+            margin-top: 16px;
+        }
+
+        .sec-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 6px;
+            margin: 0 0 10px 0;
+        }
+
+        .sec-title {
+            margin: 0;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+        }
+
+        .sec-title.lg {
+            font-size: 1.32rem;
+            letter-spacing: -0.005em;
+            text-transform: none;
+            line-height: 1.1;
+        }
+
+        .sec-meta {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        /* ============================================================
+           HUB: CREW EDITOR
+           ============================================================ */
+        .crew-box {
+            margin: 24px 0 0 0;
+        }
+
+        .crew-hint {
+            font-family: var(--serif);
+            font-size: 0.76rem;
+            line-height: 1.35;
+            color: var(--quiet);
+            margin: 6px 0 10px 0;
+        }
+
+        .crew-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .crew-row {
+            display: flex;
+            align-items: stretch;
+            height: 48px;
+            border: 1px solid var(--ink);
+            background: var(--paper);
+        }
+
+        .crew-num {
+            flex: 0 0 auto;
+            width: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid var(--ink);
+            background: var(--wash);
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            font-weight: bold;
+        }
+
+        .crew-input {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 46px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: var(--ink);
+            font-size: 1rem;
+            padding: 0 9px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .crew-input:focus {
+            outline: none;
+        }
+
+        .crew-input,
+        .text-input {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .crew-actions {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .crew-actions > .btn {
+            min-height: 48px;
+            padding: 0 14px;
+            margin: 0 8px 8px 0;
+            border: 1px solid var(--ink);
+            box-shadow: none;
+            font-size: 0.76rem;
+            font-weight: normal;
+        }
+
+        .crew-actions > .btn:active {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        /* ============================================================
+           HUB: GAME CATALOGUE
+           ============================================================ */
+        .hub-games-head {
+            margin-top: 4px;
+        }
+
+        .tile-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .tile {
+            position: relative;
+            display: flex;
+            align-items: center;
+            text-align: left;
+            min-height: 76px;
+            padding: 9px 12px;
+            border: 1px solid var(--ink);
+            border-radius: 0;
+            background: var(--paper);
+            color: var(--ink);
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .tile:active {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .tile-num {
+            position: absolute;
+            top: 8px;
+            right: 9px;
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            font-weight: bold;
+            letter-spacing: 0.04em;
+            color: #777777;
+        }
+
+        .tile:active .tile-num {
+            color: #bbbbbb;
+        }
+
+        .tile-body {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-width: 0;
+            padding-right: 26px;
+        }
+
+        .tile-name {
+            font-weight: bold;
+            font-size: 0.98rem;
+            line-height: 1.15;
+        }
+
+        .tile-blurb {
+            font-family: var(--serif);
+            font-size: 0.75rem;
+            line-height: 1.3;
+            margin-top: 4px;
+            color: var(--quiet);
+        }
+
+        .tile:active .tile-blurb {
+            color: var(--paper);
+        }
+
+        /* Game views shrink to their content; the hub fills the window. */
+        .window.compact-view {
+            height: auto;
+            max-height: 90vh;
+        }
+
+        .window.compact-view .window-content {
+            flex: 0 1 auto;
+            min-height: 0;
+        }
+
+        /* ============================================================
+           GAME VIEW
+           ============================================================ */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            min-height: 48px;
+            padding: 0 12px;
+            margin: 0 0 12px 0;
+            border: 1px solid var(--ink);
+            box-shadow: none;
+            background: var(--paper);
+            color: var(--ink);
+            font-size: 0.76rem;
+            font-weight: bold;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .back-btn:active {
+            background: var(--ink);
+            color: var(--paper);
+            transform: none;
+        }
+
+        .back-btn .chev {
+            font-size: 1rem;
+            margin-right: 6px;
+            line-height: 1;
+        }
+
+        .game-head {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 10px;
+            margin-bottom: 14px;
+        }
+
+        .game-head-text {
+            min-width: 0;
+            padding-right: 52px;
+        }
+
+        .game-title {
+            margin: 0;
+            font-size: 1.55rem;
+            line-height: 1.05;
+            letter-spacing: -0.01em;
+        }
+
+        .game-subtitle {
+            margin: 5px 0 0 0;
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            color: var(--quiet);
+        }
+
+        .game-index {
+            position: absolute;
+            right: 0;
+            top: -6px;
+            font-family: var(--mono);
+            font-size: 2.2rem;
+            line-height: 1;
+            font-weight: bold;
+            color: #dddddd;
+            letter-spacing: -0.04em;
+        }
+
+        .howto {
+            margin: 0 0 16px 0;
+            padding: 1px 0 1px 10px;
+            border: 0;
+            border-left: 3px solid var(--ink);
+            background: transparent;
+            font-family: var(--serif);
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: #222222;
+        }
+
+        /* ============================================================
+           SCOREBOARD STRIP
+           ============================================================ */
+        .stat-row {
+            display: flex;
+            border-top: 2px solid var(--ink);
+            border-bottom: 2px solid var(--ink);
+            margin-bottom: 14px;
+            background: var(--paper);
+        }
+
+        .stat {
+            flex: 1 1 0;
+            padding: 7px 2px 8px 2px;
+            text-align: center;
+            border-left: 1px solid var(--ink);
+        }
+
+        .stat:first-child {
+            border-left: 0;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.55rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            line-height: 1.2;
+        }
+
+        .stat-value {
+            display: block;
+            font-family: var(--mono);
+            font-size: 1.3rem;
+            font-weight: bold;
+            line-height: 1.1;
+            margin-top: 2px;
+        }
+
+        /* ============================================================
+           DISPLAY BANDS
+           ============================================================ */
+        .big {
+            border-top: 2px solid var(--ink);
+            border-bottom: 2px solid var(--ink);
+            background: var(--paper);
+            padding: 14px 8px;
+            text-align: center;
+            font-family: var(--mono);
+            font-weight: bold;
+            font-size: 4rem;
+            line-height: 1;
+            letter-spacing: 0.1em;
+            margin: 0 0 12px 0;
+            min-height: 76px;
+        }
+
+        .big.words {
+            font-family: var(--serif);
+            font-style: italic;
+            font-weight: normal;
+            font-size: 1.85rem;
+            line-height: 1.25;
+            letter-spacing: 0;
+            min-height: 64px;
+            padding: 12px 10px;
+        }
+
+        .ball-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .ball-grid .btn {
+            min-height: 56px;
+            font-size: 0.88rem;
+        }
+
+        .ball-grid .btn.out {
+            grid-column: 1 / -1;
+        }
+
+        .ball-log {
+            display: flex;
+            flex-wrap: wrap;
+            min-height: 36px;
+            border-top: 1px solid var(--ink);
+            border-bottom: 1px solid var(--ink);
+            padding: 6px 0;
+            margin-bottom: 14px;
+        }
+
+        .ball {
+            border: 1px solid var(--ink);
+            padding: 2px 5px;
+            margin: 2px 4px 2px 0;
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .ball.out {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .ball-log-empty {
+            font-family: var(--serif);
+            font-size: 0.78rem;
+            padding: 6px 2px;
+        }
+
+        /* ============================================================
+           GRIDS
+           ============================================================ */
+        .letter-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .letter-btn {
+            min-height: 50px;
+            border: 1px solid var(--ink);
+            border-radius: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--mono);
+            font-size: 1.05rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .letter-btn.on {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .meter {
+            height: 10px;
+            border: 1px solid var(--ink);
+            background: var(--paper);
+            margin: 0 0 12px 0;
+        }
+
+        .meter-fill {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: var(--ink);
+        }
+
+        .bingo-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .bingo-cell {
+            min-height: 58px;
+            padding: 4px 3px;
+            border: 1px solid var(--ink);
+            border-radius: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-size: 0.63rem;
+            line-height: 1.15;
+            cursor: pointer;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+
+        .bingo-cell.on {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .bingo-cell.line {
+            font-weight: bold;
+            box-shadow: inset 0 0 0 3px var(--paper);
+        }
+
+        /* ============================================================
+           LISTS
+           ============================================================ */
+        .heading-list {
+            margin: 0 0 14px 0;
+            padding-left: 22px;
+            font-family: var(--serif);
+            font-size: 1rem;
+            line-height: 1.55;
+        }
+
+        .heading-list li {
+            margin-bottom: 3px;
+        }
+
+        .word-list {
+            margin: 0 0 10px 0;
+            padding-left: 22px;
+            font-size: 0.85rem;
+        }
+
+        .word-list li {
+            margin-bottom: 2px;
+            font-family: var(--mono);
+        }
+
+        .timer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            border: 2px solid var(--ink);
+            padding: 0 6px;
+            font-family: var(--mono);
+            font-size: 1.4rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .score-line {
+            font-family: var(--mono);
+            font-weight: bold;
+            font-size: 0.88rem;
+            margin-bottom: 10px;
+        }
+
+        .story-open {
+            border-left: 3px solid var(--ink);
+            padding: 1px 0 1px 10px;
+            margin: 0 0 14px 0;
+            font-family: var(--serif);
+            font-style: italic;
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            margin: 2px 0 10px 0;
+            min-height: 28px;
+        }
+
+        .chip {
+            border: 1px solid var(--ink);
+            padding: 3px 7px;
+            margin: 0 6px 6px 0;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+        }
+
+        /* ============================================================
+           WOULD YOU RATHER
+           ============================================================ */
+        .wyr-btn {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            min-height: 84px;
+            text-align: left;
+            margin-bottom: 10px;
+            padding: 11px;
+            box-shadow: 2px 2px 0 var(--ink);
+        }
+
+        .wyr-tag {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            border: 2px solid currentColor;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--mono);
+            font-weight: bold;
+            font-size: 1rem;
+            margin-right: 12px;
+        }
+
+        .wyr-text {
+            flex: 1 1 auto;
+            font-size: 1rem;
+            line-height: 1.3;
+        }
+
+        .tally-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .tally-label {
+            flex: 0 0 auto;
+            width: 24px;
+            font-family: var(--mono);
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        .bar {
+            flex: 1 1 auto;
+            height: 20px;
+            border: 1px solid var(--ink);
+            background: var(--paper);
+            margin-right: 8px;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: var(--ink);
+            width: 0;
+        }
+
+        .tally-count {
+            flex: 0 0 auto;
+            width: 76px;
+            text-align: right;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+        }
+
+        @media (max-width: 440px) {
+            .crew-list {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .tile-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .window-content {
+                padding: 14px 12px 20px 12px;
+            }
+
+            .bingo-cell {
+                font-size: 0.58rem;
+                min-height: 52px;
+            }
+
+            .big {
+                font-size: 3.2rem;
+            }
+
+            .game-title {
+                font-size: 1.32rem;
+            }
+
+            .stat-label {
+                letter-spacing: 0.05em;
+            }
+
+            .stat-value {
+                font-size: 1.15rem;
+            }
+
+            .btn-row.three {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .btn-row.three > .btn:last-child {
+                grid-column: 1 / -1;
+            }
+
+            .timer-row,
+            .timer-row.two-actions {
+                grid-template-columns: 92px 1fr 1fr;
+            }
+
+            .timer-row .timer {
+                grid-column: 1 / -1;
+            }
+        }
+
+    </style>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+</head>
+
+<body>
+
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-stripes"></div>
+            <div class="close-box" id="close-box" tabindex="0" role="button" onclick="window.location.href='index'">X</div>
+            <span class="title-text" data-i18n="cargames.title">Car Games</span>
+        </div>
+
+        <div class="window-content" id="window-content">
+
+            <!-- ====================================================
+                 VIEW 1: HUB
+                 ==================================================== -->
+            <div id="hub-view">
+
+
+                <div class="sec-head hub-games-head">
+                    <h2 class="sec-title lg" data-i18n="cargames.hub.pick">Pick a game</h2>
+                    <span class="sec-meta">01&ndash;10</span>
+                </div>
+                <div class="tile-grid" id="tile-grid">
+
+                    <button class="tile" type="button" data-game="cricket">
+                        <span class="tile-num" aria-hidden="true">01</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g1.name">Car Cricket</span>
+                            <span class="tile-blurb" data-i18n="cargames.g1.blurb">Tap what you see. Yellow cars are out.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="alphabet">
+                        <span class="tile-num" aria-hidden="true">02</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g2.name">Alphabet Hunt</span>
+                            <span class="tile-blurb" data-i18n="cargames.g2.blurb">Spot every letter from A to Z.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="categories">
+                        <span class="tile-num" aria-hidden="true">03</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g3.name">Categories</span>
+                            <span class="tile-blurb" data-i18n="cargames.g3.blurb">One letter, five headings, shout it out.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="keepgoing">
+                        <span class="tile-num" aria-hidden="true">04</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g4.name">Keep It Going</span>
+                            <span class="tile-blurb" data-i18n="cargames.g4.blurb">Name one, then pass the Kindle on.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="plate">
+                        <span class="tile-num" aria-hidden="true">05</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g5.name">Plate Words</span>
+                            <span class="tile-blurb" data-i18n="cargames.g5.blurb">Three letters in order, one word.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="rhyme">
+                        <span class="tile-num" aria-hidden="true">06</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g6.name">Rhyme Time</span>
+                            <span class="tile-blurb" data-i18n="cargames.g6.blurb">Say a rhyme before the car moves on.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="samepage">
+                        <span class="tile-num" aria-hidden="true">07</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g7.name">Same Page</span>
+                            <span class="tile-blurb" data-i18n="cargames.g7.blurb">Count down, then compare answers.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="bingo">
+                        <span class="tile-num" aria-hidden="true">08</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g8.name">Spot Bingo</span>
+                            <span class="tile-blurb" data-i18n="cargames.g8.blurb">Five in a row from the car window.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="story">
+                        <span class="tile-num" aria-hidden="true">09</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g9.name">Story Chain</span>
+                            <span class="tile-blurb" data-i18n="cargames.g9.blurb">One line each, build it together.</span>
+                        </span>
+                    </button>
+
+                    <button class="tile" type="button" data-game="wyr">
+                        <span class="tile-num" aria-hidden="true">10</span>
+                        <span class="tile-body">
+                            <span class="tile-name" data-i18n="cargames.g10.name">Would You Rather</span>
+                            <span class="tile-blurb" data-i18n="cargames.g10.blurb">Two choices, one crew, no escape.</span>
+                        </span>
+                    </button>
+
+                </div>
+
+                <section class="crew-box">
+                    <div class="sec-head">
+                        <h2 class="sec-title" data-i18n="cargames.hub.crew">Crew</h2>
+                        <span class="sec-meta" id="crew-count">2 / 8</span>
+                    </div>
+                    <p class="crew-hint" data-i18n="cargames.hub.crew.hint">Names are saved on this Kindle. Every pass-the-Kindle game uses this crew.</p>
+                    <div class="crew-list" id="crew-list"></div>
+                    <div class="crew-actions">
+                        <button class="btn small" id="crew-add" type="button" data-i18n="cargames.hub.add">+ Add player</button>
+                        <button class="btn small" id="crew-remove" type="button" data-i18n="cargames.hub.remove">- Remove player</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ====================================================
+                 VIEW 2: GAME
+                 ==================================================== -->
+            <div id="game-view" hidden>
+
+                <button class="btn back-btn" id="back-btn" type="button"><span class="chev" aria-hidden="true">&lsaquo;</span><span data-i18n="cargames.game.back">All games</span></button>
+
+                <div class="game-head">
+                    <div class="game-head-text">
+                        <h2 class="game-title" id="game-title">Car Cricket</h2>
+                        <p class="game-subtitle" id="game-subtitle"></p>
+                    </div>
+                    <span class="game-index" id="game-index" aria-hidden="true">01</span>
+                </div>
+
+                <!-- 1. CAR CRICKET -->
+                <section class="panel" id="panel-cricket" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g1.howto">Tap the vehicle you spot out of the window. Car is 1, van 2, lorry 4, bus 6 and tractor 8. A yellow car is a wicket - five wickets or End innings closes the innings.</span></p>
+
+                    <div class="stat-row">
+                        <div class="stat">
+                            <span class="stat-label" data-i18n="cargames.cricket.score">Score</span>
+                            <span class="stat-value" id="cric-score">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label" data-i18n="cargames.cricket.wickets">Wickets</span>
+                            <span class="stat-value" id="cric-wickets">0 / 5</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label" data-i18n="cargames.cricket.overs">Overs</span>
+                            <span class="stat-value" id="cric-overs">0.0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label" data-i18n="cargames.cricket.balls">Balls</span>
+                            <span class="stat-value" id="cric-balls">0</span>
+                        </div>
+                    </div>
+
+                    <div class="ball-grid" id="cric-btns">
+                        <button class="btn" type="button" data-ball="car" data-i18n="cargames.cricket.car">Car +1</button>
+                        <button class="btn" type="button" data-ball="van" data-i18n="cargames.cricket.van">Van +2</button>
+                        <button class="btn" type="button" data-ball="lorry" data-i18n="cargames.cricket.lorry">Lorry +4</button>
+                        <button class="btn" type="button" data-ball="bus" data-i18n="cargames.cricket.bus">Bus +6</button>
+                        <button class="btn" type="button" data-ball="tractor" data-i18n="cargames.cricket.tractor">Tractor +8</button>
+                        <button class="btn out" type="button" data-ball="out" data-i18n="cargames.cricket.yellow">Yellow car = OUT</button>
+                    </div>
+
+                    <div class="mini-label" data-i18n="cargames.cricket.last">Last balls</div>
+                    <div class="ball-log" id="cric-log" aria-live="polite"></div>
+                    <div class="banner" id="cric-summary" hidden></div>
+
+                    <div class="btn-row three">
+                        <button class="btn ghost" id="cric-undo" type="button" data-i18n="cargames.cricket.undo">Undo last ball</button>
+                        <button class="btn primary" id="cric-end" type="button" data-i18n="cargames.cricket.end">End innings</button>
+                        <button class="btn" id="cric-new" type="button" data-i18n="cargames.cricket.new">New innings</button>
+                    </div>
+                </section>
+
+                <!-- 2. ALPHABET HUNT -->
+                <section class="panel" id="panel-alphabet" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g2.howto">Watch the signs, number plates and shop fronts. Tap each letter from A to Z as you spot it. Clear the whole alphabet before the trip ends.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.alpha.spotted">Spotted</div>
+                    <div class="score-line" id="alpha-progress">0 / 26</div>
+                    <div class="meter" role="presentation"><span class="meter-fill" id="alpha-meter"></span></div>
+                    <div class="letter-grid" id="alpha-grid"></div>
+                    <div class="banner" id="alpha-banner" hidden></div>
+
+                    <div class="btn-row">
+                        <button class="btn" id="alpha-new" type="button" data-i18n="cargames.alpha.new">New trip</button>
+                    </div>
+                </section>
+
+                <!-- 3. CATEGORIES -->
+                <section class="panel" id="panel-categories" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g3.howto">Pick a letter, then name something for each of the five headings before the car reaches the next town. New letter swaps the letter, Shuffle headings swaps the list.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.cat.letter">Letter</div>
+                    <div class="big" id="cat-letter">A</div>
+                    <div class="mini-label" data-i18n="cargames.cat.headings">Name one for each heading</div>
+                    <ol class="heading-list" id="cat-headings"></ol>
+
+                    <div class="btn-row two">
+                        <button class="btn primary" id="cat-newletter" type="button" data-i18n="cargames.cat.newletter">New letter</button>
+                        <button class="btn" id="cat-shuffle" type="button" data-i18n="cargames.cat.shuffle">Shuffle headings</button>
+                    </div>
+                </section>
+
+                <!-- 4. KEEP IT GOING -->
+                <section class="panel" id="panel-keepgoing" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g4.howto">Read the category out loud. The player named takes one turn, then taps Next player. Turn on New category each turn if you want a fresh prompt every time.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.keep.current">Now playing</div>
+                    <div class="big words" id="keep-player">Player 1</div>
+                    <div class="mini-label" data-i18n="cargames.keep.category">Category</div>
+                    <div class="big words" id="keep-cat">Things in a car</div>
+                    <div class="hint" id="keep-turn">Turn 1 of 2</div>
+
+                    <div class="btn-row">
+                        <button class="btn primary" id="keep-next" type="button" data-i18n="cargames.keep.next">Next player</button>
+                    </div>
+                    <div class="btn-row two">
+                        <button class="btn" id="keep-newcat" type="button" data-i18n="cargames.keep.newcat">New category</button>
+                        <button class="btn ghost" id="keep-reset" type="button" data-i18n="cargames.keep.reset">Reset turn</button>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn ghost" id="keep-rotate" type="button" data-i18n="cargames.keep.rotateOn">New category each turn: On</button>
+                    </div>
+                </section>
+
+                <!-- 5. PLATE WORDS -->
+                <section class="panel" id="panel-plate" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g5.howto">Three letters, one word - the letters must appear in that order. Type a word and tap Add word: its length is your score. Start the 60 second timer and see how many words you can find.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.plate.letters">Your letters</div>
+                    <div class="big" id="plate-letters">ABC</div>
+
+                    <div class="field-row">
+                        <input class="text-input" id="plate-input" type="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="Type a word..." data-i18n-placeholder="cargames.plate.input.ph">
+                        <button class="btn" id="plate-add" type="button" data-i18n="cargames.plate.add">Add word</button>
+                    </div>
+
+                    <div class="mini-label" data-i18n="cargames.plate.timer">Time</div>
+                    <div class="timer-row">
+                        <span class="timer" id="plate-timer">60s</span>
+                        <button class="btn primary" id="plate-start" type="button" data-i18n="cargames.plate.start">Start</button>
+                        <button class="btn" id="plate-stop" type="button" data-i18n="cargames.plate.stop">Stop</button>
+                        <button class="btn ghost" id="plate-reset" type="button" data-i18n="cargames.plate.reset">Reset</button>
+                    </div>
+
+                    <div class="score-line" id="plate-score">Score: 0</div>
+                    <div class="mini-label" data-i18n="cargames.plate.found">Words this round</div>
+                    <ul class="word-list" id="plate-list"></ul>
+                    <div class="hint" id="plate-hint" aria-live="polite"></div>
+
+                    <div class="btn-row">
+                        <button class="btn" id="plate-new" type="button" data-i18n="cargames.plate.newletters">New letters</button>
+                    </div>
+                </section>
+
+                <!-- 6. RHYME TIME -->
+                <section class="panel" id="panel-rhyme" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g6.howto">One player says a word that rhymes with the word on screen. If it is a real rhyme tap Good one, otherwise tap Dry. Either way the next word appears and the Kindle passes on.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.rhyme.label">Rhyme with</div>
+                    <div class="big" id="rhyme-word">car</div>
+                    <div class="hint" id="rhyme-tally">Good 0 / Dry 0</div>
+
+                    <div class="btn-row two">
+                        <button class="btn primary" id="rhyme-good" type="button" data-i18n="cargames.rhyme.good">Good one</button>
+                        <button class="btn" id="rhyme-dry" type="button" data-i18n="cargames.rhyme.dry">Dry</button>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn ghost" id="rhyme-new" type="button" data-i18n="cargames.rhyme.new">New round</button>
+                    </div>
+                </section>
+
+                <!-- 7. SAME PAGE -->
+                <section class="panel" id="panel-samepage" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g7.howto">Everyone thinks of an answer to the prompt without saying it. Tap Ready and count 3, 2, 1 together, then reveal. Tap Match if you all said the same thing, or No match to move on.</span></p>
+
+                    <div class="big words" id="same-cue">Ready</div>
+                    <div class="big words" id="same-prompt" hidden></div>
+                    <div class="hint" id="same-score">Matches: 0</div>
+
+                    <div class="btn-row">
+                        <button class="btn primary" id="same-reveal-btn" type="button">Ready</button>
+                    </div>
+                    <div class="btn-row two" id="same-actions" hidden>
+                        <button class="btn primary" id="same-match" type="button" data-i18n="cargames.same.match">Match!</button>
+                        <button class="btn" id="same-nomatch" type="button" data-i18n="cargames.same.nomatch">No match</button>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn ghost" id="same-new" type="button" data-i18n="cargames.same.new">New prompt</button>
+                    </div>
+                </section>
+
+                <!-- 8. SPOT BINGO -->
+                <section class="panel" id="panel-bingo" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g8.howto">Each player takes the Kindle and taps the things they can see from the window. Get five in a row, a column or a diagonal and shout BINGO. New card deals a fresh grid.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.bingo.label">Spot these from the car</div>
+                    <div class="bingo-grid" id="bingo-grid"></div>
+                    <div class="banner" id="bingo-banner" hidden></div>
+                    <div class="hint" id="bingo-progress">0 / 25 marked</div>
+
+                    <div class="btn-row">
+                        <button class="btn" id="bingo-new" type="button" data-i18n="cargames.bingo.new">New card</button>
+                    </div>
+                </section>
+
+                <!-- 9. STORY CHAIN -->
+                <section class="panel" id="panel-story" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g9.howto">Read the opening line, then each player adds one sentence and passes the Kindle on. Use the 60 second timer per turn. The list shows who has already contributed.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.story.opening">Opening line</div>
+                    <p class="story-open" id="story-opening"></p>
+
+                    <div class="mini-label" data-i18n="cargames.story.current">Now writing</div>
+                    <div class="big words" id="story-player">Player 1</div>
+                    <div class="hint" id="story-turn">Turn 1 of 2</div>
+
+                    <div class="mini-label" data-i18n="cargames.story.timer">Time</div>
+                    <div class="timer-row two-actions">
+                        <span class="timer" id="story-timer">60s</span>
+                        <button class="btn primary" id="story-start" type="button" data-i18n="cargames.story.start">Start</button>
+                        <button class="btn" id="story-stop" type="button" data-i18n="cargames.story.stop">Stop</button>
+                    </div>
+
+                    <div class="btn-row">
+                        <button class="btn primary" id="story-next" type="button" data-i18n="cargames.story.next">Next player</button>
+                    </div>
+
+                    <div class="mini-label" data-i18n="cargames.story.contributors">Who has added a line</div>
+                    <div class="chips" id="story-contrib"></div>
+                    <div class="hint" id="story-hint" aria-live="polite"></div>
+
+                    <div class="btn-row">
+                        <button class="btn ghost" id="story-new" type="button" data-i18n="cargames.story.new">New story</button>
+                    </div>
+                </section>
+
+                <!-- 10. WOULD YOU RATHER -->
+                <section class="panel" id="panel-wyr" hidden>
+                    <p class="howto"><span class="howto-label" data-i18n="cargames.game.howto">How to play</span><span data-i18n="cargames.g10.howto">Read both choices out loud, then everyone taps the one they prefer. The bars show the live vote. Next question deals a new dilemma and Reset votes clears the tally.</span></p>
+
+                    <div class="mini-label" data-i18n="cargames.wyr.label">Would you rather...</div>
+
+                    <button class="btn wyr-btn" id="wyr-a" type="button">
+                        <span class="wyr-tag" aria-hidden="true">A</span>
+                        <span class="wyr-text" id="wyr-a-text"></span>
+                    </button>
+                    <button class="btn wyr-btn" id="wyr-b" type="button">
+                        <span class="wyr-tag" aria-hidden="true">B</span>
+                        <span class="wyr-text" id="wyr-b-text"></span>
+                    </button>
+
+                    <div class="tally-row">
+                        <span class="tally-label" aria-hidden="true">A</span>
+                        <div class="bar"><div class="bar-fill" id="wyr-bar-a"></div></div>
+                        <span class="tally-count" id="wyr-count-a">0 votes</span>
+                    </div>
+                    <div class="tally-row">
+                        <span class="tally-label" aria-hidden="true">B</span>
+                        <div class="bar"><div class="bar-fill" id="wyr-bar-b"></div></div>
+                        <span class="tally-count" id="wyr-count-b">0 votes</span>
+                    </div>
+                    <div class="hint" id="wyr-total">Total: 0</div>
+                    <div class="hint" id="wyr-hint" aria-live="polite"></div>
+
+                    <div class="btn-row two">
+                        <button class="btn primary" id="wyr-next" type="button" data-i18n="cargames.wyr.next">Next question</button>
+                        <button class="btn ghost" id="wyr-reset" type="button" data-i18n="cargames.wyr.reset">Reset votes</button>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            /* =========================================================
+               1. SMALL HELPERS
+               ========================================================= */
+            var byId = function (id) {
+                return document.getElementById(id);
+            };
+
+            function setText(id, text) {
+                var el = byId(id);
+                if (el) el.textContent = text;
+            }
+
+            // Every user-facing dynamic string goes through window.t with an
+            // English fallback. Never define a global named "t".
+            function tr(key, fallback) {
+                if (typeof window.t === 'function') {
+                    var out = window.t('cargames.' + key, fallback);
+                    if (out) return out;
+                }
+                return fallback;
+            }
+
+            // Replace {name} style placeholders yourself - js/i18n.js does not
+            // interpolate variables.
+            function trn(key, fallback, vars) {
+                var s = tr(key, fallback);
+                for (var k in vars) {
+                    if (vars.hasOwnProperty(k)) {
+                        s = s.replace('{' + k + '}', String(vars[k]));
+                    }
+                }
+                return s;
+            }
+
+            function dataText(group, idx, fallback) {
+                return tr('data.' + group + '.' + idx, fallback);
+            }
+
+            function randInt(n) {
+                return Math.floor(Math.random() * n);
+            }
+
+            function shuffled(list) {
+                var a = list.slice();
+                for (var i = a.length - 1; i > 0; i--) {
+                    var j = randInt(i + 1);
+                    var tmp = a[i];
+                    a[i] = a[j];
+                    a[j] = tmp;
+                }
+                return a;
+            }
+
+            // Pick a random index that differs from "current" when possible.
+            function different(current, length) {
+                if (length <= 1) return 0;
+                var next = randInt(length);
+                var guard = 0;
+                while (next === current && guard < 50) {
+                    next = randInt(length);
+                    guard += 1;
+                }
+                return next;
+            }
+
+            function asInt(value, fallback) {
+                var n = parseInt(value, 10);
+                return isNaN(n) ? fallback : n;
+            }
+
+            function clampInt(value, lo, hi, fallback) {
+                var n = asInt(value, fallback);
+                if (n < lo) return lo;
+                if (n > hi) return hi;
+                return n;
+            }
+
+            /* =========================================================
+               2. STORAGE
+               ========================================================= */
+            var STORE_PREFIX = 'rekindle_car_';
+
+            function loadState(name) {
+                try {
+                    var raw = localStorage.getItem(STORE_PREFIX + name);
+                    if (!raw) return null;
+                    var obj = JSON.parse(raw);
+                    return (obj && typeof obj === 'object') ? obj : null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function saveState(name, obj) {
+                try {
+                    localStorage.setItem(STORE_PREFIX + name, JSON.stringify(obj));
+                } catch (e) {
+                    // localStorage is volatile on Kindle - ignore quota errors.
+                }
+            }
+
+            /* =========================================================
+               3. CONTENT POOLS
+               ========================================================= */
+            var HEADINGS = [
+                "Things in a kitchen", "Films", "Animals", "Things in a car",
+                "Countries", "Songs", "Foods", "Sports", "TV shows",
+                "Things in a school bag", "Drinks", "Cities", "Board games",
+                "Jobs", "Things that are red", "Famous people",
+                "Things in a supermarket", "Body parts", "Book titles",
+                "Things at the beach", "Vehicles", "Cartoon characters",
+                "Things in a bedroom", "Weather", "Trees and plants",
+                "Things you can borrow", "Breakfast foods", "Musical instruments",
+                "Apps and websites", "Things in a hospital", "Brands",
+                "Things that make a noise"
+            ];
+
+            // No Q, U, V, W, X, Y or Z - those stall the car.
+            var LETTER_POOL = 'ABCDEFGHIJKLMNOPRST'.split('');
+
+            var KEEP_CATS = [
+                "Things in a car", "Breakfast foods", "Animals you see from a car",
+                "Songs everyone knows", "Films from the 90s", "Things that are blue",
+                "Board games", "Things in a kitchen", "Countries", "Sports",
+                "Fruits", "Jobs", "Cartoon characters", "Things at a petrol station",
+                "Words that rhyme with car", "Things in a school bag", "TV shows",
+                "Cities", "Drinks", "Things that smell good", "Vehicles"
+            ];
+
+            var RHYME_WORDS = [
+                "car", "cat", "light", "moon", "tree", "dog", "cake", "star",
+                "blue", "night", "rain", "phone", "floor", "hat", "mouse",
+                "king", "sun", "boat", "snow", "shoe"
+            ];
+
+            var SAME_PROMPTS = [
+                "Name a pizza topping", "Name a colour", "Name a song everyone knows",
+                "Name a car colour", "Name a football team", "Name a breakfast food",
+                "Name a superhero", "Name a country", "Name a fast food chain",
+                "Name a TV show", "Name an animal", "Name a holiday destination",
+                "Name a hobby", "Name a film", "Name a fruit", "Name a school subject",
+                "Name a board game", "Name something in a hotel room", "Name a drink",
+                "Name a cartoon character", "Name a musical instrument",
+                "Name something you take to the beach", "Name a job",
+                "Name a word that rhymes with light", "Name something in a kitchen"
+            ];
+
+            var BINGO_ITEMS = [
+                "Petrol station", "Red car", "Blue car", "Motorbike", "Truck",
+                "Tractor", "Bus", "Traffic lights", "Roundabout", "Bridge",
+                "Tunnel", "Windmill", "Church", "School", "Cafe", "Bakery",
+                "Roadworks", "Speed camera", "Cow", "Sheep", "Horse",
+                "Dog in a car", "Bird", "River", "Lake", "Beach", "Mountain",
+                "Forest", "Field", "Hay bales", "Road sign", "Billboard",
+                "Caravan", "Camper van", "Bicycle", "Train", "Airplane",
+                "Helicopter", "Police car", "Ambulance", "Fire truck",
+                "Delivery van", "Sunflower", "Wind turbine", "Solar panel",
+                "Picnic table", "Lookout sign", "Yellow car"
+            ];
+
+            var BINGO_LINES = [
+                [0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14],
+                [15, 16, 17, 18, 19], [20, 21, 22, 23, 24],
+                [0, 5, 10, 15, 20], [1, 6, 11, 16, 21], [2, 7, 12, 17, 22],
+                [3, 8, 13, 18, 23], [4, 9, 14, 19, 24],
+                [0, 6, 12, 18, 24], [4, 8, 12, 16, 20]
+            ];
+
+            var STORY_LINES = [
+                "The sat nav said turn left, but the road ahead was a river.",
+                "We had been driving for six hours and the dog had not blinked once.",
+                "Somewhere past the third roundabout, the fuel light came on.",
+                "The boot was full of camping gear and one very angry chicken.",
+                "Nobody remembered who had packed the map, and it was upside down.",
+                "The radio only played one station, and it was all yodelling.",
+                "We stopped at a town where every shop sold the same hat.",
+                "A cow looked at us for a long time and then followed the car.",
+                "The sign said scenic route and then the tarmac simply ended.",
+                "My brother swore the shortcut was real. It was not.",
+                "At the drive-through, the voice asked us a question we could not answer.",
+                "The windscreen wiper flew off somewhere near the border.",
+                "We found a picnic table in the middle of nowhere with tea still warm.",
+                "The back seat was arguing about the best biscuit.",
+                "Every town we passed had a statue of the same man.",
+                "The hire car had a button marked do not press.",
+                "We were early, so we took the road with the yellow lines.",
+                "The map had a coffee stain shaped like a dinosaur.",
+                "Grandma fell asleep at the wheel, and she was not driving.",
+                "The beach was two hours away and the bucket had a hole in it."
+            ];
+
+            var DILEMMAS = [
+                ["Never wait in a queue again", "Never sit in traffic again"],
+                ["Always drive with the windows down", "Always drive with the heater on full"],
+                ["Only eat service-station food", "Only eat picnic food"],
+                ["Navigate by paper map", "Navigate by a stranger's directions"],
+                ["Have a car that flies", "Have a car that floats"],
+                ["Always be the driver", "Always be the DJ"],
+                ["A boot full of snacks", "A boot full of board games"],
+                ["Only stop at big cities", "Only stop at tiny towns"],
+                ["Be stuck behind a tractor", "Be stuck behind a bus"],
+                ["Free fuel for life", "Free parking for life"],
+                ["A radio with one station", "A radio with no volume knob"],
+                ["Sit in the front seat", "Sit in the back seat"],
+                ["Have a car that is always clean", "Have a car that never breaks down"],
+                ["A holiday by the sea", "A holiday in the mountains"],
+                ["Take the scenic route", "Take the fastest route"],
+                ["Only listen to podcasts", "Only listen to music"],
+                ["A dog in the car", "A cat in the car"],
+                ["Eat chips in the car", "Ban food in the car forever"],
+                ["Have a sunroof", "Have heated seats"],
+                ["Drive a vintage car", "Drive a brand new car"],
+                ["Get lost for an hour", "Arrive two hours early"],
+                ["Always pack too much", "Always pack too little"],
+                ["A car that beeps at everything", "A car that makes no sound at all"],
+                ["Sleep in a tent", "Sleep in a motel"],
+                ["Have unlimited snacks", "Have unlimited petrol"],
+                ["A passenger who talks nonstop", "A passenger who sleeps all trip"],
+                ["Only ever drive at night", "Only ever drive at dawn"],
+                ["Have the AC broken in summer", "Have the heater broken in winter"],
+                ["A manual gearbox", "An automatic gearbox"],
+                ["Play I Spy every trip", "Play 20 Questions every trip"],
+                ["A map with no labels", "A map with no scale"],
+                ["Stop for every lookout", "Stop for every bakery"],
+                ["Drive a tiny hatchback", "Drive a huge 4WD"],
+                ["A horn that plays a tune", "A horn that sounds like a cow"],
+                ["Always get the last parking spot", "Always get the first parking spot"],
+                ["A car with no mirrors", "A car with no indicators"],
+                ["Bring the whole family", "Bring two friends"],
+                ["Music from the 80s", "Music from the 2000s"],
+                ["Camp by a river", "Camp in a forest"],
+                ["Take the ferry", "Take the tunnel"]
+            ];
+
+            var CRICKET_BALLS = {
+                car: { pts: 1, key: 'cricket.car', en: 'Car' },
+                van: { pts: 2, key: 'cricket.van', en: 'Van' },
+                lorry: { pts: 4, key: 'cricket.lorry', en: 'Lorry' },
+                bus: { pts: 6, key: 'cricket.bus', en: 'Bus' },
+                tractor: { pts: 8, key: 'cricket.tractor', en: 'Tractor' },
+                out: { pts: 0, key: 'cricket.out', en: 'OUT' }
+            };
+            var CRICKET_WICKETS = 5;
+            var ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+            var GAMES = [
+                { id: 'cricket', nameKey: 'g1.name', name: 'Car Cricket', blurbKey: 'g1.blurb', blurb: 'Tap what you see. Yellow cars are out.' },
+                { id: 'alphabet', nameKey: 'g2.name', name: 'Alphabet Hunt', blurbKey: 'g2.blurb', blurb: 'Spot every letter from A to Z.' },
+                { id: 'categories', nameKey: 'g3.name', name: 'Categories', blurbKey: 'g3.blurb', blurb: 'One letter, five headings, shout it out.' },
+                { id: 'keepgoing', nameKey: 'g4.name', name: 'Keep It Going', blurbKey: 'g4.blurb', blurb: 'Name one, then pass the Kindle on.' },
+                { id: 'plate', nameKey: 'g5.name', name: 'Plate Words', blurbKey: 'g5.blurb', blurb: 'Three letters in order, one word.' },
+                { id: 'rhyme', nameKey: 'g6.name', name: 'Rhyme Time', blurbKey: 'g6.blurb', blurb: 'Say a rhyme before the car moves on.' },
+                { id: 'samepage', nameKey: 'g7.name', name: 'Same Page', blurbKey: 'g7.blurb', blurb: 'Count down, then compare answers.' },
+                { id: 'bingo', nameKey: 'g8.name', name: 'Spot Bingo', blurbKey: 'g8.blurb', blurb: 'Five in a row from the car window.' },
+                { id: 'story', nameKey: 'g9.name', name: 'Story Chain', blurbKey: 'g9.blurb', blurb: 'One line each, build it together.' },
+                { id: 'wyr', nameKey: 'g10.name', name: 'Would You Rather', blurbKey: 'g10.blurb', blurb: 'Two choices, one crew, no escape.' }
+            ];
+
+            var GAME_BY_ID = {};
+            for (var gi = 0; gi < GAMES.length; gi++) {
+                GAME_BY_ID[GAMES[gi].id] = GAMES[gi];
+            }
+
+            /* =========================================================
+               4. CREW (localStorage: rekindle_car_crew)
+               ========================================================= */
+            var CREW_KEY = 'rekindle_car_crew';
+
+            function defaultPlayerName(n) {
+                return trn('crew.player', 'Player {n}', { n: n });
+            }
+
+            function loadCrew() {
+                var raw = null;
+                try {
+                    raw = localStorage.getItem(CREW_KEY);
+                } catch (e) {
+                    raw = null;
+                }
+                var arr = null;
+                if (raw) {
+                    try {
+                        arr = JSON.parse(raw);
+                    } catch (e) {
+                        arr = null;
+                    }
+                }
+                if (!Array.isArray(arr) || arr.length < 2) {
+                    return [defaultPlayerName(1), defaultPlayerName(2)];
+                }
+                var out = [];
+                for (var i = 0; i < arr.length && out.length < 8; i++) {
+                    var name = (typeof arr[i] === 'string') ? arr[i].slice(0, 16).replace(/^\s+|\s+$/g, '') : '';
+                    if (!name) name = defaultPlayerName(out.length + 1);
+                    out.push(name);
+                }
+                while (out.length < 2) out.push(defaultPlayerName(out.length + 1));
+                return out;
+            }
+
+            var crew = loadCrew();
+
+            function saveCrew() {
+                try {
+                    localStorage.setItem(CREW_KEY, JSON.stringify(crew));
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+            function crewName(index) {
+                var name = (crew[index] || '').replace(/^\s+|\s+$/g, '');
+                if (!name) name = defaultPlayerName(index + 1);
+                return name;
+            }
+
+            function renderCrew() {
+                var list = byId('crew-list');
+                list.innerHTML = '';
+                for (var i = 0; i < crew.length; i++) {
+                    (function (idx) {
+                        var row = document.createElement('div');
+                        row.className = 'crew-row';
+
+                        var num = document.createElement('span');
+                        num.className = 'crew-num';
+                        num.textContent = (idx + 1 < 10 ? '0' : '') + (idx + 1);
+
+                        var input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'crew-input';
+                        input.maxLength = 16;
+                        input.value = crew[idx];
+                        input.setAttribute('aria-label', tr('hub.crew.name', 'Player name') + ' ' + (idx + 1));
+                        input.addEventListener('input', function () {
+                            crew[idx] = input.value;
+                            saveCrew();
+                            renderKeep();
+                            renderStory();
+                        });
+                        input.addEventListener('keydown', function (e) {
+                            if (e.key === 'Enter') {
+                                input.blur();
+                                e.preventDefault();
+                            }
+                        });
+
+                        row.appendChild(num);
+                        row.appendChild(input);
+                        list.appendChild(row);
+                    })(i);
+                }
+                setText('crew-count', crew.length + ' / 8');
+                byId('crew-add').disabled = crew.length >= 8;
+                byId('crew-remove').disabled = crew.length <= 2;
+            }
+
+            function addPlayer() {
+                if (crew.length >= 8) return;
+                crew.push(defaultPlayerName(crew.length + 1));
+                saveCrew();
+                renderCrew();
+                renderKeep();
+                renderStory();
+                var rows = byId('crew-list').querySelectorAll('.crew-input');
+                if (rows.length) rows[rows.length - 1].focus();
+            }
+
+            function removePlayer() {
+                if (crew.length <= 2) return;
+                crew.pop();
+                saveCrew();
+                renderCrew();
+                renderKeep();
+                renderStory();
+            }
+
+            /* =========================================================
+               5. GAME STATE (one localStorage key per game)
+               ========================================================= */
+            function normCricket(raw) {
+                var s = {
+                    score: 0, wickets: 0, balls: 0, log: [],
+                    active: true, summary: '', history: []
+                };
+                if (!raw) return s;
+                s.score = Math.max(0, asInt(raw.score, 0));
+                s.wickets = clampInt(raw.wickets, 0, CRICKET_WICKETS, 0);
+                s.balls = Math.max(0, asInt(raw.balls, 0));
+                s.active = raw.active !== false;
+                s.summary = (typeof raw.summary === 'string') ? raw.summary : '';
+                if (Array.isArray(raw.log)) {
+                    for (var i = 0; i < raw.log.length; i++) {
+                        var entry = raw.log[i];
+                        if (entry && typeof entry.t === 'string' && CRICKET_BALLS[entry.t]) {
+                            s.log.push({ t: entry.t });
+                        }
+                    }
+                    s.log = s.log.slice(-6);
+                }
+                if (Array.isArray(raw.history)) {
+                    for (var h = 0; h < raw.history.length; h++) {
+                        var snap = raw.history[h];
+                        if (snap && typeof snap === 'object') {
+                            s.history.push({
+                                score: Math.max(0, asInt(snap.score, 0)),
+                                wickets: clampInt(snap.wickets, 0, CRICKET_WICKETS, 0),
+                                balls: Math.max(0, asInt(snap.balls, 0)),
+                                log: Array.isArray(snap.log) ? snap.log.slice(-6) : [],
+                                active: snap.active !== false,
+                                summary: (typeof snap.summary === 'string') ? snap.summary : ''
+                            });
+                        }
+                    }
+                    s.history = s.history.slice(-50);
+                }
+                return s;
+            }
+
+            function normAlphabet(raw) {
+                var s = { spotted: [] };
+                if (raw && Array.isArray(raw.spotted)) {
+                    for (var i = 0; i < raw.spotted.length; i++) {
+                        var ch = raw.spotted[i];
+                        if (typeof ch === 'string' && ch.length === 1 &&
+                            ALPHABET.indexOf(ch) !== -1 && s.spotted.indexOf(ch) === -1) {
+                            s.spotted.push(ch);
+                        }
+                    }
+                }
+                return s;
+            }
+
+            function pickHeadings(avoid) {
+                var all = [];
+                for (var i = 0; i < HEADINGS.length; i++) all.push(i);
+                var pool = shuffled(all);
+                var out = pool.slice(0, 5);
+                if (avoid && avoid.length === 5) {
+                    var same = out.slice().sort().join(',') === avoid.slice().sort().join(',');
+                    if (same) out = pool.slice(5, 10);
+                }
+                return out;
+            }
+
+            function normCategories(raw) {
+                var s = { letter: randInt(LETTER_POOL.length), headings: [] };
+                if (raw) {
+                    s.letter = clampInt(raw.letter, 0, LETTER_POOL.length - 1, s.letter);
+                    if (Array.isArray(raw.headings)) {
+                        for (var i = 0; i < raw.headings.length; i++) {
+                            var idx = asInt(raw.headings[i], -1);
+                            if (idx >= 0 && idx < HEADINGS.length && s.headings.indexOf(idx) === -1) {
+                                s.headings.push(idx);
+                            }
+                        }
+                    }
+                }
+                if (s.headings.length !== 5) s.headings = pickHeadings([]);
+                return s;
+            }
+
+            function normKeep(raw) {
+                var s = { turn: 0, cat: 0, rotate: true };
+                if (!raw) return s;
+                s.turn = clampInt(raw.turn, 0, 7, 0);
+                s.cat = clampInt(raw.cat, 0, KEEP_CATS.length - 1, 0);
+                s.rotate = raw.rotate !== false;
+                return s;
+            }
+
+            function newPlateLetters(current) {
+                var out = '';
+                var guard = 0;
+                do {
+                    out = '';
+                    while (out.length < 3) {
+                        var ch = ALPHABET.charAt(randInt(26));
+                        if (out.indexOf(ch) === -1) out += ch;
+                    }
+                    guard += 1;
+                } while (out === current && guard < 50);
+                return out;
+            }
+
+            function normPlate(raw) {
+                var s = { letters: newPlateLetters(''), words: [] };
+                if (!raw) return s;
+                var letters = (typeof raw.letters === 'string') ? raw.letters.toUpperCase() : '';
+                if (/^[A-Z]{3}$/.test(letters)) s.letters = letters;
+                if (Array.isArray(raw.words)) {
+                    for (var i = 0; i < raw.words.length && s.words.length < 200; i++) {
+                        var w = raw.words[i];
+                        if (w && typeof w.w === 'string' && /^[A-Z]{3,}$/.test(w.w)) {
+                            s.words.push({ w: w.w, n: w.w.length });
+                        }
+                    }
+                }
+                return s;
+            }
+
+            function normRhyme(raw) {
+                var s = { word: randInt(RHYME_WORDS.length), good: 0, dry: 0 };
+                if (!raw) return s;
+                s.word = clampInt(raw.word, 0, RHYME_WORDS.length - 1, s.word);
+                s.good = Math.max(0, asInt(raw.good, 0));
+                s.dry = Math.max(0, asInt(raw.dry, 0));
+                return s;
+            }
+
+            function normSame(raw) {
+                var s = { stage: 0, prompt: randInt(SAME_PROMPTS.length), score: 0 };
+                if (!raw) return s;
+                s.stage = clampInt(raw.stage, 0, 4, 0);
+                s.prompt = clampInt(raw.prompt, 0, SAME_PROMPTS.length - 1, s.prompt);
+                s.score = Math.max(0, asInt(raw.score, 0));
+                return s;
+            }
+
+            function dealBingo() {
+                var all = [];
+                for (var i = 0; i < BINGO_ITEMS.length; i++) all.push(i);
+                return shuffled(all).slice(0, 25);
+            }
+
+            function normBingo(raw) {
+                var s = { card: dealBingo(), marked: [] };
+                var cardOk = false;
+                if (raw && Array.isArray(raw.card) && raw.card.length === 25) {
+                    var tested = [];
+                    cardOk = true;
+                    for (var i = 0; i < raw.card.length; i++) {
+                        var idx = asInt(raw.card[i], -1);
+                        if (idx < 0 || idx >= BINGO_ITEMS.length || tested.indexOf(idx) !== -1) {
+                            cardOk = false;
+                            break;
+                        }
+                        tested.push(idx);
+                    }
+                    if (cardOk) s.card = tested;
+                }
+                for (var m = 0; m < 25; m++) s.marked.push(false);
+                // Only restore marks when the saved card itself was valid,
+                // otherwise old marks would land on a brand new card.
+                if (cardOk && raw && Array.isArray(raw.marked)) {
+                    for (var k = 0; k < 25; k++) s.marked[k] = !!raw.marked[k];
+                }
+                return s;
+            }
+
+            function normStory(raw) {
+                var s = { line: randInt(STORY_LINES.length), turn: 0, contributors: [] };
+                if (!raw) return s;
+                s.line = clampInt(raw.line, 0, STORY_LINES.length - 1, s.line);
+                s.turn = clampInt(raw.turn, 0, 7, 0);
+                if (Array.isArray(raw.contributors)) {
+                    for (var i = 0; i < raw.contributors.length && s.contributors.length < 200; i++) {
+                        if (typeof raw.contributors[i] === 'string') {
+                            s.contributors.push(raw.contributors[i].slice(0, 16));
+                        }
+                    }
+                }
+                return s;
+            }
+
+            function normWyr(raw) {
+                var s = { q: randInt(DILEMMAS.length), a: 0, b: 0 };
+                if (!raw) return s;
+                s.q = clampInt(raw.q, 0, DILEMMAS.length - 1, s.q);
+                s.a = Math.max(0, asInt(raw.a, 0));
+                s.b = Math.max(0, asInt(raw.b, 0));
+                return s;
+            }
+
+            var stCricket = normCricket(loadState('cricket'));
+            var stAlphabet = normAlphabet(loadState('alphabet'));
+            var stCategories = normCategories(loadState('categories'));
+            var stKeep = normKeep(loadState('keepgoing'));
+            var stPlate = normPlate(loadState('plate'));
+            var stRhyme = normRhyme(loadState('rhyme'));
+            var stSame = normSame(loadState('samepage'));
+            var stBingo = normBingo(loadState('bingo'));
+            var stStory = normStory(loadState('story'));
+            var stWyr = normWyr(loadState('wyr'));
+
+            // Save the normalised state once so a first visit has something to
+            // restore, and so a corrupted blob is replaced.
+            saveState('cricket', stCricket);
+            saveState('alphabet', stAlphabet);
+            saveState('categories', stCategories);
+            saveState('keepgoing', stKeep);
+            saveState('plate', stPlate);
+            saveState('rhyme', stRhyme);
+            saveState('samepage', stSame);
+            saveState('bingo', stBingo);
+            saveState('story', stStory);
+            saveState('wyr', stWyr);
+
+            /* =========================================================
+               6. CAR CRICKET
+               ========================================================= */
+            function oversText(balls) {
+                return Math.floor(balls / 6) + '.' + (balls % 6);
+            }
+
+            function cricketSnapshot() {
+                return {
+                    score: stCricket.score,
+                    wickets: stCricket.wickets,
+                    balls: stCricket.balls,
+                    log: stCricket.log.slice(),
+                    active: stCricket.active,
+                    summary: stCricket.summary
+                };
+            }
+
+            function renderCricketLog() {
+                var box = byId('cric-log');
+                box.innerHTML = '';
+                if (!stCricket.log.length) {
+                    var empty = document.createElement('span');
+                    empty.className = 'ball-log-empty muted';
+                    empty.textContent = tr('cricket.noballs', 'No balls yet.');
+                    box.appendChild(empty);
+                    return;
+                }
+                for (var i = 0; i < stCricket.log.length; i++) {
+                    var ball = stCricket.log[i];
+                    var def = CRICKET_BALLS[ball.t];
+                    if (!def) continue;
+                    var chip = document.createElement('span');
+                    chip.className = 'ball' + (ball.t === 'out' ? ' out' : '');
+                    var label = tr(def.key, def.en);
+                    // Button labels already carry the points ("Car +1"), so strip a
+                    // trailing "+N" before adding the score to the log chip.
+                    label = label.replace(/\s*\+\s*[0-9]+\s*$/, '');
+                    if (ball.t === 'out') {
+                        chip.textContent = label;
+                    } else {
+                        chip.textContent = label + ' +' + def.pts;
+                    }
+                    box.appendChild(chip);
+                }
+            }
+
+            function renderCricket() {
+                setText('cric-score', String(stCricket.score));
+                setText('cric-wickets', stCricket.wickets + ' / ' + CRICKET_WICKETS);
+                setText('cric-overs', oversText(stCricket.balls));
+                setText('cric-balls', String(stCricket.balls));
+                renderCricketLog();
+
+                var summary = byId('cric-summary');
+                if (stCricket.summary) {
+                    summary.hidden = false;
+                    summary.textContent = stCricket.summary;
+                } else {
+                    summary.hidden = true;
+                }
+
+                var ballButtons = byId('cric-btns').querySelectorAll('button');
+                for (var i = 0; i < ballButtons.length; i++) {
+                    ballButtons[i].disabled = !stCricket.active;
+                }
+                byId('cric-end').disabled = !stCricket.active;
+                byId('cric-undo').disabled = stCricket.history.length === 0;
+            }
+
+            function cricketEndInnings() {
+                stCricket.active = false;
+                var overs = oversText(stCricket.balls);
+                stCricket.summary = trn('cricket.summary', 'You scored {runs} off {overs} overs', {
+                    runs: stCricket.score,
+                    overs: overs
+                });
+                saveState('cricket', stCricket);
+            }
+
+            function cricketPlay(type) {
+                var def = CRICKET_BALLS[type];
+                if (!def || !stCricket.active) return;
+
+                stCricket.history.push(cricketSnapshot());
+                if (stCricket.history.length > 50) stCricket.history.shift();
+
+                stCricket.balls += 1;
+                if (type === 'out') {
+                    stCricket.wickets += 1;
+                } else {
+                    stCricket.score += def.pts;
+                }
+                stCricket.log.push({ t: type });
+                if (stCricket.log.length > 6) stCricket.log.shift();
+
+                if (stCricket.wickets >= CRICKET_WICKETS) {
+                    cricketEndInnings();
+                } else {
+                    saveState('cricket', stCricket);
+                }
+                renderCricket();
+            }
+
+            function cricketUndo() {
+                if (!stCricket.history.length) return;
+                var snap = stCricket.history.pop();
+                stCricket.score = snap.score;
+                stCricket.wickets = snap.wickets;
+                stCricket.balls = snap.balls;
+                stCricket.log = snap.log.slice();
+                stCricket.active = snap.active;
+                stCricket.summary = snap.summary;
+                saveState('cricket', stCricket);
+                renderCricket();
+            }
+
+            function cricketNewInnings() {
+                stCricket = normCricket(null);
+                saveState('cricket', stCricket);
+                renderCricket();
+            }
+
+            /* =========================================================
+               7. ALPHABET HUNT
+               ========================================================= */
+            var alphabetBuilt = false;
+
+            function buildAlphabet() {
+                var grid = byId('alpha-grid');
+                grid.innerHTML = '';
+                for (var i = 0; i < ALPHABET.length; i++) {
+                    (function (ch) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'letter-btn';
+                        btn.textContent = ch;
+                        btn.setAttribute('data-letter', ch);
+                        btn.setAttribute('aria-pressed', 'false');
+                        btn.addEventListener('click', function () {
+                            toggleLetter(ch);
+                        });
+                        grid.appendChild(btn);
+                    })(ALPHABET.charAt(i));
+                }
+                alphabetBuilt = true;
+            }
+
+            function toggleLetter(ch) {
+                var at = stAlphabet.spotted.indexOf(ch);
+                if (at === -1) {
+                    stAlphabet.spotted.push(ch);
+                } else {
+                    stAlphabet.spotted.splice(at, 1);
+                }
+                saveState('alphabet', stAlphabet);
+                renderAlphabet();
+            }
+
+            function renderAlphabet() {
+                if (!alphabetBuilt) buildAlphabet();
+                var grid = byId('alpha-grid');
+                var cells = grid.children;
+                for (var i = 0; i < cells.length; i++) {
+                    var ch = cells[i].getAttribute('data-letter');
+                    var on = stAlphabet.spotted.indexOf(ch) !== -1;
+                    if (on) {
+                        cells[i].classList.add('on');
+                    } else {
+                        cells[i].classList.remove('on');
+                    }
+                    cells[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+                }
+                setText('alpha-progress', trn('alpha.progress', '{n} / 26', { n: stAlphabet.spotted.length }));
+                var meter = byId('alpha-meter');
+                if (meter) {
+                    meter.style.width = Math.round((stAlphabet.spotted.length / 26) * 100) + '%';
+                }
+                var banner = byId('alpha-banner');
+                if (stAlphabet.spotted.length >= 26) {
+                    banner.hidden = false;
+                    banner.textContent = tr('alpha.done', 'All 26 spotted! New trip to play again.');
+                } else {
+                    banner.hidden = true;
+                }
+            }
+
+            function alphabetNewTrip() {
+                stAlphabet = { spotted: [] };
+                saveState('alphabet', stAlphabet);
+                renderAlphabet();
+            }
+
+            /* =========================================================
+               8. CATEGORIES
+               ========================================================= */
+            function renderCategories() {
+                setText('cat-letter', LETTER_POOL[stCategories.letter]);
+                var list = byId('cat-headings');
+                list.innerHTML = '';
+                for (var i = 0; i < stCategories.headings.length; i++) {
+                    var idx = stCategories.headings[i];
+                    var li = document.createElement('li');
+                    li.textContent = dataText('heading', idx, HEADINGS[idx]);
+                    list.appendChild(li);
+                }
+            }
+
+            function categoriesNewLetter() {
+                stCategories.letter = different(stCategories.letter, LETTER_POOL.length);
+                saveState('categories', stCategories);
+                renderCategories();
+            }
+
+            function categoriesShuffle() {
+                stCategories.headings = pickHeadings(stCategories.headings);
+                saveState('categories', stCategories);
+                renderCategories();
+            }
+
+            /* =========================================================
+               9. KEEP IT GOING
+               ========================================================= */
+            function keepPlayerIndex() {
+                if (!crew.length) return 0;
+                return stKeep.turn % crew.length;
+            }
+
+            function renderKeep() {
+                var idx = keepPlayerIndex();
+                setText('keep-player', crewName(idx));
+                setText('keep-cat', dataText('keep', stKeep.cat, KEEP_CATS[stKeep.cat]));
+                setText('keep-turn', trn('keep.turn', 'Turn {n} of {total}', {
+                    n: idx + 1,
+                    total: crew.length
+                }));
+                setText('keep-rotate', stKeep.rotate
+                    ? tr('keep.rotateOn', 'New category each turn: On')
+                    : tr('keep.rotateOff', 'New category each turn: Off'));
+            }
+
+            function keepNext() {
+                stKeep.turn = (keepPlayerIndex() + 1) % crew.length;
+                if (stKeep.rotate) {
+                    stKeep.cat = different(stKeep.cat, KEEP_CATS.length);
+                }
+                saveState('keepgoing', stKeep);
+                renderKeep();
+            }
+
+            function keepNewCategory() {
+                stKeep.cat = different(stKeep.cat, KEEP_CATS.length);
+                saveState('keepgoing', stKeep);
+                renderKeep();
+            }
+
+            function keepToggleRotate() {
+                stKeep.rotate = !stKeep.rotate;
+                saveState('keepgoing', stKeep);
+                renderKeep();
+            }
+
+            function keepReset() {
+                stKeep.turn = 0;
+                stKeep.cat = different(stKeep.cat, KEEP_CATS.length);
+                saveState('keepgoing', stKeep);
+                renderKeep();
+            }
+
+            /* =========================================================
+               10. PLATE WORDS
+               ========================================================= */
+            var plateTime = 60;
+            var plateTimer = null;
+
+            function renderPlateTimer() {
+                setText('plate-timer', trn('timer.seconds', '{n}s', { n: plateTime }));
+            }
+
+            function plateHint(message, bad) {
+                var el = byId('plate-hint');
+                el.textContent = message;
+                if (bad) {
+                    el.classList.add('bad');
+                } else {
+                    el.classList.remove('bad');
+                }
+            }
+
+            function plateTotal() {
+                var total = 0;
+                for (var i = 0; i < stPlate.words.length; i++) total += stPlate.words[i].n;
+                return total;
+            }
+
+            function renderPlate() {
+                setText('plate-letters', stPlate.letters);
+                setText('plate-score', trn('plate.score', 'Score: {n}', { n: plateTotal() }));
+
+                var list = byId('plate-list');
+                list.innerHTML = '';
+                if (!stPlate.words.length) {
+                    var empty = document.createElement('li');
+                    empty.className = 'muted';
+                    empty.textContent = tr('plate.none', 'No words yet.');
+                    list.appendChild(empty);
+                } else {
+                    for (var i = 0; i < stPlate.words.length; i++) {
+                        var li = document.createElement('li');
+                        li.textContent = stPlate.words[i].w + '  +' + stPlate.words[i].n;
+                        list.appendChild(li);
+                    }
+                }
+                renderPlateTimer();
+            }
+
+            function plateStop() {
+                if (plateTimer) {
+                    clearInterval(plateTimer);
+                    plateTimer = null;
+                }
+            }
+
+            function plateStart() {
+                if (plateTimer) return;
+                if (plateTime <= 0) {
+                    plateHint(tr('plate.timeup', "Time's up! Press Reset to go again."), true);
+                    return;
+                }
+                plateTimer = setInterval(function () {
+                    plateTime -= 1;
+                    if (plateTime <= 0) {
+                        plateTime = 0;
+                        plateStop();
+                        plateHint(tr('plate.timeup', "Time's up! Press Reset to go again."), true);
+                    }
+                    renderPlateTimer();
+                }, 1000);
+            }
+
+            function plateResetTimer() {
+                plateStop();
+                plateTime = 60;
+                plateHint('', false);
+                renderPlateTimer();
+            }
+
+            function plateNewLetters() {
+                plateStop();
+                plateTime = 60;
+                stPlate.letters = newPlateLetters(stPlate.letters);
+                stPlate.words = [];
+                saveState('plate', stPlate);
+                plateHint('', false);
+                renderPlate();
+                byId('plate-input').value = '';
+            }
+
+            function submitPlateWord() {
+                var input = byId('plate-input');
+                var word = (input.value || '').toUpperCase().replace(/\s+/g, '');
+
+                if (!word) {
+                    plateHint(tr('plate.hint.empty', 'Type a word first.'), true);
+                    return;
+                }
+                if (!/^[A-Z]+$/.test(word)) {
+                    plateHint(tr('plate.hint.chars', 'Letters only, please.'), true);
+                    return;
+                }
+                if (word.length < 3) {
+                    plateHint(tr('plate.hint.len', 'Use at least 3 letters.'), true);
+                    return;
+                }
+
+                var pos = -1;
+                for (var i = 0; i < 3; i++) {
+                    var at = word.indexOf(stPlate.letters.charAt(i), pos + 1);
+                    if (at === -1) {
+                        plateHint(tr('plate.hint.order', 'The three letters must appear in order.'), true);
+                        return;
+                    }
+                    pos = at;
+                }
+
+                for (var j = 0; j < stPlate.words.length; j++) {
+                    if (stPlate.words[j].w === word) {
+                        plateHint(tr('plate.hint.dup', 'Already used.'), true);
+                        return;
+                    }
+                }
+
+                stPlate.words.push({ w: word, n: word.length });
+                saveState('plate', stPlate);
+                input.value = '';
+                plateHint(trn('plate.ok', 'Nice - {word} scores {n}', { word: word, n: word.length }), false);
+                renderPlate();
+                input.focus();
+            }
+
+            /* =========================================================
+               11. RHYME TIME
+               ========================================================= */
+            function renderRhyme() {
+                setText('rhyme-word', dataText('rhyme', stRhyme.word, RHYME_WORDS[stRhyme.word]));
+                setText('rhyme-tally', trn('rhyme.tally', 'Good {good} / Dry {dry}', {
+                    good: stRhyme.good,
+                    dry: stRhyme.dry
+                }));
+            }
+
+            function rhymeNextWord() {
+                stRhyme.word = different(stRhyme.word, RHYME_WORDS.length);
+            }
+
+            function rhymeGood() {
+                stRhyme.good += 1;
+                rhymeNextWord();
+                saveState('rhyme', stRhyme);
+                renderRhyme();
+            }
+
+            function rhymeDry() {
+                stRhyme.dry += 1;
+                rhymeNextWord();
+                saveState('rhyme', stRhyme);
+                renderRhyme();
+            }
+
+            function rhymeNewRound() {
+                stRhyme.good = 0;
+                stRhyme.dry = 0;
+                rhymeNextWord();
+                saveState('rhyme', stRhyme);
+                renderRhyme();
+            }
+
+            /* =========================================================
+               12. SAME PAGE
+               ========================================================= */
+            var SAME_CUES = [
+                { key: 'same.ready', en: 'Ready' },
+                { key: 'same.cue3', en: '3' },
+                { key: 'same.cue2', en: '2' },
+                { key: 'same.cue1', en: '1' }
+            ];
+
+            function renderSame() {
+                var cue = byId('same-cue');
+                var prompt = byId('same-prompt');
+                var reveal = byId('same-reveal-btn');
+                var actions = byId('same-actions');
+
+                if (stSame.stage >= 4) {
+                    cue.hidden = true;
+                    prompt.hidden = false;
+                    prompt.textContent = dataText('same', stSame.prompt, SAME_PROMPTS[stSame.prompt]);
+                    reveal.hidden = true;
+                    actions.hidden = false;
+                } else {
+                    cue.hidden = false;
+                    cue.textContent = tr(SAME_CUES[stSame.stage].key, SAME_CUES[stSame.stage].en);
+                    prompt.hidden = true;
+                    reveal.hidden = false;
+                    reveal.textContent = tr(SAME_CUES[stSame.stage].key, SAME_CUES[stSame.stage].en);
+                    actions.hidden = true;
+                }
+                setText('same-score', trn('same.score', 'Matches: {n}', { n: stSame.score }));
+            }
+
+            function sameAdvance() {
+                if (stSame.stage >= 4) return;
+                stSame.stage += 1;
+                saveState('samepage', stSame);
+                renderSame();
+                if (stSame.stage >= 4) {
+                    byId('same-match').focus();
+                } else {
+                    byId('same-reveal-btn').focus();
+                }
+            }
+
+            function sameNextPrompt() {
+                stSame.prompt = different(stSame.prompt, SAME_PROMPTS.length);
+                stSame.stage = 0;
+                saveState('samepage', stSame);
+                renderSame();
+            }
+
+            function sameAnswer(isMatch) {
+                if (stSame.stage < 4) return;
+                if (isMatch) stSame.score += 1;
+                sameNextPrompt();
+            }
+
+            /* =========================================================
+               13. SPOT BINGO
+               ========================================================= */
+            function bingoLines() {
+                var found = [];
+                for (var i = 0; i < BINGO_LINES.length; i++) {
+                    var line = BINGO_LINES[i];
+                    var full = true;
+                    for (var j = 0; j < line.length; j++) {
+                        if (!stBingo.marked[line[j]]) {
+                            full = false;
+                            break;
+                        }
+                    }
+                    if (full) found.push(line);
+                }
+                return found;
+            }
+
+            function buildBingoGrid() {
+                var grid = byId('bingo-grid');
+                grid.innerHTML = '';
+                for (var i = 0; i < stBingo.card.length; i++) {
+                    (function (cellIndex) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'bingo-cell';
+                        btn.textContent = dataText('bingo', stBingo.card[cellIndex], BINGO_ITEMS[stBingo.card[cellIndex]]);
+                        btn.setAttribute('aria-pressed', 'false');
+                        btn.addEventListener('click', function () {
+                            stBingo.marked[cellIndex] = !stBingo.marked[cellIndex];
+                            saveState('bingo', stBingo);
+                            renderBingo();
+                        });
+                        grid.appendChild(btn);
+                    })(i);
+                }
+                grid.setAttribute('data-sig', stBingo.card.join(','));
+            }
+
+            function renderBingo() {
+                var grid = byId('bingo-grid');
+                if (grid.getAttribute('data-sig') !== stBingo.card.join(',')) {
+                    buildBingoGrid();
+                }
+                var lines = bingoLines();
+                var inLine = {};
+                for (var i = 0; i < lines.length; i++) {
+                    for (var j = 0; j < lines[i].length; j++) inLine[lines[i][j]] = true;
+                }
+
+                var cells = grid.children;
+                var count = 0;
+                for (var c = 0; c < cells.length; c++) {
+                    var cls = 'bingo-cell';
+                    if (stBingo.marked[c]) {
+                        cls += ' on';
+                        count += 1;
+                    }
+                    if (inLine[c]) cls += ' line';
+                    cells[c].className = cls;
+                    cells[c].setAttribute('aria-pressed', stBingo.marked[c] ? 'true' : 'false');
+                }
+
+                setText('bingo-progress', trn('bingo.progress', '{n} / 25 marked', { n: count }));
+
+                var banner = byId('bingo-banner');
+                if (lines.length > 0) {
+                    banner.hidden = false;
+                    banner.textContent = (lines.length > 1)
+                        ? trn('bingo.bingomany', 'BINGO x{n}!', { n: lines.length })
+                        : tr('bingo.bingo', 'BINGO!');
+                } else {
+                    banner.hidden = true;
+                }
+            }
+
+            function bingoNewCard() {
+                stBingo.card = dealBingo();
+                stBingo.marked = [];
+                for (var i = 0; i < 25; i++) stBingo.marked.push(false);
+                saveState('bingo', stBingo);
+                renderBingo();
+            }
+
+            /* =========================================================
+               14. STORY CHAIN
+               ========================================================= */
+            var storyTime = 60;
+            var storyTimer = null;
+
+            function renderStoryTimer() {
+                setText('story-timer', trn('timer.seconds', '{n}s', { n: storyTime }));
+            }
+
+            function storyHint(message) {
+                setText('story-hint', message);
+            }
+
+            function storyPlayerIndex() {
+                if (!crew.length) return 0;
+                return stStory.turn % crew.length;
+            }
+
+            function renderStory() {
+                var idx = storyPlayerIndex();
+                setText('story-opening', dataText('story', stStory.line, STORY_LINES[stStory.line]));
+                setText('story-player', crewName(idx));
+                setText('story-turn', trn('story.turn', 'Turn {n} of {total}', {
+                    n: idx + 1,
+                    total: crew.length
+                }));
+
+                var box = byId('story-contrib');
+                box.innerHTML = '';
+                if (!stStory.contributors.length) {
+                    box.textContent = tr('story.none', 'No one yet.');
+                } else {
+                    for (var i = 0; i < stStory.contributors.length; i++) {
+                        var chip = document.createElement('span');
+                        chip.className = 'chip';
+                        chip.textContent = stStory.contributors[i];
+                        box.appendChild(chip);
+                    }
+                }
+                renderStoryTimer();
+            }
+
+            function storyStop() {
+                if (storyTimer) {
+                    clearInterval(storyTimer);
+                    storyTimer = null;
+                }
+            }
+
+            function storyStart() {
+                if (storyTimer) return;
+                if (storyTime <= 0) {
+                    storyHint(tr('story.timeup', "Time's up! Press Stop, then Next player."));
+                    return;
+                }
+                storyTimer = setInterval(function () {
+                    storyTime -= 1;
+                    if (storyTime <= 0) {
+                        storyTime = 0;
+                        storyStop();
+                        storyHint(tr('story.timeup', "Time's up! Press Stop, then Next player."));
+                    }
+                    renderStoryTimer();
+                }, 1000);
+            }
+
+            function storyNext() {
+                var idx = storyPlayerIndex();
+                stStory.contributors.push(crewName(idx));
+                if (stStory.contributors.length > 200) stStory.contributors.shift();
+                stStory.turn = (idx + 1) % crew.length;
+                storyStop();
+                storyTime = 60;
+                saveState('story', stStory);
+                renderStory();
+                storyHint(trn('story.pass', 'Pass the Kindle to {name}.', { name: crewName(storyPlayerIndex()) }));
+                byId('story-next').focus();
+            }
+
+            function storyNew() {
+                stStory.line = different(stStory.line, STORY_LINES.length);
+                stStory.turn = 0;
+                stStory.contributors = [];
+                storyStop();
+                storyTime = 60;
+                saveState('story', stStory);
+                renderStory();
+                storyHint('');
+            }
+
+            /* =========================================================
+               15. WOULD YOU RATHER
+               ========================================================= */
+            function wyrVoteLabel(n) {
+                if (n === 1) return trn('wyr.voteone', '{n} vote', { n: n });
+                return trn('wyr.votes', '{n} votes', { n: n });
+            }
+
+            function renderWyr() {
+                var pair = DILEMMAS[stWyr.q];
+                setText('wyr-a-text', dataText('wyr', stWyr.q + '.a', pair[0]));
+                setText('wyr-b-text', dataText('wyr', stWyr.q + '.b', pair[1]));
+
+                var total = stWyr.a + stWyr.b;
+                var pctA = total > 0 ? Math.round((stWyr.a / total) * 100) : 0;
+                var pctB = total > 0 ? 100 - pctA : 0;
+                byId('wyr-bar-a').style.width = pctA + '%';
+                byId('wyr-bar-b').style.width = pctB + '%';
+
+                setText('wyr-count-a', wyrVoteLabel(stWyr.a));
+                setText('wyr-count-b', wyrVoteLabel(stWyr.b));
+                setText('wyr-total', trn('wyr.total', 'Total: {n}', { n: total }));
+            }
+
+            function wyrVote(side) {
+                if (side === 'a') {
+                    stWyr.a += 1;
+                } else {
+                    stWyr.b += 1;
+                }
+                saveState('wyr', stWyr);
+                renderWyr();
+                setText('wyr-hint', tr('wyr.counted', 'Vote counted. Pass it on.'));
+            }
+
+            function wyrNext() {
+                stWyr.q = different(stWyr.q, DILEMMAS.length);
+                stWyr.a = 0;
+                stWyr.b = 0;
+                saveState('wyr', stWyr);
+                renderWyr();
+                setText('wyr-hint', '');
+                byId('wyr-a').focus();
+            }
+
+            function wyrReset() {
+                stWyr.a = 0;
+                stWyr.b = 0;
+                saveState('wyr', stWyr);
+                renderWyr();
+                setText('wyr-hint', tr('wyr.resetdone', 'Votes reset.'));
+            }
+
+            /* =========================================================
+               16. VIEW SWITCHING
+               ========================================================= */
+            var currentGame = null;
+            var lastGame = 'cricket';
+
+            function renderAll() {
+                renderCricket();
+                renderAlphabet();
+                renderCategories();
+                renderKeep();
+                renderPlate();
+                renderRhyme();
+                renderSame();
+                renderBingo();
+                renderStory();
+                renderWyr();
+            }
+
+            function showHub(skipFocus) {
+                currentGame = null;
+                var win = document.querySelector('.window');
+                if (win) win.classList.remove('compact-view');
+                byId('game-view').hidden = true;
+                byId('hub-view').hidden = false;
+                plateStop();
+                storyStop();
+                byId('window-content').scrollTop = 0;
+
+                if (!skipFocus) {
+                    var tile = byId('tile-grid').querySelector('[data-game="' + lastGame + '"]');
+                    if (!tile) tile = byId('tile-grid').querySelector('.tile');
+                    if (tile) {
+                        // Keep the hub at the top; focusing a tile far down the
+                        // list would otherwise scroll it into view on return.
+                        try {
+                            tile.focus({ preventScroll: true });
+                        } catch (e) {
+                            tile.focus();
+                        }
+                    }
+                }
+            }
+
+            function showGame(id) {
+                var meta = GAME_BY_ID[id];
+                if (!meta) return;
+
+                currentGame = id;
+                lastGame = id;
+                plateStop();
+                storyStop();
+
+                var win = document.querySelector('.window');
+                if (win) win.classList.add('compact-view');
+
+                byId('hub-view').hidden = true;
+                byId('game-view').hidden = false;
+                setText('game-title', tr(meta.nameKey, meta.name));
+                setText('game-subtitle', tr(meta.blurbKey, meta.blurb));
+
+                var gameNumber = 1;
+                for (var g = 0; g < GAMES.length; g++) {
+                    if (GAMES[g].id === id) {
+                        gameNumber = g + 1;
+                        break;
+                    }
+                }
+                setText('game-index', (gameNumber < 10 ? '0' : '') + gameNumber);
+
+                var panels = document.querySelectorAll('.panel');
+                for (var i = 0; i < panels.length; i++) {
+                    panels[i].hidden = (panels[i].id !== 'panel-' + id);
+                }
+
+                renderAll();
+                byId('window-content').scrollTop = 0;
+                byId('back-btn').focus();
+            }
+
+            /* =========================================================
+               17. ARROW / ENTER KEY NAVIGATION
+               ========================================================= */
+            function focusables() {
+                var root = currentGame ? byId('game-view') : byId('hub-view');
+                var nodes = root.querySelectorAll('button, input');
+                var out = [];
+                for (var i = 0; i < nodes.length; i++) {
+                    var el = nodes[i];
+                    if (el.disabled) continue;
+                    if (!el.offsetParent) continue;
+                    var rect = el.getBoundingClientRect();
+                    if (rect.width < 1 || rect.height < 1) continue;
+                    out.push(el);
+                }
+                return out;
+            }
+
+            function moveFocus(key) {
+                var list = focusables();
+                if (!list.length) return;
+
+                var active = document.activeElement;
+                if (list.indexOf(active) === -1) {
+                    list[0].focus();
+                    return;
+                }
+
+                var ar = active.getBoundingClientRect();
+                var acx = ar.left + (ar.width / 2);
+                var acy = ar.top + (ar.height / 2);
+                var best = null;
+                var bestScore = Infinity;
+
+                for (var i = 0; i < list.length; i++) {
+                    var el = list[i];
+                    if (el === active) continue;
+                    var r = el.getBoundingClientRect();
+                    var cx = r.left + (r.width / 2);
+                    var cy = r.top + (r.height / 2);
+                    var dx = cx - acx;
+                    var dy = cy - acy;
+                    var primary = 0;
+                    var secondary = 0;
+
+                    if (key === 'ArrowLeft') {
+                        if (dx > -2) continue;
+                        primary = -dx;
+                        secondary = Math.abs(dy);
+                    } else if (key === 'ArrowRight') {
+                        if (dx < 2) continue;
+                        primary = dx;
+                        secondary = Math.abs(dy);
+                    } else if (key === 'ArrowUp') {
+                        if (dy > -2) continue;
+                        primary = -dy;
+                        secondary = Math.abs(dx);
+                    } else if (key === 'ArrowDown') {
+                        if (dy < 2) continue;
+                        primary = dy;
+                        secondary = Math.abs(dx);
+                    } else {
+                        continue;
+                    }
+
+                    var score = primary + (secondary * 2);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = el;
+                    }
+                }
+
+                if (best) best.focus();
+            }
+
+            /* =========================================================
+               18. EVENT WIRING
+               ========================================================= */
+            function wire() {
+                // Close box: make the title-bar control usable from a keyboard.
+                var closeBox = byId('close-box');
+                if (closeBox) {
+                    closeBox.setAttribute('aria-label', tr('close', 'Close'));
+                    closeBox.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.location.href = 'index';
+                        }
+                    });
+                }
+
+                // Hub
+                byId('tile-grid').addEventListener('click', function (e) {
+                    var node = e.target;
+                    while (node && node !== this && !node.getAttribute) node = node.parentNode;
+                    var tile = null;
+                    if (node && node.getAttribute && node.getAttribute('data-game')) {
+                        tile = node;
+                    } else if (e.target.closest) {
+                        tile = e.target.closest('.tile');
+                    }
+                    if (tile) showGame(tile.getAttribute('data-game'));
+                });
+                byId('back-btn').addEventListener('click', function () {
+                    showHub(false);
+                });
+                byId('crew-add').addEventListener('click', addPlayer);
+                byId('crew-remove').addEventListener('click', removePlayer);
+
+                // 1. Car Cricket
+                byId('cric-btns').addEventListener('click', function (e) {
+                    var node = e.target;
+                    while (node && node !== this && !node.getAttribute) node = node.parentNode;
+                    if (node && node.getAttribute && node.getAttribute('data-ball')) {
+                        cricketPlay(node.getAttribute('data-ball'));
+                    }
+                });
+                byId('cric-undo').addEventListener('click', cricketUndo);
+                byId('cric-end').addEventListener('click', function () {
+                    if (!stCricket.active) return;
+                    stCricket.history.push(cricketSnapshot());
+                    if (stCricket.history.length > 50) stCricket.history.shift();
+                    cricketEndInnings();
+                    renderCricket();
+                });
+                byId('cric-new').addEventListener('click', cricketNewInnings);
+
+                // 2. Alphabet Hunt
+                byId('alpha-new').addEventListener('click', alphabetNewTrip);
+
+                // 3. Categories
+                byId('cat-newletter').addEventListener('click', categoriesNewLetter);
+                byId('cat-shuffle').addEventListener('click', categoriesShuffle);
+
+                // 4. Keep It Going
+                byId('keep-next').addEventListener('click', keepNext);
+                byId('keep-newcat').addEventListener('click', keepNewCategory);
+                byId('keep-rotate').addEventListener('click', keepToggleRotate);
+                byId('keep-reset').addEventListener('click', keepReset);
+
+                // 5. Plate Words
+                byId('plate-add').addEventListener('click', submitPlateWord);
+                byId('plate-input').addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitPlateWord();
+                    }
+                });
+                byId('plate-start').addEventListener('click', plateStart);
+                byId('plate-stop').addEventListener('click', plateStop);
+                byId('plate-reset').addEventListener('click', plateResetTimer);
+                byId('plate-new').addEventListener('click', plateNewLetters);
+
+                // 6. Rhyme Time
+                byId('rhyme-good').addEventListener('click', rhymeGood);
+                byId('rhyme-dry').addEventListener('click', rhymeDry);
+                byId('rhyme-new').addEventListener('click', rhymeNewRound);
+
+                // 7. Same Page
+                byId('same-reveal-btn').addEventListener('click', sameAdvance);
+                byId('same-match').addEventListener('click', function () {
+                    sameAnswer(true);
+                });
+                byId('same-nomatch').addEventListener('click', function () {
+                    sameAnswer(false);
+                });
+                byId('same-new').addEventListener('click', sameNextPrompt);
+
+                // 8. Spot Bingo
+                byId('bingo-new').addEventListener('click', bingoNewCard);
+
+                // 9. Story Chain
+                byId('story-start').addEventListener('click', storyStart);
+                byId('story-stop').addEventListener('click', storyStop);
+                byId('story-next').addEventListener('click', storyNext);
+                byId('story-new').addEventListener('click', storyNew);
+
+                // 10. Would You Rather
+                byId('wyr-a').addEventListener('click', function () {
+                    wyrVote('a');
+                });
+                byId('wyr-b').addEventListener('click', function () {
+                    wyrVote('b');
+                });
+                byId('wyr-next').addEventListener('click', wyrNext);
+                byId('wyr-reset').addEventListener('click', wyrReset);
+
+                // Keyboard: arrows move focus spatially, Enter activates
+                // (native for buttons), Escape backs out of a game.
+                document.addEventListener('keydown', function (e) {
+                    var tag = (e.target && e.target.tagName) ? e.target.tagName : '';
+                    var isTyping = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+
+                    if (e.key === 'Escape' || e.key === 'Esc') {
+                        if (isTyping) {
+                            // First Escape leaves the text field, a second one
+                            // backs out of the game.
+                            if (e.target && e.target.blur) e.target.blur();
+                            e.preventDefault();
+                            return;
+                        }
+                        if (currentGame) {
+                            showHub(false);
+                            e.preventDefault();
+                        }
+                        return;
+                    }
+
+                    if (isTyping) return;
+
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
+                        e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                        moveFocus(e.key);
+                        e.preventDefault();
+                    } else if (e.key === 'Enter') {
+                        var el = document.activeElement;
+                        if (el && el.tagName !== 'BUTTON' && el.tagName !== 'A' && el.tagName !== 'INPUT') {
+                            if (typeof el.click === 'function') {
+                                el.click();
+                                e.preventDefault();
+                            }
+                        }
+                    }
+                });
+            }
+
+            /* =========================================================
+               19. INIT
+               ========================================================= */
+            function init() {
+                buildAlphabet();
+                wire();
+                renderCrew();
+                saveCrew();
+                byId('plate-input').setAttribute('aria-label', tr('plate.input.label', 'Word'));
+                renderAll();
+                showHub(true);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+
+            window.onload = function () {
+                if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
+            };
+
+            // Never leave a 1s interval behind when the page is closed.
+            window.addEventListener('beforeunload', function () {
+                plateStop();
+                storyStop();
+            });
+            window.addEventListener('pagehide', function () {
+                plateStop();
+                storyStop();
+            });
+        })();
+    </script>
+
+</body></html>

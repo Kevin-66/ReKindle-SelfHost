@@ -251,7 +251,7 @@
 
         .cover-img {
             width: 100%;
-            aspect-ratio: 2/3;
+            height: 200px;
             object-fit: cover;
             border: 1px solid #000;
             margin-bottom: 10px;
@@ -398,10 +398,10 @@
             min-width: 160px;
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
-    <link rel="stylesheet" href="css/custom-select.css">
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/custom-select.js?v=2"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
 </head>
 
 <body>
@@ -536,7 +536,7 @@
             await loadLibrary();
             switchTab('library'); // default
 
-            document.getElementById('status-bar').innerText = window.t('manga.msg.ready') || 'Ready';
+            document.getElementById('status-bar').innerText = window.t('manga.msg.ready', "Ready") || 'Ready';
         };
 
         async function loadLibrary() {
@@ -722,10 +722,10 @@
                     btn.className = 'btn';
                     btn.style.marginTop = 'auto';
                     if (isAdded) {
-                        btn.innerText = window.t('manga.msg.added') || "Added";
+                        btn.innerText = window.t('manga.msg.added', "Added to Library") || "Added";
                         btn.disabled = true;
                     } else {
-                        btn.innerText = window.t('manga.btn.add') || "+ Add";
+                        btn.innerText = window.t('manga.btn.add', "+ Add") || "+ Add";
                         btn.onclick = (e) => {
                             e.stopPropagation();
                             addToLibrary({
@@ -735,7 +735,7 @@
                                 type: 'manga',
                                 author: manga.attributes.status // lazy but works for now
                             });
-                            btn.innerText = window.t('manga.msg.added') || "Added";
+                            btn.innerText = window.t('manga.msg.added', "Added to Library") || "Added";
                             btn.disabled = true;
                         };
                     }
@@ -757,7 +757,7 @@
                 };
                 container.appendChild(moreBtn);
 
-                showStatus(window.t('manga.msg.ready') || "Ready");
+                showStatus(window.t('manga.msg.ready', "Ready") || "Ready");
             } catch (e) {
                 console.error(e);
                 showStatus("Failed to load store: " + e.message);
@@ -776,7 +776,7 @@
             container.innerHTML = '';
 
             if (library.length === 0) {
-                const emptyMsg = window.t('manga.msg.empty_library') || 'Your library is empty. Go to the Store to add some.';
+                const emptyMsg = window.t('manga.msg.empty_library', "Your library is empty. Go to the Store to add some.") || 'Your library is empty. Go to the Store to add some.';
                 container.innerHTML = '<div style="grid-column: 1/-1; text-align: center;" data-i18n="manga.msg.empty_library">' + emptyMsg + '</div>';
                 return;
             }
@@ -798,7 +798,7 @@
                 let progressText = '';
                 if (savedPage > 0 || savedChapter > 0) {
                     var chLabel = savedChapterNum ? ('Ch ' + savedChapterNum) : (savedChapter > 0 ? ('Ch ' + (savedChapter + 1)) : '');
-                    var label = chLabel ? (chLabel + ', P ' + (savedPage + 1)) : ((window.t('manga.msg.page') || 'Page') + ' ' + (savedPage + 1));
+                    var label = chLabel ? (chLabel + ', P ' + (savedPage + 1)) : ((window.t('manga.msg.page', "Page") || 'Page') + ' ' + (savedPage + 1));
                     progressText = '<div style="font-size:0.7rem; background:#000; color:#fff; padding:2px 6px; display:inline-block; margin-bottom:4px;">' + label + '</div>';
                 }
 
@@ -822,7 +822,7 @@
                 const btnRead = document.createElement('button');
                 btnRead.className = 'btn';
                 btnRead.style.marginTop = 'auto';
-                btnRead.innerText = (savedPage > 0) ? (window.t('manga.btn.continue') || 'Continue') : (window.t('manga.btn.read') || 'Read');
+                btnRead.innerText = (savedPage > 0) ? (window.t('manga.btn.continue', "Continue") || 'Continue') : (window.t('manga.btn.read', "Read") || 'Read');
                 btnRead.onclick = (e) => {
                     e.stopPropagation();
                     openReader(item);
@@ -1178,7 +1178,7 @@
             document.getElementById('app-title').innerText = 'Manga';
 
             // Reset status bar
-            showStatus(window.t('manga.msg.ready') || 'Ready');
+            showStatus(window.t('manga.msg.ready', "Ready") || 'Ready');
             currentReading = null;
 
             // Refresh library to show updated progress

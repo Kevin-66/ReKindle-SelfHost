@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "id": "rekindle",
+  "name": "ReKindle",
+  "author": "ReKindle",
+  "description": "Highly experimental: run ReKindle without the Kindle interface or browser chrome.",
+  "version": [
+    1,
+    2,
+    1
+  ],
+  "dependencies": [],
+  "supported_platforms": null
+}

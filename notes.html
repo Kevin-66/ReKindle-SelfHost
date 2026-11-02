@@ -9,11 +9,15 @@
     <title>Notes</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="time.js"></script>
-    <script src="js/i18n.js"></script>
+    <script src="time.js?v=5"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <script src="js/safe-html.js?v=1"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -377,11 +381,11 @@
             margin-left: 10px;
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="time.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
-    <link rel="stylesheet" href="css/custom-select.css">
+    <script src="theme.js?v=35"></script>
+    
+    
+    <script src="js/custom-select.js?v=2"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
 </head>
 
 <body>
@@ -404,6 +408,7 @@
                     <option value="alpha_desc" data-i18n="notes.sort.z_a">Title (Z-A)</option>
                 </select>
                 <button class="sys-btn" onclick="createNote()" data-i18n="notes.btn.new">+ New</button>
+                <button class="sys-btn" onclick="downloadAllTXT()" data-i18n="notes.btn.export_all">Export All</button>
             </div>
             <div class="title-controls">
                 <button class="icon-btn" onclick="toggleFullScreen()" title="Full Screen">
@@ -564,6 +569,35 @@
             } catch (e) { console.error("Cache save error", e); }
         }
 
+        // Debounced cache write for per-keystroke saves (avoids serializing the
+        // entire notes array to localStorage on every keypress). In-memory state
+        // is already updated synchronously by the callers; only this write is deferred.
+        let cacheWriteTimer = null;
+
+        function scheduleCacheWrite() {
+            clearTimeout(cacheWriteTimer);
+            cacheWriteTimer = setTimeout(flushCacheWrite, 1000);
+        }
+
+        function flushCacheWrite() {
+            if (cacheWriteTimer) {
+                clearTimeout(cacheWriteTimer);
+                cacheWriteTimer = null;
+            }
+            if (currentUser) {
+                updateCache();
+            } else {
+                try {
+                    localStorage.setItem('rekindle_notes', JSON.stringify(notes));
+                } catch (e) { console.error("Local save error", e); }
+            }
+        }
+
+        // Flush any pending debounced write before the page goes away
+        window.addEventListener('pagehide', () => {
+            if (cacheWriteTimer) flushCacheWrite();
+        });
+
         function loadCloudNotes() {
             if (unsubscribe) unsubscribe();
 
@@ -595,12 +629,14 @@
         }
 
         function saveNoteData(note) {
-            if (!currentUser) {
-                localStorage.setItem('rekindle_notes', JSON.stringify(notes));
-            } else {
-                // Optimistic UI update already happened in array
-                updateCache();
+            // Runs on every keystroke (via saveCurrentNote's oninput), so the
+            // localStorage write is debounced - see scheduleCacheWrite. The
+            // in-memory `notes` array is already up to date. pagehide flushes
+            // any pending write.
+            scheduleCacheWrite();
 
+            if (currentUser) {
+                // Optimistic UI update already happened in array
                 clearTimeout(saveTimer);
                 saveTimer = setTimeout(() => {
                     document.getElementById('status-bar').innerText = window.t('notes.status.saving', "Saving...");
@@ -650,7 +686,10 @@
             container.innerHTML = '';
 
             if (notes.length === 0) {
-                container.innerHTML = `<div style="padding:40px; text-align:center; font-style:italic;">${window.t('notes.empty', 'No notes. Tap "+ New" to write.')}</div>`;
+                container.innerHTML = window.rekindleEmptyState(
+                    window.t('notes.empty', 'No notes. Tap "+ New" to write.'),
+                    { icon: 'list' }
+                );
                 return;
             }            notes.sort((a, b) => {
                 const titleA = (a.title || window.t('notes.label.untitled', 'Untitled')).toLowerCase();
@@ -709,7 +748,9 @@
             if (!note) return;
 
             document.getElementById('note-title-input').value = note.title;
-            document.getElementById('note-content').innerHTML = (note.content || '').replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            // Notes are HTML from contenteditable; sanitise through DOMParser
+            // instead of stripping <script> and assigning innerHTML.
+            window.rekindleSetSafeHtml(document.getElementById('note-content'), note.content || '');
 
             document.getElementById('list-view').style.display = 'none';
             document.getElementById('list-controls').style.display = 'none';
@@ -785,28 +826,28 @@
             });
         }
 
-        function downloadTXT() {
-            if (!currentNoteId) return;
-            const note = notes.find(n => n.id === currentNoteId);
-            if (!note) return;
-
+        function notePlainText(note) {
+            if (!note) return '';
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = note.content;
-            
+            tempDiv.innerHTML = note.content || '';
+
             tempDiv.style.position = 'absolute';
             tempDiv.style.left = '-9999px';
             tempDiv.style.whiteSpace = 'pre-wrap';
             document.body.appendChild(tempDiv);
-            
+
             const textContent = tempDiv.innerText || tempDiv.textContent || "";
             document.body.removeChild(tempDiv);
+            return textContent;
+        }
 
+        function downloadTextFile(filename, textContent) {
             const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
-            
+
             const a = document.createElement('a');
             a.href = url;
-            a.download = (note.title || window.t('notes.label.untitled', 'Untitled')) + '.txt';
+            a.download = filename;
             a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
@@ -814,9 +855,34 @@
             URL.revokeObjectURL(url);
         }
 
+        function downloadTXT() {
+            if (!currentNoteId) return;
+            const note = notes.find(n => n.id === currentNoteId);
+            if (!note) return;
+
+            downloadTextFile(
+                (note.title || window.t('notes.label.untitled', 'Untitled')) + '.txt',
+                notePlainText(note)
+            );
+        }
+
+        function downloadAllTXT() {
+            if (!notes.length) return;
+
+            const parts = [];
+            for (let i = 0; i < notes.length; i++) {
+                const note = notes[i];
+                const title = note.title || window.t('notes.label.untitled', 'Untitled');
+                parts.push(title + '\n' + '====================\n' + notePlainText(note));
+            }
+
+            const stamp = new Date().toISOString().slice(0, 10);
+            downloadTextFile('rekindle-notes-' + stamp + '.txt', parts.join('\n\n'));
+        }
+
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
 
 
 </body>

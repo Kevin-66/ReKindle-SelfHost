@@ -26,6 +26,37 @@ let cachedAccessToken = null;
 let cachedTokenExpiry = 0;
 
 /* ------------------------------------------------------------------ */
+/*  DETECTED LANGUAGE (client-side, 2026-10-26)                        */
+/* ------------------------------------------------------------------ */
+// The posting client detects the language before sending (js/lang-detect.js,
+// lazily loaded by js/post-language.js). It is advisory, not security: it only
+// decides whether the reader sees a Translate link / auto-translation. Reject
+// anything that is not a known ISO 639-1 code so a malformed value cannot end
+// up in a public post document.
+const DETECTED_LANGUAGE_CODES = new Set([
+    "am", "ar", "az", "be", "bg", "bn", "ca", "cs", "da", "de", "el", "en",
+    "es", "et", "eu", "fa", "fi", "fr", "gu", "he", "hi", "hr", "hu", "hy",
+    "is", "it", "ja", "ka", "kn", "ko", "ku", "lo", "lt", "lv", "ml", "mr",
+    "ms", "nl", "no", "or", "pa", "pl", "pt", "ro", "ru", "sk", "sl", "sq",
+    "sr", "sv", "ta", "te", "th", "tl", "tr", "uk", "ur", "vi", "yo", "zh"
+]);
+
+function clientDetectedLang(value) {
+    if (typeof value !== "string") return null;
+    const base = value.toLowerCase().replace(/_/g, "-").split("-")[0];
+    return DETECTED_LANGUAGE_CODES.has(base) ? base : null;
+}
+
+// Adds `lang` only when the client supplied a valid code. Kept as a helper so
+// every content type applies the same validation; omitting the field is the
+// "unknown" state the clients render as a Translate link without auto-translate.
+function addDetectedLang(target, body) {
+    const lang = clientDetectedLang(body && body.lang);
+    if (lang) target.lang = lang;
+    return target;
+}
+
+/* ------------------------------------------------------------------ */
 /*  CORS                                                               */
 /* ------------------------------------------------------------------ */
 function corsHeaders(origin) {
@@ -34,6 +65,15 @@ function corsHeaders(origin) {
         "Access-Control-Allow-Origin": allowed ? origin : "null",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        // Cache the preflight for a day. Without this every JSON POST from the
+        // chat costs TWO Worker requests (OPTIONS + POST), which is what pushed
+        // the account over the 100k/day Workers Free limit on 2026-10-25 and
+        // took KindleChat down with a CORS-less Cloudflare 429 (error 1027).
+        // Chromium caps this at 2h, Safari at 10min; either is a huge cut.
+        "Access-Control-Max-Age": "86400",
+        // The allowed origin is reflected, so caches/intermediaries must key
+        // on it. Cheap insurance; this worker never caches POSTs itself.
+        "Vary": "Origin",
         "Content-Type": "application/json"
     };
 }
@@ -137,7 +177,12 @@ async function firestoreCommitTransform(docPath, fieldTransforms, accessToken) {
                 transform: {
                     document: `projects/rekindle-socials/databases/(default)/documents/${docPath}`,
                     fieldTransforms
-                }
+                },
+                // A transform on a missing document would create a stub with only
+                // the transformed field (e.g. a `{commentCount: 1}` "post" for a
+                // comment posted against a deleted post id). Require the parent
+                // to exist; callers catch the resulting failure.
+                currentDocument: { exists: true }
             }
         ]
     };
@@ -226,6 +271,20 @@ async function rtdbPushWithAccessTokenAndReturnKey(path, data, accessToken) {
     return result.name;
 }
 
+async function rtdbPatchWithAccessToken(path, data, accessToken) {
+    const url = `https://rekindle-socials-default-rtdb.firebaseio.com/${path}.json?access_token=${encodeURIComponent(accessToken)}`;
+    const resp = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`RTDB patch failed (${resp.status}): ${errText}`);
+    }
+    return await resp.json();
+}
+
 async function rtdbGetWithUserToken(path, env, userToken) {
     const projectId = env.FIREBASE_PROJECT_ID || "rekindle-dd1fa";
     const url = `https://${projectId}-default-rtdb.firebaseio.com/${path}.json?auth=${encodeURIComponent(userToken)}`;
@@ -288,6 +347,7 @@ async function getExistingPendingReport(contentType, contentId, accessToken) {
                 reporterId: value.reporterId || "",
                 reporterName: value.reporterName || "",
                 itemContentType: value.contentType || "",
+                contentPath: value.contentPath || "",
                 status: value.status || "",
                 createdAt: value.createdAt || 0
             }))
@@ -317,6 +377,44 @@ async function rtdbUpdateReport(reportId, updates, accessToken) {
 /* ------------------------------------------------------------------ */
 /*  CONTENT DELETION                                                   */
 /* ------------------------------------------------------------------ */
+
+// Comment documents live one level below their parent, so a bare comment id
+// cannot identify the parent on its own. Only accept the exact shape the
+// reporting client writes: {root}/{parentId}/comments/{commentId}.
+function parseCommentPath(contentPath, root) {
+    if (!contentPath) return null;
+    const parts = String(contentPath).split("/");
+    if (parts.length === 4 && parts[0] === root && parts[2] === "comments") {
+        return { parentId: parts[1], commentId: parts[3] };
+    }
+    return null;
+}
+
+// Adjust a parent document's denormalised commentCount after a comment is
+// removed. Reads first so a legacy document with no counter (or a double
+// delete) cannot drive the value negative.
+async function adjustParentCommentCount(parentPath, delta, accessToken) {
+    if (!parentPath || !delta) return;
+    try {
+        const url = `https://firestore.googleapis.com/v1/projects/rekindle-socials/databases/(default)/documents/${parentPath}`;
+        const resp = await fetch(url, {
+            headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        if (!resp.ok) return; // Parent already gone (404) - nothing to fix.
+        const doc = await resp.json();
+        const raw = doc.fields && doc.fields.commentCount;
+        let current = 0;
+        if (raw) {
+            if (raw.integerValue !== undefined) current = parseInt(raw.integerValue, 10) || 0;
+            else if (raw.doubleValue !== undefined) current = Math.round(raw.doubleValue) || 0;
+        }
+        const next = Math.max(0, current + delta);
+        await firestorePatch(parentPath, { commentCount: next }, accessToken);
+    } catch (e) {
+        console.error(`[COMMENT-COUNT] Failed to adjust ${parentPath}:`, e.message);
+    }
+}
+
 async function autoDeleteContent(contentType, contentId, contentPath, accessToken) {
     try {
         if (contentType === "kindlechat") {
@@ -334,7 +432,13 @@ async function autoDeleteContent(contentType, contentId, contentPath, accessToke
         }
         if (contentType === "topic_comment") {
             // contentPath is like "topics/{topicId}/comments/{commentId}"
+            const parsed = parseCommentPath(contentPath, "topics");
+            if (!parsed || parsed.commentId !== contentId) {
+                console.error("[AUTO-DELETE] Refusing invalid topic comment path:", contentPath);
+                return false;
+            }
             await firestoreDelete(contentPath, accessToken);
+            await adjustParentCommentCount(`topics/${parsed.parentId}`, -1, accessToken);
             console.log(`[AUTO-DELETE] Deleted topic comment ${contentId}`);
             return true;
         }
@@ -345,7 +449,13 @@ async function autoDeleteContent(contentType, contentId, contentPath, accessToke
         }
         if (contentType === "neighbourhood_comment") {
             // contentPath is like "neighbourhood_posts/{postId}/comments/{commentId}"
+            const parsed = parseCommentPath(contentPath, "neighbourhood_posts");
+            if (!parsed || parsed.commentId !== contentId) {
+                console.error("[AUTO-DELETE] Refusing invalid neighbourhood comment path:", contentPath);
+                return false;
+            }
             await firestoreDelete(contentPath, accessToken);
+            await adjustParentCommentCount(`neighbourhood_posts/${parsed.parentId}`, -1, accessToken);
             console.log(`[AUTO-DELETE] Deleted neighbourhood comment ${contentId}`);
             return true;
         }
@@ -357,8 +467,26 @@ async function autoDeleteContent(contentType, contentId, contentPath, accessToke
         }
         if (contentType === "suggestion_comment") {
             // contentPath is like "suggestions/{suggestionId}/comments/{commentKey}"
+            const parsed = parseCommentPath(contentPath, "suggestions");
+            if (!parsed || parsed.commentId !== contentId) {
+                console.error("[AUTO-DELETE] Refusing invalid suggestion comment path:", contentPath);
+                return false;
+            }
             await rtdbDeletePrimaryWithAccessToken(contentPath, accessToken);
             console.log(`[AUTO-DELETE] Deleted suggestion comment ${contentId}`);
+            return true;
+        }
+        if (contentType === "dm_message") {
+            // DM messages live in the SOCIAL RTDB. Only delete a path that
+            // matches the strict DM shape; never trust an arbitrary path from
+            // a report payload.
+            const parsed = parseDmMessagePath(contentPath);
+            if (!parsed || parsed.messageId !== contentId) {
+                console.error("[AUTO-DELETE] Refusing invalid DM message path:", contentPath);
+                return false;
+            }
+            await rtdbDeleteWithAccessToken(`kindlechat/dm_messages/${parsed.threadId}/${parsed.messageId}`, accessToken);
+            console.log(`[AUTO-DELETE] Deleted DM message ${parsed.messageId} in ${parsed.threadId}`);
             return true;
         }
         return false;
@@ -368,19 +496,311 @@ async function autoDeleteContent(contentType, contentId, contentPath, accessToke
     }
 }
 
+/* ------------------------------------------------------------------ */
+/*  LINK / URL DETECTION                                               */
+/* ------------------------------------------------------------------ */
+/* KEEP IN SYNC with js/link-guard.js - that helper is the client-side copy
+ * of this matcher, and scripts/test-link-guard.js runs one corpus through
+ * both. A plain "word.tld" regex is not enough: competing sites are
+ * advertised with the dots replaced ("nexora-chat-v12,netlify,app/ NEW
+ * WEBSITE v12", 2026-10-26) because a comma-split domain is not clickable but
+ * is still readable. The text is normalised (full-width, unicode dots,
+ * zero-width characters, "[.]", "(dot)", uppercase DOT), then runs of
+ * hostname labels are walked; comma/space-split runs need a host signal (a
+ * label with a digit or hyphen, "www", a known hosting suffix, or a trailing
+ * slash) so ordinary chat is not rejected. Dotted domains, protocols
+ * (including hxxp) and IPs keep the original checks. */
+
+// Identical to the original domain regex so the dotted-domain behaviour
+// does not change; the chain checks reuse the same TLD set.
+var LINK_TLD_SRC = 'com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link|ly|sh';
+
+var LINK_DOTTED_RE = new RegExp('\\b[a-z0-9-]+\\s*\\.\\s*(?:' + LINK_TLD_SRC + ')\\b');
+var LINK_TLD_RE = new RegExp('^(?:' + LINK_TLD_SRC + ')$');
+var LINK_IP_RE = /\b\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\b/;
+var LINK_PROTOCOL_RE = /\bh\s*[xt]\s*[xt]\s*p\s*s?\s*[:/]{1,4}/;
+
+// TLDs that are also ordinary English words. A comma/space-split run that
+// ends in one of these needs an extra host signal before it counts as a
+// link ("hello, me" / "yes, to me" are conversations, not domains).
+var LINK_WORD_TLDS = {
+    me: 1, to: 1, it: 1, in: 1, at: 1, us: 1, my: 1, be: 1,
+    no: 1, is: 1, id: 1, do: 1, so: 1, am: 1, an: 1, as: 1,
+    on: 1, or: 1, link: 1, online: 1, site: 1, top: 1, club: 1,
+    info: 1, name: 1, pro: 1, ink: 1, mail: 1, travel: 1, jobs: 1,
+    post: 1, cat: 1, bit: 1, tv: 1
+};
+
+// Hosting platforms used for throwaway competing sites. A pair of labels
+// matching one of these is a host even when every separator is a space
+// ("netlify app", "discord gg").
+var LINK_HOST_SUFFIXES = {
+    'netlify.app': 1, 'netlify.com': 1, 'vercel.app': 1, 'now.sh': 1,
+    'github.io': 1, 'githubusercontent.com': 1, 'gitlab.io': 1,
+    'pages.dev': 1, 'workers.dev': 1, 'web.app': 1, 'firebaseapp.com': 1,
+    'blogspot.com': 1, 'wordpress.com': 1, 'wixsite.com': 1, 'weebly.com': 1,
+    'squarespace.com': 1, 'godaddysites.com': 1, 'myshopify.com': 1,
+    'carrd.co': 1, 'notion.site': 1, 'notionso.com': 1, 'linktr.ee': 1,
+    'bit.ly': 1, 'tinyurl.com': 1, 't.me': 1, 'discord.gg': 1,
+    'glitch.me': 1, 'replit.app': 1, 'replit.dev': 1, 'repl.co': 1,
+    'herokuapp.com': 1, 'onrender.com': 1, 'render.com': 1, 'fly.dev': 1,
+    'surge.sh': 1, 'neocities.org': 1, '000webhostapp.com': 1,
+    'infinityfreeapp.com': 1, 'forms.gle': 1, 'sites.google.com': 1
+};
+
+// Placeholder for a spelled-out "dot". Never a dot itself, so the legacy
+// dotted-domain regex cannot see "red dot app" as "red.app".
+var LINK_GAP_MARK = '\u0001';
+
+function linkNormalizeText(text) {
+    var s = String(text || '');
+    try { s = s.normalize('NFKC'); } catch (e) { /* ES2019 fallback below */ }
+    // Unicode full stops / bullet separators used in place of a dot.
+    s = s.replace(/[\u3002\uFF0E\uFF61\u2024\uFE52\u00B7\u2022\u22C5\u30FB\uFF65]/g, '.');
+    // "[.]", "(dot)", "{DOT}", "<dot>".
+    s = s.replace(/[\[\(\{<]\s*(?:\.|d[o0]t)\s*[\]\)\}>]/gi, '.');
+    // Glued uppercase DOT ("netlifyDOTapp", "NETLIFYDOTAPP").
+    s = s.replace(/([A-Za-z0-9])\s*DOT\s*(?=[A-Za-z0-9])/g, '$1' + LINK_GAP_MARK);
+    // Spaced "dot" ("netlify dot app"), but not "dotnet"/"using dotnet".
+    s = s.replace(/\s+dot\s+/gi, LINK_GAP_MARK);
+    // Zero-width / soft-hyphen characters used to split words.
+    s = s.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD\u180E]/g, '');
+    return s.toLowerCase();
+}
+
+// How two consecutive labels are separated.
+//   break   - a path/query starts here, so the hostname ends before it
+//   dot     - a real dot (possibly padded with spaces)
+//   dotword - a spelled-out "dot"
+//   space   - whitespace only
+//   obf     - commas, brackets, colons, pipes, ... (URL obfuscation)
+function linkGapKind(gap) {
+    if (!gap) return 'glued';
+    if (/[\/\\?&#=]/.test(gap)) return 'break';
+    if (gap.indexOf(LINK_GAP_MARK) !== -1) {
+        return /^[\s\u0001.]*$/.test(gap) ? 'dotword' : 'obf';
+    }
+    if (/^[\s.]*$/.test(gap)) return gap.indexOf('.') !== -1 ? 'dot' : 'space';
+    return 'obf';
+}
+
+// Splits the normalised text into runs of labels joined by dot-like
+// separators. A slash/query closes the run (and is remembered, because a
+// trailing slash is a strong "this is a link" signal).
+function linkCollectRuns(t) {
+    var atomRe = /[a-z0-9]+(?:-[a-z0-9]+)*/g;
+    var atoms = [];
+    var m;
+    while ((m = atomRe.exec(t)) !== null) {
+        atoms.push({ text: m[0], start: m.index, end: m.index + m[0].length });
+    }
+
+    var runs = [];
+    var run = { labels: [], gaps: [], end: 0, slash: false };
+    for (var i = 0; i < atoms.length; i++) {
+        if (!run.labels.length) {
+            run.labels.push(atoms[i].text);
+            run.end = atoms[i].end;
+            continue;
+        }
+        var gap = t.slice(run.end, atoms[i].start);
+        var kind = linkGapKind(gap);
+        if (kind === 'break') {
+            run.slash = /[\/\\]/.test(gap);
+            runs.push(run);
+            run = { labels: [atoms[i].text], gaps: [], end: atoms[i].end, slash: false };
+            continue;
+        }
+        run.labels.push(atoms[i].text);
+        run.gaps.push(kind);
+        run.end = atoms[i].end;
+    }
+    if (run.labels.length) {
+        if (t.charAt(run.end) === '/') run.slash = true;
+        runs.push(run);
+    }
+    return runs;
+}
+
+// Extra evidence that a run is a hostname rather than prose.
+function linkHostSignal(labels, tailSlash) {
+    for (var i = 0; i < labels.length - 1; i++) {
+        if (/[0-9]/.test(labels[i]) || labels[i].indexOf('-') !== -1) return true;
+    }
+    if (labels[0] === 'www') return true;
+    if (tailSlash) return true;
+    for (var j = 0; j < labels.length - 1; j++) {
+        if (LINK_HOST_SUFFIXES[labels[j] + '.' + labels[j + 1]]) return true;
+    }
+    return false;
+}
+
+function linkWindowIsLink(labels, kinds, tailSlash) {
+    var n = labels.length;
+    var last = labels[n - 1];
+    if (!LINK_TLD_RE.test(last)) return false;
+
+    var allSpace = true;
+    var allDot = true;
+    for (var i = 0; i < kinds.length; i++) {
+        if (kinds[i] !== 'space') allSpace = false;
+        if (kinds[i] !== 'dot') allDot = false;
+    }
+    // Real dots are covered by the legacy dotted-domain check, which also
+    // keeps its historical sentence-boundary behaviour.
+    if (allDot) return false;
+
+    var signal = linkHostSignal(labels, tailSlash);
+
+    if (allSpace) {
+        if (signal) return true;
+        // "example com" (but not "the app" / "great net").
+        return n === 2 && /^(?:com|net|org)$/.test(last) &&
+            labels[0].length >= 5 && !LINK_WORD_TLDS[last];
+    }
+
+    // Comma / bracket / "dot" split.
+    if (n === 2) {
+        if (signal) return true;
+        if (LINK_WORD_TLDS[last]) return false;
+        var left = labels[0];
+        return /[0-9]/.test(left) || left.indexOf('-') !== -1 || left.length >= 5;
+    }
+    if (LINK_WORD_TLDS[last] && !signal) return false;
+    return true;
+}
+
+function linkRunIsLink(run) {
+    var n = run.labels.length;
+    // Only windows of 2-4 labels: a link in a sentence is short, and this
+    // keeps "a. b. c. d" style prose from matching.
+    for (var len = 2; len <= 4; len++) {
+        for (var start = 0; start + len <= n; start++) {
+            var end = start + len - 1;
+            if (linkWindowIsLink(
+                run.labels.slice(start, end + 1),
+                run.gaps.slice(start, end),
+                run.slash && end === n - 1
+            )) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function linkLooksLikeLink(text) {
+    if (!text) return false;
+    var t = linkNormalizeText(text);
+    if (LINK_PROTOCOL_RE.test(t)) return true;
+    if (/\bwww\s*\./.test(t)) return true;
+    if (LINK_DOTTED_RE.test(t)) return true;
+    if (LINK_IP_RE.test(t)) return true;
+
+    var runs = linkCollectRuns(t);
+    for (var i = 0; i < runs.length; i++) {
+        if (linkRunIsLink(runs[i])) return true;
+    }
+    return false;
+}
+
 function containsUrl(text) {
     if (!text) return false;
-    const t = String(text).toLowerCase();
-    const protocolLike = /h\s*t\s*t\s*p\s*s?\s*[:/]{1,4}/.test(t);
-    const wwwLike = /\bwww\./.test(t);
-    const domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link)\b/.test(t);
-    const ipLike = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(t);
-    return protocolLike || wwwLike || domainLike || ipLike;
+    return linkLooksLikeLink(text);
+}
+
+// Banned competitor mentions (KindleHub / kindlehub.pro / Unreader / InkChat).
+// KEEP IN SYNC with js/promo-ban.js - the client uses the same folding rules so
+// the UI and the server agree on what counts as a mention.
+//
+// The KindleHub owner evades naive regexes with spelled-out dots
+// ("kindlehubDOTpro"), Cyrillic/Greek homoglyphs ("kindlеhub"), leetspeak
+// ("Unr3ad3r"), separators ("kindle.hub") and the "khub" abbreviation, so the
+// text is folded to ASCII (homoglyphs -> letters, leet -> letters, diacritics
+// stripped) and compacted (non-alphanumerics dropped) before matching.
+const PROMO_HOMOGLYPHS = {
+    // Cyrillic
+    "\u0430": "a", "\u0432": "b", "\u0435": "e", "\u0451": "e", "\u043A": "k",
+    "\u043C": "m", "\u043D": "h", "\u043E": "o", "\u0440": "p", "\u0441": "c",
+    "\u0442": "t", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0457": "i",
+    "\u0455": "s", "\u0501": "d", "\u04CF": "l", "\u0458": "j", "\u051B": "q",
+    "\u051D": "w", "\u0261": "g", "\u044C": "b", "\u043F": "n",
+    // Greek
+    "\u03B1": "a", "\u03B2": "b", "\u03B5": "e", "\u03B9": "i", "\u03BA": "k",
+    "\u03BD": "v", "\u03BF": "o", "\u03C1": "p", "\u03C3": "o", "\u03C4": "t",
+    "\u03C5": "u", "\u03C7": "x", "\u03C9": "w", "\u03B3": "y", "\u03B7": "n",
+    "\u03BC": "u", "\u03C0": "n", "\u03B6": "z",
+    // Latin small caps / dotless forms
+    "\u0131": "i", "\u0251": "a", "\u2113": "l", "\u026A": "i", "\u0280": "r",
+    "\u0274": "n", "\u028F": "y", "\u0262": "g", "\u029C": "h", "\u0299": "b",
+    "\u1D0B": "k", "\u1D1C": "u", "\u1D0F": "o", "\u1D00": "a", "\u1D04": "c",
+    "\u1D05": "d", "\u1D07": "e", "\u1D0A": "j", "\u029F": "l", "\u1D0D": "m",
+    "\u1D18": "p", "\uA731": "s", "\uA730": "f", "\u1D1B": "t"
+};
+const PROMO_LEET = {
+    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b",
+    "9": "g", "@": "a", "$": "s", "!": "i", "|": "i"
+};
+const PROMO_TERMS = ["kindlehub", "unreader", "inkchat"];
+
+function promoFoldChar(ch) {
+    if (!ch) return "";
+    const code = ch.charCodeAt(0);
+    let c = ch;
+    if (code > 127 && typeof ch.normalize === "function") {
+        try {
+            const n = ch.normalize("NFKD");
+            if (n) c = n.charAt(0);
+        } catch (e) {
+            c = ch;
+        }
+    }
+    c = c.toLowerCase();
+    if (c.length !== 1) c = ch.charAt(0).toLowerCase();
+    return PROMO_HOMOGLYPHS[c] || PROMO_LEET[c] || c;
+}
+
+function promoFoldText(text) {
+    const s = String(text || "");
+    let folded = "";
+    let compact = "";
+    const map = [];
+    for (let i = 0; i < s.length; i++) {
+        const f = promoFoldChar(s.charAt(i));
+        folded += f;
+        if (f.length === 1 && /[a-z0-9]/.test(f)) {
+            compact += f;
+            map.push(i);
+        }
+    }
+    return { folded: folded, compact: compact, map: map };
 }
 
 function containsPromotedTerm(text) {
     if (!text) return false;
-    return /\b(?:unreader|un-reader|inkchat|kindlehub)\b/i.test(String(text));
+    const s = String(text);
+    const info = promoFoldText(s);
+
+    // Compact terms catch separators / homoglyphs / "DOT" spellings.
+    for (let t = 0; t < PROMO_TERMS.length; t++) {
+        const term = PROMO_TERMS[t];
+        let from = 0;
+        let at = info.compact.indexOf(term, from);
+        while (at !== -1) {
+            from = at + 1;
+            const start = info.map[at];
+            // "unreader"/"inkchat" need a word boundary or ordinary phrases
+            // ("run reader" -> "runreader") would match. "kindlehub" is
+            // distinctive enough to match inside a word.
+            const before = start > 0 ? promoFoldChar(s.charAt(start - 1)) : "";
+            if (term === "kindlehub" || !/[a-z0-9]/.test(before)) return true;
+            at = info.compact.indexOf(term, from);
+        }
+    }
+
+    // Standalone "khub" / "K-Hub" abbreviation.
+    const khubRe = /(^|[^a-z0-9])k[\W_]*hub(?![a-z0-9])/g;
+    return khubRe.test(info.folded);
 }
 
 function containsDih(text) {
@@ -390,14 +810,36 @@ function containsDih(text) {
     return /\bdih\b|\b\w+dih\b/i.test(String(text));
 }
 
+// Every content write used to pay an RTDB GET for timeouts/{uid}, which is
+// empty for virtually every user. Cache the verdict briefly; a timeout still
+// takes effect within 30s, and repeat attempts from a timed-out user stop
+// costing a Firebase round trip each.
+const timeoutCache = new Map(); // uid -> { expires: number, result: object }
+const TIMEOUT_CACHE_TTL_MS = 30 * 1000;
+
+function cacheTimeoutResult(uid, result) {
+    timeoutCache.set(uid, { expires: Date.now() + TIMEOUT_CACHE_TTL_MS, result });
+    if (timeoutCache.size > 500) {
+        const now = Date.now();
+        for (const [key, entry] of timeoutCache) {
+            if (entry.expires <= now) timeoutCache.delete(key);
+        }
+    }
+    return result;
+}
+
 async function checkTimeout(uid, env, userToken, accessToken) {
+    const cached = timeoutCache.get(uid);
+    if (cached && cached.expires > Date.now()) return cached.result;
+
+    let result = { timedOut: false };
     try {
         const data = await rtdbGetWithUserToken(`timeouts/${uid}`, env, userToken);
         if (data && typeof data.until === "number") {
             const now = Date.now();
             if (data.until > now) {
                 const remainingMinutes = Math.ceil((data.until - now) / 60000);
-                return { timedOut: true, remainingMinutes };
+                result = { timedOut: true, remainingMinutes };
             }
         }
     } catch (e) {
@@ -409,19 +851,58 @@ async function checkTimeout(uid, env, userToken, accessToken) {
                 const now = Date.now();
                 if (data.until > now) {
                     const remainingMinutes = Math.ceil((data.until - now) / 60000);
-                    return { timedOut: true, remainingMinutes };
+                    result = { timedOut: true, remainingMinutes };
                 }
             }
         } catch (e2) {
             console.error("[Moderate] Timeout check with access token failed:", e2.message);
         }
     }
-    return { timedOut: false };
+    return cacheTimeoutResult(uid, result);
 }
 
 /* ------------------------------------------------------------------ */
 /*  FIREBASE TOKEN VERIFICATION                                        */
 /* ------------------------------------------------------------------ */
+const GOOGLE_JWK_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const GOOGLE_JWK_TTL_MS = 6 * 60 * 60 * 1000; // Google's Cache-Control max-age is ~6h
+
+async function fetchGoogleJwks() {
+    const cacheKey = new Request(GOOGLE_JWK_URL);
+    let cache = null;
+    try {
+        cache = caches.default;
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+            const ts = Number(cached.headers.get("x-cache-ts") || 0);
+            if (ts > 0 && Date.now() - ts < GOOGLE_JWK_TTL_MS) {
+                try {
+                    return await cached.json();
+                } catch (e) {
+                    // Corrupt cached entry — fall through to network
+                }
+            }
+        }
+    } catch (e) {
+        cache = null; // Cache API unavailable — fall through to network
+    }
+
+    const keysRes = await fetch(GOOGLE_JWK_URL);
+    if (!keysRes.ok) throw new Error("Could not fetch Google public keys: " + keysRes.status);
+
+    if (cache) {
+        try {
+            const headers = new Headers(keysRes.headers);
+            headers.set("x-cache-ts", String(Date.now()));
+            headers.set("Cache-Control", "public, max-age=21600");
+            await cache.put(cacheKey, new Response(keysRes.clone().body, { status: keysRes.status, headers }));
+        } catch (e) {
+            // Cache write failures are non-fatal
+        }
+    }
+    return keysRes.json();
+}
+
 async function verifyFirebaseToken(token, env) {
     const parts = token.split(".");
     if (parts.length !== 3) throw new Error("Malformed token: expected 3 parts");
@@ -456,9 +937,7 @@ async function verifyFirebaseToken(token, env) {
         throw new Error(`Invalid issuer: token iss="${payload.iss}" not in allowed=[${validIss.join(", ")}]`);
     }
 
-    const keysRes = await fetch("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com");
-    if (!keysRes.ok) throw new Error("Could not fetch Google public keys: " + keysRes.status);
-    const keys = await keysRes.json();
+    const keys = await fetchGoogleJwks();
 
     const jwk = keys.keys.find(k => k.kid === header.kid);
     if (!jwk) throw new Error("Unknown signing key: kid=" + header.kid);
@@ -773,14 +1252,50 @@ function moderationErrorMessage(mod) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  REPORT COMMENTS                                                    */
+/* ------------------------------------------------------------------ */
+// Every report must explain itself. The client modal checks the same rule
+// before sending (js/reports.js), but the client is bypassable, so this is
+// the authoritative gate for all report types.
+//
+// KEEP IN SYNC with hasProperWord()/reportCommentError() in js/reports.js.
+const REPORT_COMMENT_MAX = 500;
+
+function hasProperWord(text) {
+    if (!text) return false;
+    try {
+        return new RegExp("\\p{L}{2,}", "u").test(text);
+    } catch (e) {
+        return /[A-Za-z]{2,}/.test(text);
+    }
+}
+
+function reportCommentError(comment) {
+    const text = String(comment || "").trim();
+    if (!text) {
+        return "Please add a comment explaining what is wrong with this content.";
+    }
+    if (!hasProperWord(text)) {
+        return "Please write at least one word — symbols, numbers or emoji alone are not enough.";
+    }
+    if (text.length > REPORT_COMMENT_MAX) {
+        return `Please keep the comment under ${REPORT_COMMENT_MAX} characters.`;
+    }
+    return "";
+}
+
+/* ------------------------------------------------------------------ */
 /*  LOGGING                                                            */
 /* ------------------------------------------------------------------ */
-async function logAutomodRejection(uid, contentType, text, categories, accessToken) {
+async function logAutomodRejection(uid, contentType, text, categories, accessToken, options) {
     try {
+        const opts = options || {};
         const entry = {
             uid,
             contentType,
-            text: text.substring(0, 500),
+            // DM text is private: never copy it into the general automod log.
+            // Categories are enough to audit the decision.
+            text: opts.storeText === false ? "[redacted: private message]" : String(text || "").substring(0, 500),
             categories,
             timestamp: { ".sv": "timestamp" },
             source: "openai_moderation"
@@ -803,6 +1318,10 @@ const RATE_LIMIT_CONFIG = {
     topic_comment: { capacity: 5, refillMs: 12000 },  // match kindlechat
     neighbourhood_post: { capacity: 5, refillMs: 300000 },
     neighbourhood_comment: { capacity: 10, refillMs: 30000 },
+    // Direct messages: replies are conversational but capped per user, and
+    // starting conversations is much rarer (Pro-only + acceptance gate).
+    dm: { capacity: 8, refillMs: 8000 },
+    dm_request: { capacity: 5, refillMs: 7200000 },   // 2 hours, plus a 3-pending cap
     report: { capacity: 60, refillMs: 3600000, refillAmount: 60 }  // 60 per hour, burst allowed
 };
 
@@ -847,23 +1366,7 @@ async function rtdbSocialPut(path, data, etag, accessToken) {
     return { ok: true };
 }
 
-async function rtdbSocialPutSimple(path, data, accessToken) {
-    const url = `https://rekindle-socials-default-rtdb.firebaseio.com/${path}.json`;
-    const resp = await fetch(url, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${accessToken}`
-        },
-        body: JSON.stringify(data)
-    });
-    if (!resp.ok) {
-        const errText = await resp.text();
-        console.error("[DEDUPE] Failed to record recent content:", resp.status, errText);
-    }
-}
-
-async function consumeRateLimitToken(uid, contentType, accessToken) {
+async function consumeRateLimitToken(uid, contentType, accessToken, spamOpts) {
     const config = RATE_LIMIT_CONFIG[contentType];
     if (!config) return { allowed: true };
 
@@ -897,8 +1400,25 @@ async function consumeRateLimitToken(uid, contentType, accessToken) {
         bucket.tokens -= 1;
         bucket.updatedAt = now;
 
+        // Repetition guard: evaluated on the bucket we already read above and
+        // persisted in the same PUT, so it costs no extra Firebase operations.
+        let spamBlock = null;
+        if (spamOpts && typeof spamOpts.text === "string" && spamOpts.text.length) {
+            const evaluation = evaluateChatRepetition(bucket.rep, spamOpts.text, now, spamOpts.isArt === true);
+            bucket.rep = evaluation.rep;
+            spamBlock = evaluation.blocked;
+        }
+
         const putResult = await rtdbSocialPut(path, bucket, etag, accessToken);
         if (putResult.ok) {
+            if (spamBlock) {
+                return {
+                    allowed: false,
+                    spamBlocked: true,
+                    retryAfter: spamBlock.retryAfter,
+                    message: spamBlock.message
+                };
+            }
             return { allowed: true };
         }
 
@@ -912,12 +1432,250 @@ async function consumeRateLimitToken(uid, contentType, accessToken) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  DUPLICATE / REPETITIVE CONTENT DETECTION (per-user, per-type)      */
+/*  DIRECT MESSAGES (social RTDB only)                                 */
 /* ------------------------------------------------------------------ */
-// Stores a normalized hash of recently-submitted text under
-// kindlechat/user_recent/{uid}/{contentType}/{hash} -> timestamp.
-// Identical or near-identical messages sent within 5 minutes are rejected.
-const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
+// EVERY path here lives in the rekindle-socials RTDB. DM content must never
+// be written to the primary (rekindle-dd1fa) database: the chat, its reports
+// and the moderation worker all operate against the social project.
+const DM_THREADS_PATH = "kindlechat/dm_threads";
+const DM_MESSAGES_PATH = "kindlechat/dm_messages";
+const DM_USER_THREADS_PATH = "kindlechat/dm_user_threads";
+const DM_PREFS_PATH = "kindlechat/dm_prefs";
+const DM_BLOCKS_PATH = "kindlechat/dm_blocks";
+const DM_CONFIG_PATH = "kindlechat/config";
+const DM_MAX_MESSAGE = 1000;
+const DM_MAX_REQUEST = 300;
+const DM_MAX_PENDING_OUTGOING = 3;
+const DM_FLAG_CACHE_MS = 60000;
+
+let dmFlagCache = { key: null, value: false, ts: 0 };
+
+// Deterministic thread id. UIDs are alphanumeric in Firebase, and sorting
+// makes the id identical no matter who initiates, so two people can never
+// create two parallel threads and a blocked pair can never restart.
+function dmThreadId(uidA, uidB) {
+    const a = String(uidA || "").trim();
+    const b = String(uidB || "").trim();
+    if (!a || !b || a === b) return "";
+    if (!/^[A-Za-z0-9]{6,128}$/.test(a) || !/^[A-Za-z0-9]{6,128}$/.test(b)) return "";
+    return "dm_" + [a, b].sort().join("_");
+}
+
+// Reports for DM messages must carry the thread id in their contentPath
+// (a message id alone cannot identify the thread). This parser is strict so
+// a forged path cannot reach an arbitrary RTDB location during auto-delete.
+function parseDmMessagePath(path) {
+    const parts = String(path || "").split("/");
+    if (parts.length !== 4) return null;
+    if (parts[0] !== "kindlechat" || parts[1] !== "dm_messages") return null;
+    const threadId = parts[2];
+    const messageId = parts[3];
+    if (!/^dm_[A-Za-z0-9]+_[A-Za-z0-9]+$/.test(threadId)) return null;
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(messageId)) return null;
+    return { threadId, messageId };
+}
+
+function dmFlagKeyForOrigin(origin) {
+    // Beta gets its own switch because beta and production share the same
+    // social project. Everything else (prod/lite/legacy/no-origin) uses the
+    // production switch.
+    return origin === "https://beta.rekindle.ink" ? "dm_beta_enabled" : "dm_enabled";
+}
+
+async function isDmEnabledForOrigin(origin, accessToken) {
+    const key = dmFlagKeyForOrigin(origin);
+    const now = Date.now();
+    if (dmFlagCache.key === key && (now - dmFlagCache.ts) < DM_FLAG_CACHE_MS) {
+        return dmFlagCache.value;
+    }
+    try {
+        const res = await rtdbSocialGet(DM_CONFIG_PATH, accessToken);
+        const value = !!(res.data && res.data[key] === true);
+        dmFlagCache = { key, value, ts: now };
+        return value;
+    } catch (e) {
+        // Fail closed: if the switch cannot be read, do not open new DMs.
+        console.error("[DM] config read failed:", e.message);
+        dmFlagCache = { key, value: false, ts: now };
+        return false;
+    }
+}
+
+async function rtdbSocialQuery(path, query, accessToken) {
+    const url = `https://rekindle-socials-default-rtdb.firebaseio.com/${path}.json?${query}&access_token=${encodeURIComponent(accessToken)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`RTDB query failed (${resp.status}): ${errText}`);
+    }
+    return await resp.json();
+}
+
+async function getDmThreadWithEtag(threadId, accessToken) {
+    const res = await rtdbSocialGet(`${DM_THREADS_PATH}/${threadId}`, accessToken);
+    return {
+        thread: res.data && typeof res.data === "object" ? res.data : null,
+        etag: res.etag || null
+    };
+}
+
+async function countPendingOutgoingDmRequests(uid, accessToken) {
+    try {
+        const data = await rtdbSocialQuery(
+            `${DM_USER_THREADS_PATH}/${uid}`,
+            'orderBy="status"&equalTo="pending"',
+            accessToken
+        );
+        if (!data || typeof data !== "object") return 0;
+        let count = 0;
+        Object.keys(data).forEach(function (threadId) {
+            const row = data[threadId];
+            if (row && row.requestedBy === uid) count++;
+        });
+        return count;
+    } catch (e) {
+        // A failed count must not silently disable the cap; treat as over cap.
+        console.error("[DM] pending count failed:", e.message);
+        return DM_MAX_PENDING_OUTGOING;
+    }
+}
+
+async function getDmAllowRequests(uid, accessToken) {
+    try {
+        const res = await rtdbSocialGet(`${DM_PREFS_PATH}/${uid}/allowRequests`, accessToken);
+        // Missing prefs (null) means the default: requests allowed.
+        return res.data !== false;
+    } catch (e) {
+        // Fail closed: if the preference cannot be read, do not create a new
+        // conversation. The acceptance gate is a second layer, not a reason
+        // to ignore an explicit opt-out.
+        console.error("[DM] preference read failed:", e.message);
+        return false;
+    }
+}
+
+async function hasDmBlock(uidA, uidB, accessToken) {
+    try {
+        const [forward, reverse] = await Promise.all([
+            rtdbSocialGet(`${DM_BLOCKS_PATH}/${uidA}/${uidB}`, accessToken),
+            rtdbSocialGet(`${DM_BLOCKS_PATH}/${uidB}/${uidA}`, accessToken)
+        ]);
+        return forward.data === true || reverse.data === true;
+    } catch (e) {
+        // Fail closed: if the block list cannot be read, do not create a new
+        // conversation (a missed request is safer than a missed block).
+        console.error("[DM] block check failed:", e.message);
+        return true;
+    }
+}
+
+function isValidDmText(text, maxLength) {
+    return typeof text === "string" && text.trim().length > 0 && text.length <= maxLength;
+}
+
+// A block overwrites the thread status, so dm_block records the status it
+// replaced in blockedFromStatus. Unblocking puts the conversation back the way
+// it was: an accepted conversation reopens, a pending request returns to the
+// inbox for a fresh accept/decline. Threads blocked before blockedFromStatus
+// existed fall back on the transition timestamps.
+function dmStatusAfterUnblock(thread) {
+    const prior = thread && thread.blockedFromStatus;
+    if (prior === "pending" || prior === "accepted" || prior === "declined") return prior;
+    if (thread && thread.acceptedAt) return "accepted";
+    if (thread && thread.declinedAt) return "declined";
+    return "pending";
+}
+
+function dmIndexRow(otherUid, thread, lastMessageAt, lastMessageUid) {
+    const row = {
+        otherUid,
+        requestedBy: thread.requestedBy,
+        status: thread.status,
+        // Use the RTDB server timestamp so the inbox and the client's
+        // lastReadAt (also a server timestamp) share one clock.
+        lastMessageAt: typeof lastMessageAt === "number" ? lastMessageAt : { ".sv": "timestamp" },
+        lastMessageUid: lastMessageUid || thread.requestedBy || ""
+    };
+    if (thread.blockedBy) row.blockedBy = thread.blockedBy;
+    return row;
+}
+
+async function writeDmIndexRow(uid, threadId, row, accessToken) {
+    // PATCH (not PUT): lastReadAt is written by the client and must survive
+    // every new message. PATCH also creates the row on first contact.
+    await rtdbPatchWithAccessToken(`${DM_USER_THREADS_PATH}/${uid}/${threadId}`, row, accessToken);
+}
+
+// Mirrors a thread status transition into both participants' inbox rows.
+// Two reads here are fine: transitions are rare, and a missing row is rebuilt
+// from the thread. blockedBy must be removed when the block is lifted or both
+// inboxes keep showing "You blocked this person".
+async function writeDmStatusToIndexRows(uid, other, threadId, thread, accessToken) {
+    const myRowPath = `${DM_USER_THREADS_PATH}/${uid}/${threadId}`;
+    const otherRowPath = `${DM_USER_THREADS_PATH}/${other}/${threadId}`;
+    const [myRowRes, otherRowRes] = await Promise.all([
+        rtdbSocialGet(myRowPath, accessToken).catch(function () { return { data: null }; }),
+        rtdbSocialGet(otherRowPath, accessToken).catch(function () { return { data: null }; })
+    ]);
+    const myRow = (myRowRes.data && typeof myRowRes.data === "object")
+        ? myRowRes.data
+        : dmIndexRow(other, thread, null, thread.requestedBy);
+    const otherRow = (otherRowRes.data && typeof otherRowRes.data === "object")
+        ? otherRowRes.data
+        : dmIndexRow(uid, thread, null, thread.requestedBy);
+    myRow.status = thread.status;
+    otherRow.status = thread.status;
+    if (thread.blockedBy) {
+        myRow.blockedBy = thread.blockedBy;
+        otherRow.blockedBy = thread.blockedBy;
+    } else {
+        delete myRow.blockedBy;
+        delete otherRow.blockedBy;
+    }
+    await Promise.all([
+        rtdbSetWithAccessToken(myRowPath, myRow, accessToken),
+        rtdbSetWithAccessToken(otherRowPath, otherRow, accessToken)
+    ]);
+}
+
+function otherDmParticipant(thread, uid) {
+    const participants = (thread && thread.participants) || {};
+    const others = Object.keys(participants).filter(function (p) { return p !== uid; });
+    return others.length === 1 ? others[0] : "";
+}
+
+// Report-scoped context. Only called when a participant reports a message, so
+// moderators never get a blanket read rule on private conversations.
+async function getDmReportContext(threadId, accessToken) {
+    try {
+        const data = await rtdbSocialQuery(
+            `${DM_MESSAGES_PATH}/${threadId}`,
+            'orderBy="timestamp"&limitToLast=10',
+            accessToken
+        );
+        if (!data || typeof data !== "object") return [];
+        return Object.keys(data).map(function (key) {
+            const msg = data[key] || {};
+            return {
+                uid: msg.uid || "",
+                text: String(msg.text || "").substring(0, 500),
+                timestamp: typeof msg.timestamp === "number" ? msg.timestamp : 0
+            };
+        }).sort(function (a, b) { return a.timestamp - b.timestamp; });
+    } catch (e) {
+        console.error("[DM] report context fetch failed:", e.message);
+        return [];
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  TEXT NORMALISATION / HASHING (used by the chat repetition guard)   */
+/* ------------------------------------------------------------------ */
+// `kindlechat/user_recent` is retired: nothing records to it any more, so
+// the per-type duplicate checks were removed rather than left spending one
+// RTDB read per topic / comment / post. Chat repeats are handled by the
+// bucket-backed guard below; these helpers only normalise and hash text.
+const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;      // exact-repeat window for chat
 
 function normalizeForDedupe(text) {
     if (!text) return "";
@@ -938,41 +1696,174 @@ function hashDedupeKey(text) {
     return String(hash >>> 0);
 }
 
-async function checkUserRecentContent(uid, contentType, text, accessToken) {
-    const hash = hashDedupeKey(text);
-    if (!hash) return { duplicate: false };
-    const path = `kindlechat/user_recent/${uid}/${contentType}/${hash}`;
-    const { data } = await rtdbSocialGet(path, accessToken);
-    const now = Date.now();
-    if (data && typeof data.timestamp === "number" && (now - data.timestamp) < DUPLICATE_WINDOW_MS) {
-        return { duplicate: true, retryAfter: Math.ceil((DUPLICATE_WINDOW_MS - (now - data.timestamp)) / 1000) };
+/* ------------------------------------------------------------------ */
+/*  KINDLE CHAT REPETITION GUARD                                       */
+/* ------------------------------------------------------------------ */
+// Repetition state lives INSIDE the existing server_rate_limits bucket, so
+// this guard adds ZERO Firebase reads/writes: that bucket is already read
+// and written once per message by consumeRateLimitToken().
+//
+// Why not kindlechat/user_recent? Those writes were fire-and-forget after
+// the response had been sent (no ctx.waitUntil) and they silently stopped
+// persisting: the newest entry is 2026-09-21, so exact-duplicate blocking
+// had been dead for a month. That is how the 2026-10-19 "hello hello
+// hello" flood went straight through. Replacing the three extra
+// user_recent ops per chat message (check GET + record PUT + cleanup GET)
+// with this guard is a net REDUCTION of 3 Firebase operations.
+//
+// Stored shape (compact string, hashes only - never message text):
+//   bucket.rep = "<ts>:<textHash>:<dominantHash>:<tokHash> <tokHash>|..."
+// holding the user's most recent message shapes (newest first).
+const CHAT_REP_WINDOW_MS = 10 * 60 * 1000;           // near-repeat window
+const CHAT_REP_DUP_WINDOW_MS = DUPLICATE_WINDOW_MS;  // 5 min, same as the old dedupe window
+const CHAT_REP_SIMILARITY = 0.5;                     // Jaccard over de-duplicated token hashes
+const CHAT_REP_LIMIT = 2;                            // 3rd near-identical message is rejected
+const CHAT_REP_MAX_ENTRIES = 4;
+const CHAT_REP_MAX_TOKENS = 16;
+
+// Collapses character runs ("hello", "hellllo", "hhhhh...") and drops
+// @mentions (conversation context, not content), so stretched spam and
+// plain greetings compare equal. Character dominance is measured on the
+// un-collapsed text, or a 120-character "aaaa...saaaa" mash would look
+// like a three-letter word.
+function chatTextShapes(text) {
+    const raw = String(text || "")
+        .toLowerCase()
+        .replace(/(^|\s)@[a-z0-9_.\-]+/g, " ")
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ")
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!raw) return { toks: [], dom: "" };
+    const cleaned = raw.replace(/(.)\1+/g, "$1");
+    const words = cleaned.split(" ");
+    const counts = Object.create(null);
+    const order = [];
+    for (const w of words) {
+        if (!w) continue;
+        if (counts[w]) { counts[w]++; } else { counts[w] = 1; order.push(w); }
     }
-    return { duplicate: false };
+    // A "dominant" token means one word (or one letter) carries the message:
+    // "hello hello hello", "hi hi hi hi bhi hi", "aaaaaa". Those shapes must
+    // match each other even when junk words are sprinkled in (Jaccard alone
+    // dilutes them). Single-character dominants are tagged "#x" so a mashed
+    // "a a a" and "aaaaaa" compare equal without colliding with words.
+    let dominant = "";
+    const letters = raw.replace(/\s+/g, "");
+    if (letters.length >= 8) {
+        const charCounts = Object.create(null);
+        let topChar = "", topCharCount = 0;
+        for (const ch of letters) {
+            charCounts[ch] = (charCounts[ch] || 0) + 1;
+            if (charCounts[ch] > topCharCount) { topCharCount = charCounts[ch]; topChar = ch; }
+        }
+        if (topCharCount >= Math.ceil(letters.length * 0.7)) dominant = hashDedupeKey("#" + topChar);
+    }
+    if (!dominant) {
+        let topWord = "", topCount = 0;
+        for (const w of order) {
+            if (counts[w] > topCount) { topCount = counts[w]; topWord = w; }
+        }
+        if (words.length === 1 || topCount >= Math.max(2, Math.ceil(words.length * 0.5))) {
+            dominant = topWord.length === 1 ? hashDedupeKey("#" + topWord) : hashDedupeKey(topWord);
+        }
+    }
+    return {
+        toks: order.slice(0, CHAT_REP_MAX_TOKENS).map(hashDedupeKey),
+        dom: dominant
+    };
 }
 
-async function recordUserRecentContent(uid, contentType, text, accessToken) {
-    const hash = hashDedupeKey(text);
-    if (!hash) return;
-    const path = `kindlechat/user_recent/${uid}/${contentType}/${hash}`;
-    await rtdbSocialPutSimple(path, { timestamp: Date.now() }, accessToken);
+function decodeChatRep(rep) {
+    if (!rep || typeof rep !== "string") return [];
+    const out = [];
+    for (const part of rep.split("|")) {
+        const bits = part.split(":");
+        if (bits.length < 3) continue;
+        const t = Number(bits[0]);
+        if (!t) continue;
+        out.push({ t: t, h: bits[1] || "", dom: bits[2] || "", toks: bits[3] ? bits[3].split(" ").filter(Boolean) : [] });
+    }
+    return out;
 }
 
-async function cleanupUserRecentContent(uid, contentType, accessToken) {
-    try {
-        const path = `kindlechat/user_recent/${uid}/${contentType}`;
-        const { data } = await rtdbSocialGet(path, accessToken);
-        if (!data || typeof data !== "object") return;
-        const now = Date.now();
-        const deletes = [];
-        for (const [hash, entry] of Object.entries(data)) {
-            if (entry && typeof entry.timestamp === "number" && (now - entry.timestamp) > DUPLICATE_WINDOW_MS) {
-                deletes.push(rtdbDeleteWithAccessToken(`${path}/${hash}`, accessToken));
+function encodeChatRep(entries) {
+    return entries.map(e => e.t + ":" + e.h + ":" + (e.dom || "") + ":" + (e.toks || []).join(" ")).join("|");
+}
+
+function chatTokenOverlap(a, b) {
+    if (!a.length || !b.length) return 0;
+    const B = Object.create(null);
+    for (const t of b) B[t] = 1;
+    let shared = 0;
+    for (const t of a) { if (B[t]) shared++; }
+    // a and b are already de-duplicated, so this is a plain Jaccard index
+    return shared / (a.length + b.length - shared);
+}
+
+function chatShapesMatch(shape, entry) {
+    if (shape.dom && entry.dom && shape.dom === entry.dom) return true;
+    return chatTokenOverlap(shape.toks, entry.toks) >= CHAT_REP_SIMILARITY;
+}
+
+// Returns { blocked: {retryAfter, message}|null, rep: <state to persist> }.
+// The attempt is always recorded - blocked ones included - so a spammer
+// cannot outlast the window by hammering send.
+function evaluateChatRepetition(rep, text, now, isArt) {
+    const entries = decodeChatRep(rep).filter(e => now - e.t >= 0 && now - e.t < CHAT_REP_WINDOW_MS);
+    const textHash = hashDedupeKey(normalizeForDedupe(text));
+    let blocked = null;
+
+    if (isArt) {
+        // Same drawing reposted (the placeholder caption must not be compared)
+        for (const e of entries) {
+            const age = now - e.t;
+            if (e.h === textHash && age < CHAT_REP_DUP_WINDOW_MS) {
+                blocked = {
+                    retryAfter: Math.ceil((CHAT_REP_DUP_WINDOW_MS - age) / 1000),
+                    message: "You already posted this pixel art recently. Modify it to post again."
+                };
+                break;
             }
         }
-        await Promise.all(deletes);
-    } catch (e) {
-        console.error("[DEDUPE] Cleanup failed:", e.message);
+    } else {
+        const shape = chatTextShapes(text);
+        if (shape.toks.length) {
+            // 1. Exact repeat within the duplicate window
+            for (const e of entries) {
+                const age = now - e.t;
+                if (e.h === textHash && age < CHAT_REP_DUP_WINDOW_MS) {
+                    blocked = {
+                        retryAfter: Math.ceil((CHAT_REP_DUP_WINDOW_MS - age) / 1000),
+                        message: "You just sent that message. Say something different - repeated messages are blocked to keep chat readable."
+                    };
+                    break;
+                }
+            }
+            // 2. Same message reworded or stretched a few times in the window
+            if (!blocked) {
+                const ages = [];
+                for (const e of entries) {
+                    if (!e.toks.length) continue;
+                    if (chatShapesMatch(shape, e)) ages.push(now - e.t);
+                }
+                if (ages.length >= CHAT_REP_LIMIT) {
+                    ages.sort((x, y) => x - y);   // newest first
+                    const wait = Math.ceil((CHAT_REP_WINDOW_MS - ages[CHAT_REP_LIMIT - 1]) / 1000);
+                    blocked = {
+                        retryAfter: Math.max(10, wait),
+                        message: "You have sent the same message a few times. Please say something new - repeated messages are blocked to keep chat readable."
+                    };
+                }
+            }
+        }
     }
+
+    const shape = isArt ? { toks: [], dom: "" } : chatTextShapes(text);
+    const next = [{ t: now, h: textHash, dom: shape.dom, toks: shape.toks }]
+        .concat(entries)
+        .slice(0, CHAT_REP_MAX_ENTRIES);
+    return { blocked: blocked, rep: encodeChatRep(next) };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1002,106 +1893,9 @@ function checkRateLimit(key, maxTokens, refillMs) {
     return { allowed: true };
 }
 
-/* ------------------------------------------------------------------ */
-/*  DISCORD NOTIFICATIONS                                              */
-/* ------------------------------------------------------------------ */
-async function sendDiscordReportNotification(env, reportData) {
-    const botToken = env.DISCORD_BOT_TOKEN;
-    const channelId = env.DISCORD_CHANNEL_ID;
-    
-    if (!botToken || !channelId) {
-        console.log("[REPORT] DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID not configured, skipping notification");
-        return;
-    }
-    
-    const truncatedSnapshot = reportData.contentSnapshot
-        ? reportData.contentSnapshot.substring(0, 500).replace(/```/g, "` ` `") + (reportData.contentSnapshot.length > 500 ? "..." : "")
-        : "No preview available";
-    
-    const isAutoDeleted = reportData.autoDeleted === true;
-    const title = isAutoDeleted
-        ? (reportData.deleteSuccess ? "AUTO-DELETED: Content Removed" : "AUTO-DELETE FAILED")
-        : "New Content Report";
-    const color = isAutoDeleted
-        ? (reportData.deleteSuccess ? 3066993 : 15158332)
-        : 15158332;
-    
-    const fields = [
-        { name: "Reporter", value: `${reportData.reporterName} (${reportData.reporterId})`, inline: true },
-        { name: "Reported User", value: `${reportData.reportedUserName || "Unknown"} (${reportData.reportedUserId})`, inline: true },
-        { name: "Content Type", value: reportData.contentType, inline: true },
-        { name: "Reason", value: reportData.reason, inline: true }
-    ];
-    
-    if (isAutoDeleted) {
-        fields.push({ name: "Auto-Delete", value: reportData.deleteSuccess ? (reportData.resolutionNote || "Content was automatically deleted") : "Auto-delete failed, manual action required", inline: false });
-    }
-    
-    fields.push(
-        { name: "Content ID", value: reportData.contentId, inline: false },
-        { name: "Content Path", value: reportData.contentPath, inline: false },
-        { name: "Comment", value: reportData.comment || "None", inline: false },
-        { name: "Content Preview", value: "```\n" + truncatedSnapshot + "\n```", inline: false }
-    );
-    
-    const embed = {
-        title,
-        color,
-        fields,
-        timestamp: new Date().toISOString(),
-        footer: { text: "ReKindle Moderation" }
-    };
-    
-    const payload = { embeds: [embed] };
-    
-    // Add action buttons (only for non-auto-deleted content)
-    if (!isAutoDeleted) {
-        const actionId = `${reportData.contentType}:${reportData.contentId}:${reportData.reportedUserId || ""}`;
-        payload.components = [{
-            type: 1,
-            components: [
-                {
-                    type: 2,
-                    style: 4,
-                    label: "Delete Content",
-                    custom_id: `delete:${actionId}`,
-                    emoji: { name: "🗑️" }
-                },
-                {
-                    type: 2,
-                    style: 3,
-                    label: "Timeout User (24h)",
-                    custom_id: `timeout:${actionId}`,
-                    emoji: { name: "⏰" }
-                },
-                {
-                    type: 2,
-                    style: 2,
-                    label: "Dismiss Report",
-                    custom_id: `dismiss:${actionId}`,
-                    emoji: { name: "✅" }
-                }
-            ]
-        }];
-    }
-    
-    try {
-        const resp = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bot ${botToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-            const errText = await resp.text();
-            console.error("[REPORT] Discord bot notification failed:", resp.status, errText);
-        }
-    } catch (e) {
-        console.error("[REPORT] Discord notification failed:", e.message);
-    }
-}
+/* Discord report notifications were removed 2026-10-25 by request: reports
+   stay in /reports and the moderation console, but no Discord embed is sent.
+   The /discord-interaction endpoint (buttons) remains for the old Worker. */
 
 /* ------------------------------------------------------------------ */
 /*  DISCORD INTERACTIONS                                               */
@@ -1166,7 +1960,15 @@ async function handleDiscordInteraction(request, env) {
 
         try {
             if (action === "delete") {
-                const contentPath = getContentPath(contentType, contentId);
+                let contentPath = getContentPath(contentType, contentId);
+                // A comment id does not identify its parent post/topic, and a
+                // DM message id only identifies its thread, so fall back to the
+                // path stored on the pending report (getContentPath returns ""
+                // for those types).
+                if (!contentPath) {
+                    const report = await getExistingPendingReport(contentType, contentId, accessToken);
+                    if (report && report.contentPath) contentPath = report.contentPath;
+                }
                 const deleted = await autoDeleteContent(contentType, contentId, contentPath, accessToken);
                 if (deleted) {
                     message = "Content deleted successfully.";
@@ -1213,11 +2015,16 @@ async function handleDiscordInteraction(request, env) {
 function getContentPath(contentType, contentId) {
     if (contentType === "kindlechat") return `kindlechat/messages/${contentId}`;
     if (contentType === "topic") return `topics/${contentId}`;
-    if (contentType === "topic_comment") return `topics/${contentId}`;
     if (contentType === "neighbourhood_post") return `neighbourhood_posts/${contentId}`;
-    if (contentType === "neighbourhood_comment") return `neighbourhood_posts/${contentId}`;
     if (contentType === "suggestion") return `suggestions/${contentId}`;
-    if (contentType === "suggestion_comment") return `suggestions/${contentId}`;
+    // Comment ids are only unique inside their parent document, so the parent
+    // path has to come from the stored report's contentPath. The same is true
+    // for DM messages (only unique inside their thread) and suggestion
+    // comments (inside their suggestion). See handleDiscordInteraction.
+    if (contentType === "topic_comment") return "";
+    if (contentType === "neighbourhood_comment") return "";
+    if (contentType === "suggestion_comment") return "";
+    if (contentType === "dm_message") return "";
     return "";
 }
 
@@ -1257,7 +2064,7 @@ export default {
         }
 
         if (request.method === "OPTIONS") {
-            return new Response(null, { headers });
+            return new Response(null, { status: 204, headers });
         }
 
         if (request.method !== "POST") {
@@ -1286,8 +2093,12 @@ export default {
 
             const accessToken = await getCachedAccessToken(env);
 
-            // --- TIMEOUT CHECK (skip for reports) ---
-            if (type !== "report") {
+            // --- TIMEOUT CHECK ---
+            // Reports and DM safety actions (accept/decline/block/unblock) must
+            // remain available even to a timed-out user; only content writes
+            // are blocked by a timeout.
+            const TIMEOUT_EXEMPT_TYPES = ["report", "dm_accept", "dm_decline", "dm_block", "dm_unblock"];
+            if (!TIMEOUT_EXEMPT_TYPES.includes(type)) {
                 const timeoutCheck = await checkTimeout(uid, env, token, accessToken);
                 if (timeoutCheck.timedOut) {
                     return new Response(JSON.stringify({
@@ -1314,26 +2125,28 @@ export default {
                     return new Response(JSON.stringify({ error: "That word is not allowed." }), { status: 400, headers });
                 }
 
-                // Rate limit
-                const rl = await consumeRateLimitToken(uid, "kindlechat", accessToken);
-                if (!rl.allowed) {
-                    return new Response(JSON.stringify({ allowed: false, error: `Rate limit exceeded. Please wait ${rl.retryAfter} second(s) before posting.`, retryAfter: rl.retryAfter }), { status: 429, headers });
-                }
-
                 const isFlipnote = body.is_flipnote === true;
                 const isPixelArt = body.is_pixel_art === true;
 
-                // Duplicate / repetitive content detection
-                if (isPixelArt && body.grid_data) {
-                    const pixelDupCheck = await checkUserRecentContent(uid, "kindlechat_pixel_art", body.grid_data, accessToken);
-                    if (pixelDupCheck.duplicate) {
-                        return new Response(JSON.stringify({ allowed: false, error: "You already posted this pixel art recently. Modify it to post again.", retryAfter: pixelDupCheck.retryAfter }), { status: 429, headers });
-                    }
-                } else if (!isPixelArt && !isFlipnote) {
-                    const dupCheck = await checkUserRecentContent(uid, "kindlechat", trimmed, accessToken);
-                    if (dupCheck.duplicate) {
-                        return new Response(JSON.stringify({ allowed: false, error: "You already sent this recently. Please wait a few minutes.", retryAfter: dupCheck.retryAfter }), { status: 429, headers });
-                    }
+                // Rate limit + repetition guard in a single RTDB round-trip.
+                // The repetition state rides on the rate-limit bucket, so this
+                // replaces the old user_recent duplicate checks (3 ops/message)
+                // without adding any Firebase reads or writes.
+                // Flipbooks are skipped: their placeholder caption is shared by
+                // every flipbook, so comparing captions would false-positive.
+                let spamOpts = null;
+                if (!isFlipnote) {
+                    spamOpts = isPixelArt
+                        ? { text: String(body.grid_data || ""), isArt: true }
+                        : { text: trimmed, isArt: false };
+                }
+                const rl = await consumeRateLimitToken(uid, "kindlechat", accessToken, spamOpts);
+                if (!rl.allowed) {
+                    return new Response(JSON.stringify({
+                        allowed: false,
+                        error: rl.message || `Rate limit exceeded. Please wait ${rl.retryAfter} second(s) before posting.`,
+                        retryAfter: rl.retryAfter
+                    }), { status: 429, headers });
                 }
 
                 const skipOpenAIModeration = isFlipnote || isPixelArt;
@@ -1357,6 +2170,7 @@ export default {
                 for (const key of allowedExtras) {
                     if (key in body) msgData[key] = body[key];
                 }
+                addDetectedLang(msgData, body);
 
                 const pixelArt = body.pixel_art || null;
                 const gridSize = getGridSize(body.grid_data);
@@ -1386,19 +2200,376 @@ export default {
                     await rtdbSetWithAccessToken(`kindlechat/art_index/${result.name}`, artIndexEntry, accessToken).catch(e => console.error("[WORKER] art_index write failed:", e.message));
                 }
 
-                // Record this text for duplicate detection (non-blocking)
-                if (trimmed) {
-                    recordUserRecentContent(uid, "kindlechat", trimmed, accessToken).catch(e => console.error("[DEDUPE] record failed:", e.message));
-                    cleanupUserRecentContent(uid, "kindlechat", accessToken).catch(e => console.error("[DEDUPE] cleanup failed:", e.message));
-                }
-
-                // Record pixel art grid for duplicate detection (non-blocking)
-                if (isPixelArt && body.grid_data) {
-                    recordUserRecentContent(uid, "kindlechat_pixel_art", body.grid_data, accessToken).catch(e => console.error("[DEDUPE] record failed:", e.message));
-                    cleanupUserRecentContent(uid, "kindlechat_pixel_art", accessToken).catch(e => console.error("[DEDUPE] cleanup failed:", e.message));
-                }
+                // Duplicate/repetition state was already recorded on the
+                // rate-limit bucket by consumeRateLimitToken() above.
 
                 return new Response(JSON.stringify({ allowed: true, key: result.name }), { status: 200, headers });
+            }
+
+            // --- DIRECT MESSAGE REQUEST ---
+            // Pro members start the conversation; every first contact is a
+            // moderated request that the recipient must accept. All DM data is
+            // written by this worker into the SOCIAL RTDB.
+            if (type === "dm_request") {
+                const toUid = typeof body.toUid === "string" ? body.toUid.trim() : "";
+                const text = typeof body.text === "string" ? body.text : "";
+
+                if (!toUid || toUid === uid) {
+                    return new Response(JSON.stringify({
+                        error: toUid === uid ? "You can't message yourself." : "Choose a user to message."
+                    }), { status: 400, headers });
+                }
+                if (!/^[A-Za-z0-9]{6,128}$/.test(toUid)) {
+                    return new Response(JSON.stringify({ error: "Invalid recipient." }), { status: 400, headers });
+                }
+
+                const threadId = dmThreadId(uid, toUid);
+                if (!threadId) {
+                    return new Response(JSON.stringify({ error: "Invalid recipient." }), { status: 400, headers });
+                }
+
+                if (!(await isDmEnabledForOrigin(origin, accessToken))) {
+                    return new Response(JSON.stringify({
+                        error: "Direct messages are temporarily unavailable.",
+                        code: "dm_disabled"
+                    }), { status: 403, headers });
+                }
+
+                // Only ReKindle+ members may start new conversations. The
+                // recipient can be any age-verified user.
+                if (payload.pro !== true) {
+                    return new Response(JSON.stringify({
+                        error: "ReKindle+ is required to start new conversations.",
+                        code: "pro_required"
+                    }), { status: 403, headers });
+                }
+                if (payload.ageVerified !== true) {
+                    return new Response(JSON.stringify({
+                        error: "Age verification is required to send direct messages.",
+                        code: "age_required"
+                    }), { status: 403, headers });
+                }
+
+                if (!isValidDmText(text, DM_MAX_REQUEST)) {
+                    return new Response(JSON.stringify({
+                        error: `Message requests must be 1-${DM_MAX_REQUEST} characters.`
+                    }), { status: 400, headers });
+                }
+                if (containsUrl(text)) {
+                    return new Response(JSON.stringify({ error: "Links and URLs are not allowed." }), { status: 400, headers });
+                }
+                if (containsPromotedTerm(text)) {
+                    return new Response(JSON.stringify({ error: "Promotional content is not allowed." }), { status: 400, headers });
+                }
+                if (containsDih(text)) {
+                    return new Response(JSON.stringify({ error: "That word is not allowed." }), { status: 400, headers });
+                }
+
+                const rl = await consumeRateLimitToken(uid, "dm_request", accessToken);
+                if (!rl.allowed) {
+                    return new Response(JSON.stringify({
+                        allowed: false,
+                        error: `Too many message requests. Please wait ${rl.retryAfter} second(s).`,
+                        retryAfter: rl.retryAfter
+                    }), { status: 429, headers });
+                }
+
+                // If a thread already exists, the caller is a participant, so
+                // it is safe (and more useful) to report an accepted thread even
+                // if the recipient has since turned requests off.
+                const existing = await getDmThreadWithEtag(threadId, accessToken);
+                if (existing.thread) {
+                    if (existing.thread.status === "accepted") {
+                        return new Response(JSON.stringify({
+                            error: "You already have a conversation with this person.",
+                            code: "dm_exists",
+                            threadId
+                        }), { status: 409, headers });
+                    }
+                    return new Response(JSON.stringify({
+                        error: "This person can't receive message requests right now."
+                    }), { status: 409, headers });
+                }
+
+                const pendingOutgoing = await countPendingOutgoingDmRequests(uid, accessToken);
+                if (pendingOutgoing >= DM_MAX_PENDING_OUTGOING) {
+                    return new Response(JSON.stringify({
+                        error: `You can have at most ${DM_MAX_PENDING_OUTGOING} unanswered message requests. Wait for a reply or cancellation before starting another.`,
+                        code: "dm_pending_cap"
+                    }), { status: 429, headers });
+                }
+
+                if (!(await getDmAllowRequests(toUid, accessToken))) {
+                    return new Response(JSON.stringify({
+                        error: "This person can't receive message requests right now."
+                    }), { status: 403, headers });
+                }
+                if (await hasDmBlock(uid, toUid, accessToken)) {
+                    // Never reveal who blocked whom.
+                    return new Response(JSON.stringify({
+                        error: "This person can't receive message requests right now."
+                    }), { status: 403, headers });
+                }
+
+                const mod = await moderateContent(text, env.OPENAI_API_KEY);
+                if (mod.flagged) {
+                    await logAutomodRejection(uid, "dm_request", text, mod.categories, accessToken, { storeText: false });
+                    return new Response(JSON.stringify({ error: moderationErrorMessage(mod) }), { status: 400, headers });
+                }
+
+                const thread = {
+                    participants: { [uid]: true, [toUid]: true },
+                    requestedBy: uid,
+                    status: "pending",
+                    createdAt: { ".sv": "timestamp" }
+                };
+
+                try {
+                    await rtdbSetWithAccessToken(`${DM_THREADS_PATH}/${threadId}`, thread, accessToken);
+                    const messageResult = await rtdbPushWithAccessToken(`${DM_MESSAGES_PATH}/${threadId}`, addDetectedLang({
+                        uid,
+                        text,
+                        timestamp: { ".sv": "timestamp" }
+                    }, body), accessToken);
+                    await Promise.all([
+                        writeDmIndexRow(uid, threadId, dmIndexRow(toUid, thread, null, uid), accessToken),
+                        writeDmIndexRow(toUid, threadId, dmIndexRow(uid, thread, null, uid), accessToken)
+                    ]);
+                    console.log("[DM] request created:", threadId);
+                    return new Response(JSON.stringify({
+                        success: true,
+                        threadId,
+                        messageId: messageResult.name
+                    }), { status: 200, headers });
+                } catch (e) {
+                    // Best-effort rollback so a partial write does not leave an
+                    // invisible half-thread behind.
+                    await rtdbDeleteWithAccessToken(`${DM_THREADS_PATH}/${threadId}`, accessToken).catch(function () { });
+                    await rtdbDeleteWithAccessToken(`${DM_MESSAGES_PATH}/${threadId}`, accessToken).catch(function () { });
+                    await rtdbDeleteWithAccessToken(`${DM_USER_THREADS_PATH}/${uid}/${threadId}`, accessToken).catch(function () { });
+                    await rtdbDeleteWithAccessToken(`${DM_USER_THREADS_PATH}/${toUid}/${threadId}`, accessToken).catch(function () { });
+                    throw e;
+                }
+            }
+
+            // --- DIRECT MESSAGE REPLY ---
+            if (type === "dm_message") {
+                const threadId = typeof body.threadId === "string" ? body.threadId : "";
+                const text = typeof body.text === "string" ? body.text : "";
+
+                if (!/^dm_[A-Za-z0-9]+_[A-Za-z0-9]+$/.test(threadId)) {
+                    return new Response(JSON.stringify({ error: "Invalid conversation." }), { status: 400, headers });
+                }
+                if (!(await isDmEnabledForOrigin(origin, accessToken))) {
+                    return new Response(JSON.stringify({
+                        error: "Direct messages are temporarily unavailable.",
+                        code: "dm_disabled"
+                    }), { status: 403, headers });
+                }
+                if (!isValidDmText(text, DM_MAX_MESSAGE)) {
+                    return new Response(JSON.stringify({
+                        error: `Messages must be 1-${DM_MAX_MESSAGE} characters.`
+                    }), { status: 400, headers });
+                }
+                if (containsUrl(text)) {
+                    return new Response(JSON.stringify({ error: "Links and URLs are not allowed." }), { status: 400, headers });
+                }
+                if (containsPromotedTerm(text)) {
+                    return new Response(JSON.stringify({ error: "Promotional content is not allowed." }), { status: 400, headers });
+                }
+                if (containsDih(text)) {
+                    return new Response(JSON.stringify({ error: "That word is not allowed." }), { status: 400, headers });
+                }
+
+                const { thread } = await getDmThreadWithEtag(threadId, accessToken);
+                if (!thread || !thread.participants || thread.participants[uid] !== true) {
+                    return new Response(JSON.stringify({ error: "Conversation not found." }), { status: 404, headers });
+                }
+                if (thread.status !== "accepted") {
+                    return new Response(JSON.stringify({
+                        error: "This conversation is not open.",
+                        code: "dm_not_open"
+                    }), { status: 403, headers });
+                }
+
+                const rl = await consumeRateLimitToken(uid, "dm", accessToken, { text, isArt: false });
+                if (!rl.allowed) {
+                    return new Response(JSON.stringify({
+                        allowed: false,
+                        error: rl.message || `Please wait ${rl.retryAfter} second(s) before sending another message.`,
+                        retryAfter: rl.retryAfter
+                    }), { status: 429, headers });
+                }
+
+                const mod = await moderateContent(text, env.OPENAI_API_KEY);
+                if (mod.flagged) {
+                    await logAutomodRejection(uid, "dm", text, mod.categories, accessToken, { storeText: false });
+                    return new Response(JSON.stringify({ error: moderationErrorMessage(mod) }), { status: 400, headers });
+                }
+
+                const result = await rtdbPushWithAccessToken(`${DM_MESSAGES_PATH}/${threadId}`, addDetectedLang({
+                    uid,
+                    text,
+                    timestamp: { ".sv": "timestamp" }
+                }, body), accessToken);
+
+                const other = otherDmParticipant(thread, uid);
+                if (other) {
+                    // The message itself is the source of truth. If an inbox
+                    // index write fails, do NOT report failure to the sender
+                    // (they would resend and duplicate the message); log it for
+                    // a repair instead.
+                    await Promise.all([
+                        writeDmIndexRow(uid, threadId, dmIndexRow(other, thread, null, uid), accessToken),
+                        writeDmIndexRow(other, threadId, dmIndexRow(uid, thread, null, uid), accessToken)
+                    ]).catch(function (e) {
+                        console.error("[DM] index update failed after message write:", e.message);
+                    });
+                }
+
+                return new Response(JSON.stringify({ success: true, messageId: result.name }), { status: 200, headers });
+            }
+
+            // --- DM ACCEPT / DECLINE / BLOCK / UNBLOCK ---
+            // These are deliberately NOT behind the Pro check or the kill
+            // switch: a recipient must always be able to accept, decline,
+            // block or unblock, including while timed out.
+            if (type === "dm_accept" || type === "dm_decline" || type === "dm_block" || type === "dm_unblock") {
+                const threadId = typeof body.threadId === "string" ? body.threadId : "";
+                if (!/^dm_[A-Za-z0-9]+_[A-Za-z0-9]+$/.test(threadId)) {
+                    return new Response(JSON.stringify({ error: "Invalid conversation." }), { status: 400, headers });
+                }
+
+                const { thread, etag } = await getDmThreadWithEtag(threadId, accessToken);
+                if (!thread || !thread.participants || thread.participants[uid] !== true) {
+                    return new Response(JSON.stringify({ error: "Conversation not found." }), { status: 404, headers });
+                }
+
+                const other = otherDmParticipant(thread, uid);
+                if (!other) {
+                    return new Response(JSON.stringify({ error: "Conversation not found." }), { status: 404, headers });
+                }
+
+                if (type === "dm_unblock") {
+                    if (thread.status !== "blocked") {
+                        // Idempotent: a retried unblock is not an error.
+                        return new Response(JSON.stringify({
+                            success: true,
+                            status: thread.status
+                        }), { status: 200, headers });
+                    }
+                    if (thread.blockedBy !== uid) {
+                        // Only the blocker can lift their own block. The blocked
+                        // party gets the same generic answer as their closed
+                        // banner, so this action never reveals who blocked whom.
+                        return new Response(JSON.stringify({ error: "This conversation is closed." }), { status: 403, headers });
+                    }
+
+                    // Remove the caller's block first: if a later write fails,
+                    // the thread status still enforces the block, never the
+                    // reverse.
+                    await rtdbDeleteWithAccessToken(`${DM_BLOCKS_PATH}/${uid}/${other}`, accessToken);
+
+                    // dm_block's idempotent branch lets the other participant
+                    // block back. Their block outlives this unblock, so the
+                    // thread stays closed and ownership moves to them.
+                    let otherBlocked = false;
+                    try {
+                        const reverse = await rtdbSocialGet(`${DM_BLOCKS_PATH}/${other}/${uid}`, accessToken);
+                        otherBlocked = reverse.data === true;
+                    } catch (e) {
+                        // Fail closed: an unreadable block list must not
+                        // resurrect a conversation someone may have blocked.
+                        console.error("[DM] reverse block check failed:", e.message);
+                        otherBlocked = true;
+                    }
+
+                    const restored = Object.assign({}, thread);
+                    restored.unblockedAt = { ".sv": "timestamp" };
+                    if (otherBlocked) {
+                        restored.status = "blocked";
+                        restored.blockedBy = other;
+                        restored.blockedAt = { ".sv": "timestamp" };
+                    } else {
+                        restored.status = dmStatusAfterUnblock(thread);
+                        delete restored.blockedBy;
+                        delete restored.blockedAt;
+                        delete restored.blockedFromStatus;
+                    }
+
+                    const unblockPut = await rtdbSocialPut(`${DM_THREADS_PATH}/${threadId}`, restored, etag, accessToken);
+                    if (!unblockPut.ok) {
+                        return new Response(JSON.stringify({ error: "Conversation changed. Please try again." }), { status: 409, headers });
+                    }
+
+                    await writeDmStatusToIndexRows(uid, other, threadId, restored, accessToken);
+                    console.log("[DM] unblocked:", threadId, restored.status);
+
+                    return new Response(JSON.stringify({
+                        success: true,
+                        status: restored.status,
+                        blockedBy: restored.blockedBy || null
+                    }), { status: 200, headers });
+                }
+
+                if (type === "dm_accept") {
+                    if (thread.status === "accepted") {
+                        return new Response(JSON.stringify({ success: true, status: "accepted" }), { status: 200, headers });
+                    }
+                    if (thread.status !== "pending") {
+                        return new Response(JSON.stringify({ error: "This message request is no longer available." }), { status: 409, headers });
+                    }
+                    if (thread.requestedBy === uid) {
+                        return new Response(JSON.stringify({ error: "Only the recipient can accept this request." }), { status: 403, headers });
+                    }
+                }
+
+                if (type === "dm_decline") {
+                    if (thread.status === "declined") {
+                        return new Response(JSON.stringify({ success: true, status: "declined" }), { status: 200, headers });
+                    }
+                    if (thread.status !== "pending") {
+                        return new Response(JSON.stringify({ error: "This message request is no longer available." }), { status: 409, headers });
+                    }
+                    if (thread.requestedBy === uid) {
+                        return new Response(JSON.stringify({ error: "Only the recipient can decline this request." }), { status: 403, headers });
+                    }
+                }
+
+                if (type === "dm_block" && thread.status === "blocked") {
+                    // Idempotent: make sure the block record exists too.
+                    await rtdbSetWithAccessToken(`${DM_BLOCKS_PATH}/${uid}/${other}`, true, accessToken).catch(function () { });
+                    return new Response(JSON.stringify({ success: true, status: "blocked" }), { status: 200, headers });
+                }
+
+                const updated = Object.assign({}, thread);
+                if (type === "dm_accept") {
+                    updated.status = "accepted";
+                    updated.acceptedAt = { ".sv": "timestamp" };
+                } else if (type === "dm_decline") {
+                    updated.status = "declined";
+                    updated.declinedAt = { ".sv": "timestamp" };
+                } else {
+                    updated.status = "blocked";
+                    updated.blockedBy = uid;
+                    updated.blockedAt = { ".sv": "timestamp" };
+                    // Remember what the block replaced so dm_unblock can put
+                    // the conversation back the way it was.
+                    updated.blockedFromStatus = thread.status;
+                }
+
+                const putResult = await rtdbSocialPut(`${DM_THREADS_PATH}/${threadId}`, updated, etag, accessToken);
+                if (!putResult.ok) {
+                    return new Response(JSON.stringify({ error: "Conversation changed. Please try again." }), { status: 409, headers });
+                }
+
+                if (type === "dm_block") {
+                    await rtdbSetWithAccessToken(`${DM_BLOCKS_PATH}/${uid}/${other}`, true, accessToken);
+                }
+
+                await writeDmStatusToIndexRows(uid, other, threadId, updated, accessToken);
+
+                return new Response(JSON.stringify({ success: true, status: updated.status }), { status: 200, headers });
             }
 
             // --- TOPIC ---
@@ -1456,12 +2627,6 @@ export default {
                     return new Response(JSON.stringify({ error: `Rate limit exceeded. You can create ${RATE_LIMIT_CONFIG.topic.capacity} topics every ${Math.round(RATE_LIMIT_CONFIG.topic.refillMs / 3600000)} hours. Please wait ${rl.retryAfter} second(s).`, retryAfter: rl.retryAfter }), { status: 429, headers });
                 }
 
-                // Duplicate / repetitive content detection
-                const dupCheck = await checkUserRecentContent(uid, "topic", title + " " + subheading, accessToken);
-                if (dupCheck.duplicate) {
-                    return new Response(JSON.stringify({ error: "You already posted a topic like this recently. Please wait a few minutes.", retryAfter: dupCheck.retryAfter }), { status: 429, headers });
-                }
-
                 // Moderation
                 let textToModerate = title + " " + subheading;
                 if (validatedPoll) {
@@ -1486,6 +2651,7 @@ export default {
                 if (validatedPoll) {
                     topicData.poll = validatedPoll;
                 }
+                addDetectedLang(topicData, body);
                 const id = await firestoreCreate("topics", topicData, accessToken);
 
                 return new Response(JSON.stringify({ success: true, id }), { status: 200, headers });
@@ -1517,12 +2683,6 @@ export default {
                     return new Response(JSON.stringify({ error: `Rate limit exceeded. Please wait ${rl.retryAfter} second(s) before commenting.`, retryAfter: rl.retryAfter }), { status: 429, headers });
                 }
 
-                // Duplicate / repetitive content detection
-                const dupCheck = await checkUserRecentContent(uid, "topic_comment", commentText, accessToken);
-                if (dupCheck.duplicate) {
-                    return new Response(JSON.stringify({ error: "You already sent this comment recently. Please wait a few minutes.", retryAfter: dupCheck.retryAfter }), { status: 429, headers });
-                }
-
                 // Moderation
                 const mod = await moderateContent(commentText, env.OPENAI_API_KEY);
                 if (mod.flagged) {
@@ -1531,11 +2691,11 @@ export default {
                 }
 
                 // Create comment
-                const commentId = await firestoreCreate(`topics/${topicId}/comments`, {
+                const commentId = await firestoreCreate(`topics/${topicId}/comments`, addDetectedLang({
                     body: commentText,
                     authorId: uid,
                     timestamp: new Date()
-                }, accessToken);
+                }, body), accessToken);
 
                 // Atomically increment commentCount and update lastActive
                 try {
@@ -1589,12 +2749,6 @@ export default {
                     return new Response(JSON.stringify({ error: `Rate limit exceeded. Please wait ${rl.retryAfter} second(s) before posting.`, retryAfter: rl.retryAfter }), { status: 429, headers });
                 }
 
-                // Duplicate / repetitive content detection
-                const dupCheck = await checkUserRecentContent(uid, "neighbourhood_post", trimmed, accessToken);
-                if (dupCheck.duplicate) {
-                    return new Response(JSON.stringify({ error: "You already posted this recently. Please wait a few minutes.", retryAfter: dupCheck.retryAfter }), { status: 429, headers });
-                }
-
                 // Moderation
                 const mod = await moderateContent(trimmed, env.OPENAI_API_KEY);
                 if (mod.flagged) {
@@ -1602,11 +2756,11 @@ export default {
                     return new Response(JSON.stringify({ error: moderationErrorMessage(mod) }), { status: 400, headers });
                 }
 
-                const id = await firestoreCreate("neighbourhood_posts", {
+                const id = await firestoreCreate("neighbourhood_posts", addDetectedLang({
                     uid,
                     text: trimmed,
                     timestamp: new Date()
-                }, accessToken);
+                }, body), accessToken);
 
                 return new Response(JSON.stringify({ success: true, id }), { status: 200, headers });
             }
@@ -1635,12 +2789,6 @@ export default {
                     return new Response(JSON.stringify({ error: `Rate limit exceeded. Please wait ${rl.retryAfter} second(s) before commenting.`, retryAfter: rl.retryAfter }), { status: 429, headers });
                 }
 
-                // Duplicate / repetitive content detection
-                const dupCheck = await checkUserRecentContent(uid, "neighbourhood_comment", trimmed, accessToken);
-                if (dupCheck.duplicate) {
-                    return new Response(JSON.stringify({ error: "You already sent this comment recently. Please wait a few minutes.", retryAfter: dupCheck.retryAfter }), { status: 429, headers });
-                }
-
                 // Moderation
                 const mod = await moderateContent(trimmed, env.OPENAI_API_KEY);
                 if (mod.flagged) {
@@ -1648,11 +2796,24 @@ export default {
                     return new Response(JSON.stringify({ error: moderationErrorMessage(mod) }), { status: 400, headers });
                 }
 
-                const id = await firestoreCreate(`neighbourhood_posts/${postId}/comments`, {
+                const id = await firestoreCreate(`neighbourhood_posts/${postId}/comments`, addDetectedLang({
                     uid,
                     text: trimmed,
                     timestamp: new Date()
-                }, accessToken);
+                }, body), accessToken);
+
+                // Keep the denormalised counter on the post in step. The feed
+                // renders it straight from the post document, so showing a
+                // count never costs a read of the comments subcollection.
+                // Rules allow a commentCount-only update from any age-verified
+                // client, so the client can do the same on delete.
+                try {
+                    await firestoreCommitTransform(`neighbourhood_posts/${postId}`, [
+                        { fieldPath: "commentCount", increment: { integerValue: "1" } }
+                    ], accessToken);
+                } catch (e) {
+                    console.error("Error incrementing neighbourhood commentCount:", e);
+                }
 
                 return new Response(JSON.stringify({ success: true, id }), { status: 200, headers });
             }
@@ -1665,23 +2826,61 @@ export default {
                     return new Response(JSON.stringify({ error: "Missing required report fields." }), { status: 400, headers });
                 }
                 
-                const validContentTypes = ["kindlechat", "topic", "topic_comment", "neighbourhood_post", "neighbourhood_comment", "suggestion", "suggestion_comment"];
+                const validContentTypes = ["kindlechat", "topic", "topic_comment", "neighbourhood_post", "neighbourhood_comment", "suggestion", "suggestion_comment", "dm_message"];
                 if (!validContentTypes.includes(contentType)) {
                     return new Response(JSON.stringify({ error: "Invalid content type." }), { status: 400, headers });
                 }
                 
-                // Content removed on the first report
-                const IMMEDIATE_DELETE_TYPES = ["kindlechat", "topic_comment", "neighbourhood_comment", "suggestion_comment"];
+                // Content that one report used to remove outright. Since
+                // 2026-10-26 a single report only removes it when moderation
+                // confirms the content, or when a second person reports it:
+                // the board had repeat reports of one user deleting other
+                // people's messages, and every message already passed
+                // moderation on the way in, so a re-check usually finds
+                // nothing. See docs/agent/moderation-reports.md.
+                const IMMEDIATE_DELETE_TYPES = ["kindlechat", "topic_comment", "neighbourhood_comment", "suggestion_comment", "dm_message"];
                 // Content that requires two reports from different users
                 const TWO_REPORT_DELETE_TYPES = ["topic", "neighbourhood_post", "suggestion"];
-                const shouldDeleteImmediately = IMMEDIATE_DELETE_TYPES.includes(contentType);
+                const isImmediateType = IMMEDIATE_DELETE_TYPES.includes(contentType);
                 
                 // Validate lengths
-                if (comment && comment.length > 500) {
-                    return new Response(JSON.stringify({ error: "Comment is too long (max 500 characters)." }), { status: 400, headers });
+                // A report without a real explanation is not actionable, so it
+                // never reaches /reports. Applies to every contentType, and is
+                // checked before the rate limiter so bad requests are free.
+                const reportCommentProblem = reportCommentError(comment);
+                if (reportCommentProblem) {
+                    return new Response(JSON.stringify({ error: reportCommentProblem }), { status: 400, headers });
                 }
                 if (contentSnapshot && contentSnapshot.length > 2000) {
                     return new Response(JSON.stringify({ error: "Content snapshot is too long (max 2000 characters)." }), { status: 400, headers });
+                }
+
+                // DM reports: the client only supplies ids. Derive the content
+                // path, author and snapshot from the social RTDB after proving
+                // the reporter is a participant. This stops a forged report
+                // from auto-deleting someone else's message.
+                let reportContentPath = contentPath || "";
+                let reportReportedUserId = reportedUserId || "";
+                let reportContentSnapshot = (contentSnapshot || "").substring(0, 2000);
+                let dmContext = null;
+                if (contentType === "dm_message") {
+                    const parsed = parseDmMessagePath(contentPath);
+                    if (!parsed || parsed.messageId !== contentId) {
+                        return new Response(JSON.stringify({ error: "Invalid DM report path." }), { status: 400, headers });
+                    }
+                    const { thread } = await getDmThreadWithEtag(parsed.threadId, accessToken);
+                    if (!thread || !thread.participants || thread.participants[uid] !== true) {
+                        return new Response(JSON.stringify({ error: "Conversation not found." }), { status: 404, headers });
+                    }
+                    const msgRes = await rtdbSocialGet(`${DM_MESSAGES_PATH}/${parsed.threadId}/${parsed.messageId}`, accessToken);
+                    const msg = msgRes.data;
+                    if (!msg || typeof msg !== "object") {
+                        return new Response(JSON.stringify({ error: "This message is no longer available." }), { status: 404, headers });
+                    }
+                    reportContentPath = `kindlechat/dm_messages/${parsed.threadId}/${parsed.messageId}`;
+                    reportReportedUserId = msg.uid || "";
+                    reportContentSnapshot = String(msg.text || "").substring(0, 2000);
+                    dmContext = await getDmReportContext(parsed.threadId, accessToken);
                 }
                 
                 // Rate limit: token bucket (no bypass)
@@ -1698,35 +2897,84 @@ export default {
                 const reportData = {
                     reporterId: uid,
                     reporterName: username,
-                    reportedUserId: reportedUserId || "",
+                    reportedUserId: reportReportedUserId,
                     reportedUserName: "",
                     contentType,
                     contentId,
-                    contentPath: contentPath || "",
+                    contentPath: reportContentPath,
                     reason,
-                    comment: (comment || "").substring(0, 500),
-                    contentSnapshot: (contentSnapshot || "").substring(0, 2000),
+                    comment: String(comment || "").trim().substring(0, REPORT_COMMENT_MAX),
+                    contentSnapshot: reportContentSnapshot,
                     status: "pending",
                     createdAt: Date.now()
                 };
+                if (dmContext && dmContext.length) reportData.dmContext = dmContext;
                 
                 const reportId = await rtdbPushWithAccessToken(REPORTS_PATH, reportData, accessToken);
                 reportData.reportId = reportId;
                 
-                // Decide whether to auto-delete now
+                // Decide whether to auto-delete now.
+                //
+                // Two-report types still need a second, different reporter.
+                // Chat/comment/DM types need either a second reporter or a
+                // moderation hit on the snapshot: a single report from someone
+                // who simply wants the message gone no longer deletes it. A
+                // failed moderation call keeps the OLD behaviour (delete), so
+                // an OpenAI/network outage cannot leave harassment up.
                 let shouldAutoDelete = false;
                 let deleteNote = "";
-                if (shouldDeleteImmediately) {
-                    shouldAutoDelete = true;
-                    deleteNote = "Auto-deleted after 1 report";
-                } else if (TWO_REPORT_DELETE_TYPES.includes(contentType) && isSecondReport) {
-                    shouldAutoDelete = true;
-                    deleteNote = "Auto-deleted after 2 reports";
+                let heldForReview = false;
+
+                if (TWO_REPORT_DELETE_TYPES.includes(contentType)) {
+                    if (isSecondReport) {
+                        shouldAutoDelete = true;
+                        deleteNote = "Auto-deleted after 2 reports";
+                    }
+                } else if (isImmediateType) {
+                    if (isSecondReport) {
+                        shouldAutoDelete = true;
+                        deleteNote = "Auto-deleted after 2 reports";
+                    } else if (reportContentSnapshot && env.OPENAI_API_KEY) {
+                        let moderationChecked = false;
+                        let flagged = false;
+                        try {
+                            const mod = await moderateContent(reportContentSnapshot, env.OPENAI_API_KEY);
+                            moderationChecked = !!(mod && typeof mod.flagged === "boolean");
+                            flagged = !!(mod && mod.flagged);
+                        } catch (modErr) {
+                            console.error("[REPORT] Moderation re-check failed:", modErr.message);
+                        }
+                        if (!moderationChecked || flagged) {
+                            // Fail safe: no verdict, or a real violation.
+                            shouldAutoDelete = true;
+                            deleteNote = flagged
+                                ? "Auto-deleted after 1 report (moderation confirmed)"
+                                : "Auto-deleted after 1 report (moderation unavailable)";
+                        } else {
+                            heldForReview = true;
+                        }
+                    } else {
+                        shouldAutoDelete = true;
+                        deleteNote = "Auto-deleted after 1 report (moderation unavailable)";
+                    }
                 }
-                
+
+                if (heldForReview) {
+                    // Keep the report pending so the owner can still see it (and
+                    // act), but do not remove the content.
+                    console.log(`[REPORT] Moderation cleared ${contentType}/${contentId}; holding report ${reportId} for review.`);
+                    try {
+                        await rtdbUpdateReport(reportId, {
+                            resolutionNote: "Held for review (moderation found nothing)"
+                        }, accessToken);
+                    } catch (e) {
+                        console.error("[REPORT] Failed to annotate held report:", e.message);
+                    }
+                }
+
                 if (shouldAutoDelete) {
-                    console.log(`[REPORT] ${shouldDeleteImmediately ? 'Immediate' : 'Second'} report on ${contentType}/${contentId}. Auto-deleting...`);
-                    const deleted = await autoDeleteContent(contentType, contentId, contentPath, accessToken);
+                    console.log(`[REPORT] ${isSecondReport ? 'Second' : 'First'} report on ${contentType}/${contentId}. Auto-deleting...`);
+                    const deleted = await autoDeleteContent(contentType, contentId, reportContentPath, accessToken);
                     
                     if (deleted) {
                         // Mark reports as resolved only when deletion succeeds
@@ -1754,18 +3002,10 @@ export default {
                         // Deletion failed — keep reports pending so moderators can act
                         reportData.resolutionNote = "Auto-delete failed";
                     }
-                    
-                    // Send Discord notification about auto-deletion
-                    await sendDiscordReportNotification(env, {
-                        ...reportData,
-                        autoDeleted: true,
-                        deleteSuccess: deleted
-                    });
-                } else {
-                    // Send normal Discord notification for first report
-                    await sendDiscordReportNotification(env, reportData);
                 }
-                
+
+                // No Discord embed is sent: reports are visible in /reports and
+                // the moderation console (notifications removed 2026-10-25).
                 return new Response(JSON.stringify({ success: true, id: reportId }), { status: 200, headers });
             }
 
@@ -1776,4 +3016,22 @@ export default {
             return new Response(JSON.stringify({ error: err.message || "Internal error" }), { status: 500, headers });
         }
     }
+};
+
+// Exported for scripts/test-chat-spam.js, scripts/test-dm.js,
+// scripts/test-reports.js and scripts/test-worker-cors.js (unit tests).
+// Wrangler only uses the default export, so these are inert in production.
+export {
+    corsHeaders,
+    containsUrl,
+    chatTextShapes,
+    chatTokenOverlap,
+    evaluateChatRepetition,
+    dmThreadId,
+    parseDmMessagePath,
+    dmFlagKeyForOrigin,
+    isValidDmText,
+    dmStatusAfterUnblock,
+    reportCommentError,
+    hasProperWord
 };

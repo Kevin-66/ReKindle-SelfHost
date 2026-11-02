@@ -305,9 +305,9 @@
             border-radius: 50%;
         }
     </style>
-    <script src="js/i18n.js"></script>
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="time.js?v=5"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -449,7 +449,7 @@
 
         function startNewGame() {
             loadRandomPuzzle();
-            document.getElementById('message-bar').innerText = window.t ? window.t('bindings.msg.instructions') : "Create four groups of four!";
+            document.getElementById('message-bar').innerText = window.t ? window.t('bindings.msg.instructions', "Create four groups of four!") : "Create four groups of four!";
             document.getElementById('grid-area').style.display = '';
             renderGame();
         }
@@ -484,11 +484,11 @@
             renderMistakes();
 
             if (solvedGroups.length === 4 && mistakesLeft > 0) {
-                const perfectTxt = window.t ? window.t('bindings.msg.perfect') : "Perfect! You bound them all.";
+                const perfectTxt = window.t ? window.t('bindings.msg.perfect', "Perfect! You bound them all.") : "Perfect! You bound them all.";
                 document.getElementById('message-bar').innerText = perfectTxt;
                 document.getElementById('grid-area').style.display = 'none';
             } else if (mistakesLeft === 0) {
-                const gameOverTxt = window.t ? window.t('bindings.msg.game_over') : "Out of mistakes. Next time!";
+                const gameOverTxt = window.t ? window.t('bindings.msg.game_over', "Out of mistakes. Next time!") : "Out of mistakes. Next time!";
                 document.getElementById('message-bar').innerText = gameOverTxt;
                 document.getElementById('grid-area').style.display = 'none';
             }
@@ -550,12 +550,12 @@
                 solvedGroups.push(group);
                 activeCards = activeCards.filter(c => c.groupIndex !== firstGroup);
                 selectedIndices = [];
-                const correctTxt = window.t ? window.t('bindings.msg.correct') : "Correct!";
+                const correctTxt = window.t ? window.t('bindings.msg.correct', "Correct!") : "Correct!";
                 document.getElementById('message-bar').innerText = correctTxt;
                 shuffleArray(activeCards); // shuffle remaining cards automatically
             } else {
                 mistakesLeft--;
-                const incorrectTxt = window.t ? window.t('bindings.msg.incorrect') : "Incorrect...";
+                const incorrectTxt = window.t ? window.t('bindings.msg.incorrect', "Incorrect...") : "Incorrect...";
                 document.getElementById('message-bar').innerText = incorrectTxt;
 
                 const counts = {};
@@ -563,7 +563,7 @@
                     counts[c.groupIndex] = (counts[c.groupIndex] || 0) + 1;
                 });
                 if (Object.values(counts).includes(3)) {
-                    const oneAwayTxt = window.t ? window.t('bindings.msg.one_away') : "One away...";
+                    const oneAwayTxt = window.t ? window.t('bindings.msg.one_away', "One away...") : "One away...";
                     document.getElementById('message-bar').innerText = oneAwayTxt;
                 }
 
@@ -599,7 +599,7 @@
 
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
 
 
 </body>

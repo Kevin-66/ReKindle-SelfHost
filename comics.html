@@ -371,8 +371,10 @@
             font-family: sans-serif;
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
 </head>
 
 <body>
@@ -474,7 +476,7 @@
             if (libraryMigrated) {
                 showStatus('Old MangaDex titles were removed. This app now uses legal public domain comics from the Internet Archive.');
             } else {
-                showStatus(window.t('manga.msg.ready') || 'Ready');
+                showStatus(window.t('manga.msg.ready', "Ready") || 'Ready');
             }
         };
 
@@ -579,7 +581,10 @@
                 storeTotal = (data.response && data.response.numFound) || 0;
 
                 if (docs.length === 0 && page === 1) {
-                    container.innerHTML = '<div style="grid-column: 1/-1; text-align: center;" data-i18n="manga.msg.empty_store">Store is empty.</div>';
+                    container.innerHTML = window.rekindleEmptyState(
+                        window.t('manga.msg.empty_store', 'Store is empty.'),
+                        { icon: 'book', className: 'rk-empty-grid' }
+                    );
                     return;
                 }
 
@@ -603,10 +608,10 @@
                     btn.className = 'btn';
                     btn.style.marginTop = 'auto';
                     if (isAdded) {
-                        btn.innerText = window.t('manga.msg.added') || "Added";
+                        btn.innerText = window.t('manga.msg.added', "Added to Library") || "Added";
                         btn.disabled = true;
                     } else {
-                        btn.innerText = window.t('manga.btn.add') || "+ Add";
+                        btn.innerText = window.t('manga.btn.add', "+ Add") || "+ Add";
                         btn.onclick = function (e) {
                             e.stopPropagation();
                             addToLibrary({
@@ -616,7 +621,7 @@
                                 author: creator,
                                 source: 'ia'
                             });
-                            btn.innerText = window.t('manga.msg.added') || "Added";
+                            btn.innerText = window.t('manga.msg.added', "Added to Library") || "Added";
                             btn.disabled = true;
                         };
                     }
@@ -640,7 +645,7 @@
                     container.appendChild(moreBtn);
                 }
 
-                showStatus(window.t('manga.msg.ready') || "Ready");
+                showStatus(window.t('manga.msg.ready', "Ready") || "Ready");
             } catch (e) {
                 console.error(e);
                 showStatus("Failed to load store: " + e.message);
@@ -659,8 +664,10 @@
             container.innerHTML = '';
 
             if (library.length === 0) {
-                var emptyMsg = window.t('manga.msg.empty_library') || 'Your library is empty. Go to the Store to add some.';
-                container.innerHTML = '<div style="grid-column: 1/-1; text-align: center;" data-i18n="manga.msg.empty_library">' + emptyMsg + '</div>';
+                container.innerHTML = window.rekindleEmptyState(
+                    window.t('manga.msg.empty_library', 'Your library is empty. Go to the Store to add some.'),
+                    { icon: 'book', className: 'rk-empty-grid' }
+                );
                 return;
             }
 
@@ -681,7 +688,7 @@
 
                 var progressText = '';
                 if (savedPage > 0) {
-                    var label = (window.t('manga.msg.page') || 'Page') + ' ' + (savedPage + 1);
+                    var label = (window.t('manga.msg.page', "Page") || 'Page') + ' ' + (savedPage + 1);
                     progressText = '<div style="font-size:0.7rem; background:#000; color:#fff; padding:2px 6px; display:inline-block; margin-bottom:4px;">' + label + '</div>';
                 }
 
@@ -705,7 +712,7 @@
                 var btnRead = document.createElement('button');
                 btnRead.className = 'btn';
                 btnRead.style.marginTop = 'auto';
-                btnRead.innerText = (savedPage > 0) ? (window.t('manga.btn.continue') || 'Continue') : (window.t('manga.btn.read') || 'Read');
+                btnRead.innerText = (savedPage > 0) ? (window.t('manga.btn.continue', "Continue") || 'Continue') : (window.t('manga.btn.read', "Read") || 'Read');
                 btnRead.onclick = function (e) {
                     e.stopPropagation();
                     openReader(item);
@@ -835,7 +842,7 @@
                 '<p style="margin-bottom: 20px; font-weight: bold;">This comic cannot be read in-app.</p>' +
                 '<a href="' + DETAILS_BASE + item.id + '" target="_blank" style="display: inline-block; padding: 10px 20px; background: black; color: white; text-decoration: none; font-weight: bold; font-family: sans-serif; box-shadow: 2px 2px 0 #555;">' +
                 'Read on archive.org</a></div>';
-            showStatus(window.t('manga.msg.ready') || 'Ready');
+            showStatus(window.t('manga.msg.ready', "Ready") || 'Ready');
         }
 
         function toggleFullScreen() {
@@ -861,10 +868,10 @@
             }
 
             // Restore title
-            document.getElementById('app-title').innerText = window.t('manga.title') || 'Comics';
+            document.getElementById('app-title').innerText = window.t('manga.title', "Comics") || 'Comics';
 
             // Reset status bar
-            showStatus(window.t('manga.msg.ready') || 'Ready');
+            showStatus(window.t('manga.msg.ready', "Ready") || 'Ready');
             currentReading = null;
 
             // Refresh library to show updated progress
@@ -913,6 +920,7 @@
             }
         }
     </script>
+    <script src="js/custom-select.js?v=2"></script>
 </body>
 
 </html>

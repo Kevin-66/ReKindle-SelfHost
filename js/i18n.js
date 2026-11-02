@@ -64,6 +64,20 @@
         return defaultText || key;
     };
 
+    // Locale templates may contain ${name} placeholders; the loader only does
+    // a key lookup, so dynamic text must be filled explicitly. Use split/join
+    // rather than String.replace so "$&" inside a value is not special.
+    window.tFormat = function (key, vars, fallback) {
+        var text = window.t(key, fallback || key);
+        if (!vars) return text;
+        for (var name in vars) {
+            if (Object.prototype.hasOwnProperty.call(vars, name)) {
+                text = text.split('${' + name + '}').join(String(vars[name]));
+            }
+        }
+        return text;
+    };
+
     window.rekindleSetLanguage = function (lang) {
         localStorage.setItem('rekindle_language', lang);
         location.reload();
@@ -85,10 +99,13 @@
     files.push('locales/' + lang + '.json');
     if (extraPrefix) files.push('locales/' + extraPrefix + '-' + lang + '.json');
 
-    // Optimization: Unblock English users immediately. 
-    // They will use in-code defaults until the background fetch completes.
+    // English needs no locale file: every data-i18n element already carries its
+    // English copy in the markup, and window.t() falls back to the inline
+    // default. locales/en.json is 173 KB / 3,520 keys and was fetched and
+    // JSON.parsed on every navigation just to resolve a handful of
+    // attribute-only strings. Pages with data-i18n-file still fetch theirs.
     if (lang === 'en' && !extraPrefix) {
-        setTimeout(notifyReady, 0);
+        files.length = 0;
     }
 
     Promise.all(files.map(function (url) {
@@ -105,8 +122,17 @@
         // Expose for dynamic use
         window.rekindleTranslations = translations;
 
-        // Apply Translations
+        // Apply Translations. A cached locale can resolve before <body> is
+        // parsed (i18n.js often sits early in <head>), which used to leave the
+        // static data-i18n markup untranslated forever. Apply once now when the
+        // document is ready, and again on DOMContentLoaded if it is still
+        // parsing. Existing nodes are also re-scanned when the observer starts.
         applyTranslations(translations);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                applyTranslations(translations);
+            });
+        }
 
         // Start Observer for dynamic content
         initObserver(translations);
@@ -134,6 +160,26 @@
         notifyReady(); // Continue even on error to unblock app
     });
 
+    var I18N_SELECTOR = '[data-i18n], [data-i18n-placeholder], [data-i18n-title], [data-i18n-only], [data-i18n-html]';
+
+    function hasI18nAttr(el) {
+        return !!(el.getAttribute('data-i18n') || el.getAttribute('data-i18n-placeholder') ||
+            el.getAttribute('data-i18n-title') || el.getAttribute('data-i18n-only') ||
+            el.getAttribute('data-i18n-html'));
+    }
+
+    // Cheap pre-check for the MutationObserver: most inserted nodes are leaves
+    // with no i18n attributes, so skip them without running a selector scan.
+    function needsTranslation(node, haveTranslations) {
+        if (hasI18nAttr(node)) return true;
+        if (!node.firstElementChild) return false;
+        if (!haveTranslations) {
+            // Nothing to translate, but data-i18n-only still needs applying.
+            return !!(node.querySelector && node.querySelector('[data-i18n-only]'));
+        }
+        return !!(node.querySelector && node.querySelector(I18N_SELECTOR));
+    }
+
     function applyTranslations(t, root) {
         root = root || document;
 
@@ -150,14 +196,9 @@
             if (k5 && t[k5]) el.innerHTML = t[k5];
         };
 
-        var selector = '[data-i18n], [data-i18n-placeholder], [data-i18n-title], [data-i18n-only], [data-i18n-html]';
-        var els = root.querySelectorAll ? root.querySelectorAll(selector) : [];
+        var els = root.querySelectorAll ? root.querySelectorAll(I18N_SELECTOR) : [];
         for (var i = 0; i < els.length; i++) translate(els[i]);
-        if (root !== document && root.getAttribute && (
-            root.getAttribute('data-i18n') || root.getAttribute('data-i18n-placeholder') ||
-            root.getAttribute('data-i18n-title') || root.getAttribute('data-i18n-only') ||
-            root.getAttribute('data-i18n-html')
-        )) {
+        if (root !== document && root.getAttribute && hasI18nAttr(root)) {
             translate(root);
         }
     }
@@ -169,10 +210,14 @@
 
         var startObserver = function () {
             if (!document.body) return;
+            var haveTranslations = false;
+            for (var key in translations) {
+                if (translations.hasOwnProperty(key)) { haveTranslations = true; break; }
+            }
             var observer = new MutationObserver(function (mutations) {
                 mutations.forEach(function (mutation) {
                     mutation.addedNodes.forEach(function (node) {
-                        if (node.nodeType === 1) { // 1 = Element
+                        if (node.nodeType === 1 && needsTranslation(node, haveTranslations)) {
                             applyTranslations(translations, node);
                         }
                     });
@@ -183,6 +228,9 @@
                 childList: true,
                 subtree: true
             });
+
+            // Catch markup that was parsed before this observer existed.
+            applyTranslations(translations);
         };
 
         if (document.body) {

@@ -166,8 +166,9 @@ async function grantPro(uid, email, days, type, stripeCustomerId = null) {
         console.log('  (no email found, skipping config/supporters update)');
     }
 
-    // 3. Set Firebase custom claim
-    await admin.auth().setCustomUserClaims(uid, { pro: true });
+    // 3. Set Firebase custom claim (merge, so ageVerified/moderator survive)
+    const userRecord = await admin.auth().getUser(uid);
+    await admin.auth().setCustomUserClaims(uid, Object.assign({}, userRecord.customClaims || {}, { pro: true }));
     console.log(`✓ Set pro=true custom claim on Firebase Auth`);
 
     return expiresAt;
@@ -193,8 +194,9 @@ async function revokePro(uid, email) {
         console.log(`✓ Removed ${email} from config/supporters`);
     }
 
-    // 3. Revoke Firebase custom claim
-    await admin.auth().setCustomUserClaims(uid, { pro: false });
+    // 3. Revoke Firebase custom claim (merge, so ageVerified/moderator survive)
+    const userRecord = await admin.auth().getUser(uid);
+    await admin.auth().setCustomUserClaims(uid, Object.assign({}, userRecord.customClaims || {}, { pro: false }));
     console.log(`✓ Set pro=false custom claim on Firebase Auth`);
 }
 

@@ -453,11 +453,14 @@
         }
     </style>
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/safe-html.js?v=1"></script>
 </head>
 
 <body>
@@ -539,7 +542,6 @@
                     auth = firebase.auth();
                     db = firebase.firestore();
                     isFirebaseAvailable = true;
-                    console.log("Firebase initialized.");
 
                     auth.onAuthStateChanged(user => {
                         currentUser = user;
@@ -618,7 +620,6 @@
                 }
 
                 const publicUrl = this.baseUrl + path + query;
-                console.log("Fetching URL:", publicUrl);
 
                 let lastError = null;
                 let lastStatus = null;
@@ -718,12 +719,9 @@
         }
 
         function decodeXmlEntities(text) {
-            return text
-                .replace(/&amp;/g, "&")
-                .replace(/&lt;/g, "<")
-                .replace(/&gt;/g, ">")
-                .replace(/&quot;/g, '"')
-                .replace(/&apos;/g, "'");
+            // Single pass: chained replaces would decode "&amp;lt;" twice.
+            const entities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+            return String(text).replace(/&(amp|lt|gt|quot|apos);/g, function (m, name) { return entities[name]; });
         }
 
         function stripCdata(text) {
@@ -738,15 +736,20 @@
             return t.replace(/^\/u\//, "").trim();
         }
 
+        var regexCache = {};
+        function getRegex(pattern) {
+            return regexCache[pattern] || (regexCache[pattern] = new RegExp(pattern, "i"));
+        }
+
         function extractTagText(xml, tagName) {
-            var regex = new RegExp("<(?:[a-zA-Z0-9-]+:)?" + tagName + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[a-zA-Z0-9-]+:)?" + tagName + ">", "i");
+            var regex = getRegex("<(?:[a-zA-Z0-9-]+:)?" + tagName + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[a-zA-Z0-9-]+:)?" + tagName + ">");
             var match = xml.match(regex);
             if (!match) return "";
             return decodeXmlEntities(stripCdata(match[1]).trim());
         }
 
         function extractTagAttr(xml, tagName, attrName) {
-            var regex = new RegExp("<(?:[a-zA-Z0-9-]+:)?" + tagName + "[^>]*\\s" + attrName + "=\"([^\"]*)\"", "i");
+            var regex = getRegex("<(?:[a-zA-Z0-9-]+:)?" + tagName + "[^>]*\\s" + attrName + "=\"([^\"]*)\"");
             var match = xml.match(regex);
             return match ? decodeXmlEntities(match[1]) : "";
         }
@@ -1082,14 +1085,10 @@
 
                 try {
                     let responseText = await api.getSubreddit(this.currentSub, this.afterToken);
-                    console.log('Load more RSS length:', responseText.length, 'preview:', responseText.substring(0, 200));
                     let posts = parseRssPosts(responseText);
-                    console.log('Load more RSS posts:', posts.length);
                     if (posts.length === 0) {
                         responseText = await api.getSubredditJson(this.currentSub, this.afterToken);
-                        console.log('Load more JSON length:', responseText.length, 'preview:', responseText.substring(0, 200));
                         posts = parseJsonPosts(responseText);
-                        console.log('Load more JSON posts:', posts.length);
                     }
 
                     if (posts.length > 0) {
@@ -1120,7 +1119,31 @@
             },
 
             // FEED
-            async loadCurrentSub() {
+            // Keep at most 5 cached subreddit payloads. Previously every visit wrote
+        // a new `reddit_feed_xml_<sub>` key forever; browsing 30-40 subs piled up
+        // megabytes toward the 64 MB cache limit, which makes the Kindle OS wipe
+        // the whole cache directory at launch.
+        cacheFeedForSub(sub, text) {
+            var MAX = 5;
+            var LRU_KEY = 'reddit_feed_xml_lru';
+            try {
+                localStorage.setItem('reddit_feed_xml_' + sub, text);
+                var lru = [];
+                try { lru = JSON.parse(localStorage.getItem(LRU_KEY) || '[]'); } catch (e) { lru = []; }
+                if (!Array.isArray(lru)) lru = [];
+                lru = lru.filter(function (s) { return s !== sub; });
+                lru.unshift(sub);
+                while (lru.length > MAX) {
+                    var evicted = lru.pop();
+                    if (evicted) localStorage.removeItem('reddit_feed_xml_' + evicted);
+                }
+                localStorage.setItem(LRU_KEY, JSON.stringify(lru));
+            } catch (e) {
+                console.warn('Failed to cache feed:', e);
+            }
+        },
+
+        async loadCurrentSub() {
                 const subInput = document.getElementById('sub-input');
                 let sub = subInput.value.trim() || 'popular';
                 sub = sub.replace(/^r\//, '');
@@ -1136,20 +1159,12 @@
 
                 try {
                     let responseText = await api.getSubreddit(sub);
-                    console.log('RSS response length:', responseText.length, 'preview:', responseText.substring(0, 200));
                     let posts = parseRssPosts(responseText);
-                    console.log('RSS posts parsed:', posts.length);
                     if (posts.length === 0) {
                         responseText = await api.getSubredditJson(sub);
-                        console.log('JSON response length:', responseText.length, 'preview:', responseText.substring(0, 200));
                         posts = parseJsonPosts(responseText);
-                        console.log('JSON posts parsed:', posts.length);
                     }
-                    try {
-                        localStorage.setItem('reddit_feed_xml_' + sub, responseText);
-                    } catch (e) {
-                        console.warn('Failed to cache feed:', e);
-                    }
+                    this.cacheFeedForSub(sub, responseText);
                     this.renderPostList(posts, sub, false);
 
                 } catch (e) {
@@ -1173,14 +1188,10 @@
 
                 try {
                     let responseText = await api.getThread(permalink);
-                    console.log('Thread RSS length:', responseText.length, 'preview:', responseText.substring(0, 200));
                     let data = parseRssThread(responseText);
-                    console.log('Thread RSS has post:', !!data.post);
                     if (!data.post) {
                         responseText = await api.getThreadJson(permalink);
-                        console.log('Thread JSON length:', responseText.length, 'preview:', responseText.substring(0, 200));
                         data = parseJsonThread(responseText);
-                        console.log('Thread JSON has post:', !!data.post);
                     }
                     const post = data.post;
                     const comments = data.comments;
@@ -1195,10 +1206,9 @@
 
                     if (post.contentHtml) {
                         let body = this.decodeHtml(post.contentHtml);
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = body.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                        const doc = new DOMParser().parseFromString(String(body || ''), 'text/html');
 
-                        const table = tempDiv.querySelector('table');
+                        const table = doc.querySelector('table');
                         if (table) {
                             const text = table.innerText || table.textContent;
                             if (text.indexOf('[link]') !== -1 && text.indexOf('[comments]') !== -1) {
@@ -1206,9 +1216,9 @@
                             }
                         }
 
-                        const remainingText = (tempDiv.innerText || tempDiv.textContent).trim();
+                        const remainingText = (doc.body.innerText || doc.body.textContent || '').trim();
                         if (remainingText.length > 0) {
-                            body = this.processCommentHtml(tempDiv.innerHTML);
+                            body = this.processCommentHtml(doc.body.innerHTML);
                             html += `<div class="thread-body">${body}</div>`;
                         } else if (post.permalink) {
                             html += `<div class="thread-body"><a href="https://www.reddit.com${post.permalink}" target="_blank" style="color:blue; text-decoration:underline;">[Open Post on Reddit]</a></div>`;
@@ -1230,18 +1240,20 @@
                     });
 
                     html += '</div>';
-                    content.innerHTML = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                    // Sanitise the assembled thread through DOMParser so
+                    // untrusted Reddit HTML never reaches an innerHTML sink.
+                    window.rekindleSetSafeHtml(content, html);
                     this.addLinkHandlers();
 
                 } catch (e) {
                     if (e.message && e.message.indexOf('superseded') !== -1) return;
-                    content.innerHTML = `<div class="loading" style="color:red">Error loading thread<br>${e.message}</div>`;
+                    content.innerHTML = `<div class="loading" style="color:red">Error loading thread<br>${escapeHtml(e.message)}</div>`;
                 }
             },
 
             processCommentHtml(html) {
-                const div = document.createElement('div');
-                div.innerHTML = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+                const div = doc.body;
                 const links = div.querySelectorAll('a');
 
                 links.forEach(a => {
@@ -1289,17 +1301,18 @@
                         e.preventDefault();
                         e.stopPropagation();
                         const href = a.getAttribute('href');
-                        if (!href || href.indexOf('#') === 0 || href.indexOf('javascript:') === 0 || href.indexOf('data:') === 0) return;
-                        let url = href;
-                        if (url.indexOf('http') !== 0) {
-                            try {
-                                url = new URL(url, 'https://www.reddit.com').href;
-                            } catch (_) {
-                                return;
-                            }
+                        if (!href || href.charAt(0) === '#') return;
+                        let url;
+                        try {
+                            url = new URL(href, 'https://www.reddit.com');
+                        } catch (_) {
+                            return;
                         }
+                        // Only http(s) may reach the browser frame; blocks
+                        // javascript:, data:, vbscript: and file: URLs.
+                        if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
                         ui.saveReturnState();
-                        window.location.href = 'browser.html?lite=true&return=/reddit.html&url=' + encodeURIComponent(url);
+                        window.location.href = 'browser.html?lite=true&return=/reddit.html&url=' + encodeURIComponent(url.href);
                     });
                 });
             },

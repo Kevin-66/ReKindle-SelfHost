@@ -8,10 +8,14 @@
 
     <title>Crossy</title>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/score-submit.js?v=1" data-game="crossy"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
+    <script src="js/i18n.js?v=4"></script>
 
     <style>
         :root {
@@ -315,7 +319,7 @@
             color: white;
         }
     </style>
-    <script src="theme.js?v=18"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -474,6 +478,7 @@
         let cameraY = 0;
         let blackY = -1;
         let blackMoving = false;
+        let drawNeeded = true;
 
         function rowType(y) {
             const cycle = ((y % 4) + 4) % 4;
@@ -609,8 +614,6 @@
             img.onload = function () {
                 spriteSheet = img;
                 spriteLoaded = true;
-                console.log('crossysprites.png loaded:', img.width + 'x' + img.height);
-                console.log('Layout:', SPRITE_SHEET_LAYOUT);
                 drawDebugInfo();
                 updateStartButton();
             };
@@ -660,8 +663,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('debug') !== '1') return;
 
-            console.log('Sprite sheet size:', spriteSheet.width + 'x' + spriteSheet.height);
-            console.log('Layout:', SPRITE_SHEET_LAYOUT);
 
             // Draw a tiny preview of each sprite across the top of the canvas
             ctx.fillStyle = 'white';
@@ -681,7 +682,7 @@
             if (spriteLoaded && highScoreLoaded) {
                 const startButton = document.querySelector('#start-game-modal .sys-btn');
                 startButton.disabled = false;
-                startButton.innerText = window.t ? window.t('crossy.btn.start') : "Start Game";
+                startButton.innerText = window.t ? window.t('crossy.btn.start', "Start Game") : "Start Game";
                 startButton.removeAttribute('data-i18n');
             }
         }
@@ -718,11 +719,7 @@
 
                 if (uid && db) {
                     try {
-                        await db.collection('leaderboard_crossy').doc(uid).set({
-                            username: username,
-                            score: newScore,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        });
+                        await window.RekindleScores.submit('leaderboard_crossy', { score: newScore });
                     } catch (e) { console.error(e); }
                 }
             }
@@ -738,7 +735,7 @@
             const modal = document.getElementById('leaderboard-modal');
             modal.style.display = 'block';
             const list = document.getElementById('lb-content');
-            list.innerText = window.t ? window.t('crossy.status.loading') : 'Loading...';
+            list.innerText = window.t ? window.t('crossy.status.loading', "Loading...") : 'Loading...';
             list.removeAttribute('data-i18n');
 
             const user = auth ? auth.currentUser : null;
@@ -751,7 +748,7 @@
 
                     list.innerHTML = '';
                     if (snapshot.empty) {
-                        list.innerText = window.t ? window.t('crossy.status.no_scores') : "No scores yet!";
+                        list.innerText = window.t ? window.t('crossy.status.no_scores', "No scores yet!") : "No scores yet!";
                         return;
                     }
                     let rank = 1;
@@ -773,10 +770,10 @@
                     });
                 } catch (e) {
                     console.error("Error loading leaderboard:", e);
-                    list.innerText = window.t ? window.t('crossy.status.error_loading') : "Error loading scores.";
+                    list.innerText = window.t ? window.t('crossy.status.error_loading', "Error loading scores.") : "Error loading scores.";
                 }
             } else {
-                list.innerText = window.t ? window.t('crossy.status.login_required') : "Log in to see global scores.";
+                list.innerText = window.t ? window.t('crossy.status.login_required', "Log in to see global scores.") : "Log in to see global scores.";
             }
         }
 
@@ -794,6 +791,7 @@
             player = { x: 3, y: 0, facing: 1 };
             rows = [];
             inputQueue = [];
+            drawNeeded = true;
             ensureRows();
 
             if (gameLoop) cancelAnimationFrame(gameLoop);
@@ -852,6 +850,7 @@
 
             player.x = nx;
             player.y = ny;
+            drawNeeded = true;
 
             ensureRows();
 
@@ -888,6 +887,7 @@
 
             rows.forEach(function (row) {
                 if (row.type === ROAD_ROW || row.type === RIVER_ROW) {
+                    if (row.y >= cameraY - 2 && row.y <= cameraY + ROWS_VISIBLE + 2) drawNeeded = true;
                     row.items.forEach(function (item) {
                         item.x += row.speed * row.direction;
                         if (item.x > COLS) item.x -= COLS + item.len + 2;
@@ -928,6 +928,7 @@
 
             if (blackMoving && !isGameOver) {
                 blackY += BLACK_SPEED;
+                if (blackY >= cameraY - 1) drawNeeded = true;
                 if (player.y <= blackY + BLACK_KILL_OFFSET) endGame();
             }
         }
@@ -1046,7 +1047,10 @@
         function loop(timestamp) {
             if (!isGameOver) {
                 update(timestamp);
-                draw();
+                if (drawNeeded) {
+                    drawNeeded = false;
+                    draw();
+                }
                 gameLoop = requestAnimationFrame(loop);
             }
         }

@@ -8,7 +8,7 @@
 
     <title>Cube Dash</title>
 
-    <script src="js/i18n.js"></script>
+    <script src="js/i18n.js?v=4"></script>
 
     <style>
         :root {
@@ -465,7 +465,7 @@
             line-height: 1.6;
         }
     </style>
-    <script src="theme.js?v=18"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -1231,7 +1231,9 @@
                 accumulator -= FIXED_TIMESTEP;
             }
 
-            if (state.screen === 'game') drawFrame();
+            // No repaint while the pause / level-complete overlay is up: nothing
+            // visible can change, and a full scene redraw on e-ink is expensive.
+            if (state.screen === 'game' && !state.isPaused && !state.isCompleted) drawFrame();
             requestAnimationFrame(gameLoop);
         }
 

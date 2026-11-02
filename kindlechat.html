@@ -7,7 +7,6 @@
     <meta charset="UTF-8">
 
     <title>KindleChat</title>
-    <script src="js/reports.js"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -302,6 +301,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            contain: layout style;
         }
 
         .gallery-item:active {
@@ -402,6 +402,7 @@
             position: relative;
             min-width: 0;
             /* Allow shrinking */
+            contain: layout style;
         }
 
         .msg.self {
@@ -419,6 +420,18 @@
             color: #666;
             margin-bottom: 2px;
             display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+        }
+
+        /* Translation controls read as small buttons, not tiny buried links. */
+        [id^="toggle-"], [id^="translate-"] {
+            display: inline-block;
+            border: 1px solid #666;
+            background: #fff;
+            padding: 1px 4px;
+            margin-top: 3px;
+            text-decoration: none !important;
         }
 
         /* Manual spacing for Kindle browser */
@@ -786,12 +799,7 @@
         /* User Tag Styling */
         .user-tag {
             font-weight: bold;
-            cursor: pointer;
             color: #000;
-        }
-
-        .user-tag:hover {
-            text-decoration: underline;
         }
 
         /* FIX: White text for tags inside self bubbles (black background) */
@@ -1086,10 +1094,12 @@
             z-index: 10;
             display: none;
             flex-direction: row;
+            flex-wrap: wrap;
+            max-width: 320px;
         }
 
-        #reaction-selection-modal>*+* {
-            margin-left: 5px;
+        #reaction-selection-modal>* {
+            margin: 2px;
         }
 
         .reaction-option {
@@ -1170,7 +1180,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(0, 0, 0, 0.45);
             z-index: 10001;
             display: none;
             /* Default hidden */
@@ -1184,6 +1194,22 @@
         #guest-overlay h2 {
             margin-top: 0;
             font-size: 1.5rem;
+        }
+
+        .guest-card {
+            background: white;
+            border: 2px solid black;
+            box-shadow: 4px 4px 0 black;
+            padding: 24px 20px;
+            width: 100%;
+            max-width: 360px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .guest-card .sys-btn {
+            display: inline-block !important;
+            margin: 12px auto 0 auto !important;
         }
 
         /* --- USER THEMES --- */
@@ -1288,23 +1314,365 @@
             transform: translate(1px, 1px);
             box-shadow: none;
         }
+
+        /* DIRECT MESSAGES */
+        .dm-tab-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dm-unread-dot {
+            display: none;
+            width: 8px;
+            height: 8px;
+            background: black;
+            border: 1px solid black;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+
+        .room-tab.active .dm-unread-dot {
+            background: white;
+            border-color: white;
+        }
+
+        #messages-view {
+            flex-grow: 1;
+            display: none;
+            flex-direction: column;
+            background: white;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #messages-view.active {
+            display: flex;
+        }
+
+        /* DM SPLIT VIEW
+           Conversation names on the left, the open thread on the right. Enabled
+           by applyDmLayout() only when the .window is wide enough; below that
+           (Kindle portrait / phones) the single-pane inbox+thread flow stays.
+           CSS Grid (not flex) so the 2px gutter is allowed on Chromium 75. */
+        #app-layout.dm-split {
+            display: grid;
+            grid-template-columns: 230px 1fr;
+            grid-template-rows: auto 1fr;
+        }
+
+        #app-layout.dm-split>.room-header {
+            grid-column: 1 / -1;
+            grid-row: 1;
+        }
+
+        #app-layout.dm-split>#messages-view {
+            grid-column: 1;
+            grid-row: 2;
+            display: flex;
+            border-right: 2px solid black;
+        }
+
+        #app-layout.dm-split>#chat-view,
+        #app-layout.dm-split>#dm-empty-pane {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        /* Placeholder shown in the right pane until a conversation is picked. */
+        #dm-empty-pane {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        #app-layout.dm-split>#dm-empty-pane.visible {
+            display: flex;
+        }
+
+        /* The sidebar replaces the inbox, so Back and the toolbar title would
+           only eat space at this width. */
+        #app-layout.dm-split #dm-back-btn,
+        #app-layout.dm-split .dm-toolbar-title {
+            display: none;
+        }
+
+        #app-layout.dm-split .dm-toolbar {
+            padding: 6px;
+        }
+
+        #app-layout.dm-split .dm-new-btn {
+            width: 100%;
+        }
+
+        /* Selected conversation in the sidebar. */
+        .dm-row.active {
+            background: #e5e5e5;
+            box-shadow: inset 4px 0 0 black;
+        }
+
+        .dm-toolbar {
+            flex-shrink: 0;
+            border-bottom: 2px solid black;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #eee;
+        }
+
+        .dm-toolbar-title {
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .dm-new-btn {
+            min-height: 40px;
+            padding: 4px 12px;
+            border: 2px solid black;
+            background: white;
+            box-shadow: 2px 2px 0 black;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .dm-new-btn:active {
+            background: black;
+            color: white;
+            box-shadow: none;
+            transform: translate(2px, 2px);
+        }
+
+        .dm-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .dm-row {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #ccc;
+            cursor: pointer;
+            min-height: 48px;
+            box-sizing: border-box;
+        }
+
+        .dm-row:active {
+            background: #eee;
+        }
+
+        .dm-row-main {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        /* Conversation-list avatar: same 32x32 pixel art as the chat bubbles,
+           rendered as a canvas on first draw and an <img> (cached data URL)
+           afterwards. */
+        .dm-row-avatar {
+            width: 32px;
+            height: 32px;
+            border: 2px solid black;
+            background: white;
+            margin-right: 10px;
+            flex-shrink: 0;
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .dm-row-name {
+            font-weight: bold;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dm-row-meta {
+            font-size: 0.72rem;
+            color: #555;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dm-request-tag {
+            display: inline-block;
+            border: 1px solid black;
+            background: black;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: bold;
+            padding: 1px 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        .dm-row-dot {
+            width: 10px;
+            height: 10px;
+            background: black;
+            border-radius: 50%;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .dm-empty {
+            padding: 30px 20px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        #dm-thread-header {
+            display: none;
+            flex-shrink: 0;
+            border-bottom: 2px solid black;
+            padding: 6px 10px;
+            align-items: center;
+            background: #eee;
+            min-height: 40px;
+            box-sizing: border-box;
+        }
+
+        .dm-back-btn {
+            border: 2px solid black;
+            background: white;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            min-height: 32px;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 black;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .dm-back-btn:active {
+            background: black;
+            color: white;
+            box-shadow: none;
+            transform: translate(2px, 2px);
+        }
+
+        .dm-thread-name {
+            font-weight: bold;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex-grow: 1;
+        }
+
+        #dm-request-banner {
+            display: none;
+            flex-shrink: 0;
+            border-bottom: 2px solid black;
+            background: #fffbe5;
+            padding: 10px;
+            font-size: 0.82rem;
+            line-height: 1.4;
+        }
+
+        .dm-banner-text {
+            margin-bottom: 8px;
+        }
+
+        .dm-banner-actions {
+            display: flex;
+            align-items: center;
+        }
+
+        .dm-banner-actions>*+* {
+            margin-left: 8px;
+        }
+
+        .dm-banner-btn {
+            border: 2px solid black;
+            background: white;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            min-height: 36px;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 black;
+        }
+
+        .dm-banner-btn.primary {
+            background: black;
+            color: white;
+        }
+
+        .dm-banner-btn:active {
+            box-shadow: none;
+            transform: translate(2px, 2px);
+        }
+
+        .dm-form-field {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            border: 2px solid black;
+            border-radius: 0;
+            padding: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            background: white;
+            margin-top: 4px;
+        }
+
+        .dm-form-label {
+            display: block;
+            text-align: left;
+            font-weight: bold;
+            font-size: 0.82rem;
+            margin-top: 12px;
+        }
+
+        .dm-form-note {
+            text-align: left;
+            font-size: 0.75rem;
+            color: #555;
+            line-height: 1.4;
+            margin-top: 10px;
+        }
+
+        .dm-form-error {
+            text-align: left;
+            color: #a00000;
+            font-size: 0.8rem;
+            min-height: 1em;
+            margin-top: 8px;
+        }
     </style>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="emojis.js?v=6"></script>
-    <script src="js/emoji-render.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<link rel="preconnect" href="https://rekindle-socials-default-rtdb.firebaseio.com">
 
-    <script src="bad_words.js?v=4"></script>
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
-    <script src="js/age-verification.js?v=2"></script>
+    <script src="theme.js?v=35"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="js/i18n.js?v=4"></script>
 
 </head>
 
@@ -1352,9 +1720,26 @@
                     data-i18n="kindlechat.tab.chat">KindleChat</div>
                 <div id="gallery-tab" class="room-tab" onclick="switchKindlechatTab('gallery')"
                     data-i18n="kindlechat.tab.gallery">Gallery</div>
+                <div id="messages-tab" class="room-tab" onclick="switchKindlechatTab('messages')"
+                    style="display:none;"><span class="dm-tab-label"
+                        data-i18n="kindlechat.tab.messages">Messages</span><span id="dm-tab-dot"
+                        class="dm-unread-dot"></span></div>
             </div>
 
             <div id="chat-view">
+
+                <div id="dm-thread-header">
+                    <button type="button" id="dm-back-btn" class="dm-back-btn"
+                        onclick="switchKindlechatTab('messages')" data-i18n="kindlechat.dm.back">Back</button>
+                    <div id="dm-thread-name" class="dm-thread-name">Messages</div>
+                    <button type="button" id="dm-block-btn" class="dm-back-btn" style="margin-left:10px; margin-right:0;"
+                        onclick="dmHeaderBlockAction()" data-i18n="kindlechat.dm.block">Block</button>
+                </div>
+
+                <div id="dm-request-banner">
+                    <div id="dm-banner-text" class="dm-banner-text"></div>
+                    <div class="dm-banner-actions" id="dm-banner-actions"></div>
+                </div>
 
                 <div id="chat-history">
                 </div>
@@ -1414,16 +1799,32 @@
                     </div>
                 </div>
             </div>
+
+            <div id="messages-view">
+                <div class="dm-toolbar">
+                    <div class="dm-toolbar-title" data-i18n="kindlechat.dm.title">Messages</div>
+                    <button type="button" id="dm-new-btn" class="dm-new-btn" onclick="openNewDmModal()"
+                        data-i18n="kindlechat.dm.new">New Message</button>
+                </div>
+                <div id="dm-list" class="dm-list">
+                    <div class="dm-empty" data-i18n="kindlechat.dm.loading">Loading messages...</div>
+                </div>
+            </div>
+
+            <div id="dm-empty-pane">
+                <div data-i18n="kindlechat.dm.select_conversation">Select a conversation</div>
+            </div>
         </div>
 
         <!-- GUEST OVERLAY HTML -->
         <div id="guest-overlay">
-            <h2 id="guest-overlay-title" data-i18n="kindlechat.guest_overlay">You need to be logged in to use KindleChat
-            </h2>
-            <p id="guest-overlay-message" style="font-size: 0.9rem; color: #666; margin: 10px 0; max-width: 300px;"></p>
-            <br>
-            <button class="sys-btn" onclick="window.location.href='index?login=true'"
-                data-i18n="kindlechat.btn.login">Log In</button>
+            <div class="guest-card">
+                <h2 id="guest-overlay-title" data-i18n="kindlechat.guest_overlay">You need to be logged in to use KindleChat
+                </h2>
+                <p id="guest-overlay-message" style="font-size: 0.9rem; color: #666; margin: 10px 0;"></p>
+                <button class="sys-btn" onclick="window.location.href='index?login=true'"
+                    data-i18n="kindlechat.btn.login">Log In</button>
+            </div>
         </div>
 
         <!-- NEW: REACTION SELECTION MODAL (Moved inside .window to inherit scaling) -->
@@ -1476,27 +1877,16 @@
                         General chat.</div>
                 </div>
 
-                <div style="margin: 15px 0;">
-                    <label style="display:block; font-size:0.9rem; font-weight:bold; margin-bottom:4px;"
-                        data-i18n="kindlechat.settings.trans_lang">Translation Language</label>
-                    <select id="setting-translation-lang"
-                        style="width:100%; border:2px solid black; border-radius:0; padding:6px; font-family:inherit; font-size:0.9rem; background:white;">
-                        <option value="auto" data-i18n="kindlechat.settings.trans_lang_auto">Auto (System Language)
-                        </option>
-                        <option value="en">English</option>
-                        <option value="es">Español</option>
-                        <option value="pt">Português</option>
-                        <option value="pl">Polski</option>
-                        <option value="de">Deutsch</option>
-                        <option value="it">Italiano</option>
-                        <option value="fr">Français</option>
-                        <option value="ru">Русский</option>
-                        <option value="zh">中文</option>
-                        <option value="vi">Tiếng Việt</option>
-                    </select>
-                    <div style="font-size:0.8rem; color:#666; margin-top:4px;"
-                        data-i18n="kindlechat.settings.trans_lang_desc">
-                        Choose an alternative language for translations. "Auto" matches your system language.</div>
+                <div style="margin: 15px 0;" id="dm-requests-setting">
+                    <label style="display:flex; align-items:center; cursor:pointer;">
+                        <input type="checkbox" id="setting-dm-requests"
+                            style="width:20px; height:20px; margin-right:10px;">
+                        <span data-i18n="kindlechat.dm.allow_requests">Allow message requests</span>
+                    </label>
+                    <div style="margin-left:34px; font-size:0.8rem; color:#666;"
+                        data-i18n="kindlechat.dm.allow_requests_desc">
+                        ReKindle+ members can send you a request. You always decide whether to accept.
+                    </div>
                 </div>
 
                 <div id="admin-tools-setting" style="margin: 15px 0; display:none;">
@@ -1542,6 +1932,10 @@
                     <li style="margin-bottom: 10px;"><b data-i18n="kindlechat.rules.5.title">No Self-Promo:</b> <span
                             data-i18n="kindlechat.rules.5.text">Do not advertise your own
                             content.</span></li>
+                    <li style="margin-bottom: 10px;"><b data-i18n="kindlechat.rules.6.title">Private Messages:</b>
+                        <span data-i18n="kindlechat.rules.6.text">Only ReKindle+ members can start a conversation.
+                            Never share personal information, and report anything that makes you uncomfortable.</span>
+                    </li>
                 </ul>
                 <div style="margin-top:20px; display:flex; justify-content:center;">
                     <button id="btn-close-rules" class="sys-btn"
@@ -1553,7 +1947,100 @@
             </div>
         </div>
 
+        <!-- NEW DM MODAL -->
+        <div class="modal-box" id="dm-new-modal-content" style="display:none; text-align:left; padding:0; overflow:hidden;">
+            <div class="title-bar" style="border-bottom:2px solid black; margin-bottom:10px;">
+                <div class="title-stripes"></div>
+                <div class="close-box" onclick="closeModal('dm-new-modal-content'); closeModal('modal-overlay');">X</div>
+                <span class="title-text" data-i18n="kindlechat.dm.new_title">Start a conversation</span>
+            </div>
+            <div style="padding: 0 15px 15px 15px;">
+                <label class="dm-form-label" for="dm-username" data-i18n="kindlechat.dm.username">Username</label>
+                <input type="text" id="dm-username" class="dm-form-field" autocomplete="off" autocapitalize="none"
+                    placeholder="Username" data-i18n-placeholder="kindlechat.dm.username">
+                <label class="dm-form-label" for="dm-message" data-i18n="kindlechat.dm.first_message">First message</label>
+                <textarea id="dm-message" class="dm-form-field" rows="3" maxlength="300"
+                    data-i18n-placeholder="kindlechat.dm.first_placeholder"
+                    placeholder="Say hello (max 300 characters)"></textarea>
+                <div class="dm-form-note" data-i18n="kindlechat.dm.request_note">
+                    The other person must accept before the conversation opens. Messages are moderated and links
+                    are not allowed.
+                </div>
+                <div id="dm-form-error" class="dm-form-error"></div>
+                <div style="margin-top:12px; display:flex; justify-content:center;">
+                    <button type="button" class="sys-btn" id="dm-request-send-btn" onclick="sendDmRequest()"
+                        data-i18n="kindlechat.dm.send_request">Send Request</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DM SAFETY MODAL -->
+        <div class="modal-box" id="dm-safety-modal-content" style="display:none; text-align:left; padding:0; overflow:hidden;">
+            <div class="title-bar" style="border-bottom:2px solid black; margin-bottom:10px;">
+                <div class="title-stripes"></div>
+                <div class="close-box" onclick="acknowledgeDmSafety()">X</div>
+                <span class="title-text" data-i18n="kindlechat.dm.safety_title">Private messages</span>
+            </div>
+            <div style="padding: 0 18px 18px 18px; font-size:0.85rem; line-height:1.5;">
+                <p style="margin-top:0;" data-i18n="kindlechat.dm.safety_body">
+                    Only ReKindle+ members can start a conversation, and you choose whether to accept each request.
+                    Messages are screened, but never share personal information such as your address, school or
+                    passwords. You can block or report anyone.
+                </p>
+                <div style="display:flex; justify-content:center; margin-top:12px;">
+                    <button type="button" class="sys-btn" onclick="acknowledgeDmSafety()"
+                        data-i18n="kindlechat.dm.safety_ok">I understand</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DM PRO UPSELL MODAL -->
+        <div class="modal-box" id="dm-upsell-modal-content" style="display:none; text-align:left; padding:0; overflow:hidden;">
+            <div class="title-bar" style="border-bottom:2px solid black; margin-bottom:10px;">
+                <div class="title-stripes"></div>
+                <div class="close-box" onclick="closeModal('dm-upsell-modal-content'); closeModal('modal-overlay');">X</div>
+                <span class="title-text" data-i18n="kindlechat.dm.upsell_title">ReKindle+</span>
+            </div>
+            <div style="padding: 0 18px 18px 18px; font-size:0.85rem; line-height:1.5; text-align:center;">
+                <p style="margin-top:0;" data-i18n="kindlechat.dm.upsell_body">
+                    Starting new conversations is a ReKindle+ feature. You can still receive requests and reply to
+                    conversations you accept.
+                </p>
+                <div style="display:flex; justify-content:center;">
+                    <button type="button" class="sys-btn" onclick="window.location.href='pay.html'"
+                        data-i18n="kindlechat.dm.upsell_btn">Learn about ReKindle+</button>
+                    <button type="button" class="sys-btn" style="margin-left:10px;"
+                        onclick="closeModal('dm-upsell-modal-content'); closeModal('modal-overlay');"
+                        data-i18n="common.close">Close</button>
+                </div>
+            </div>
+        </div>
+
     </div>
+
+    <!-- Loaded here, after the markup, so the shell paints before the
+         Firebase SDK downloads and parses (2026-10-26 load-path pass).
+         Order is unchanged: this block still runs before the app script. -->
+    <script src="js/reports.js?v=4"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/social-token-cache.js?v=1"></script>
+    <script src="emojis.js?v=7"></script>
+    <script src="js/emoji-render.js?v=1"></script>
+    <script src="bad_words.js?v=4"></script>
+    <script src="js/promo-ban.js?v=1"></script>
+    <script src="js/link-guard.js?v=1"></script>
+    <script src="js/social-endpoints.js?v=1"></script>
+    <script src="js/spam-guard.js?v=1"></script>
+    <script src="js/translate-client.js?v=3"></script>
+    <script src="js/post-language.js?v=1"></script>
+    <script src="time.js?v=5"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <script src="js/custom-select.js?v=2"></script>
+    <script src="js/age-verification.js?v=2"></script>
 
     <script>
         // --- GLOBAL ERROR CATCHER ---
@@ -1598,6 +2085,11 @@
             // Show generic content, hide Others
             document.getElementById('settings-modal-content').style.display = 'none';
             document.getElementById('rules-modal-content').style.display = 'none';
+            var dmModals = ['dm-new-modal-content', 'dm-safety-modal-content', 'dm-upsell-modal-content'];
+            for (var dmi = 0; dmi < dmModals.length; dmi++) {
+                var dmEl = document.getElementById(dmModals[dmi]);
+                if (dmEl) dmEl.style.display = 'none';
+            }
             generic.style.display = 'block';
             generic.style.padding = '';
             generic.style.width = '';
@@ -1616,6 +2108,11 @@
         function hideModal() {
             var overlay = document.getElementById('modal-overlay');
             if (overlay) overlay.style.display = 'none';
+            var flipImg = document.getElementById('gallery-flipbook-img');
+            if (flipImg && flipImg.dataset.playing === "true") {
+                flipImg.dataset.playing = "false";
+                if (flipImg.playTimer) clearTimeout(flipImg.playTimer);
+            }
             var generic = document.getElementById('generic-modal-content');
             if (generic) {
                 generic.style.padding = '';
@@ -1643,10 +2140,14 @@
         var currentUser = null;
         var currentUsername = "";
 
-        // TODO: START HERE - User must deploy cloudflare-worker.js and paste URL here
-        var TRANSLATION_WORKER_URL = "https://rekindle-translate.timjarnott.workers.dev";
-        var MODERATION_WORKER_URL = "https://rekindle-moderate.timjarnott.workers.dev";
-        // Example: "https://rekindle-chat-worker.timothyarnott.workers.dev"
+        // Social Workers live in the separate "ReKindle Social" Cloudflare
+        // account, so social traffic cannot exhaust the main account's free
+        // quota. js/social-endpoints.js is the single switch; the literal is
+        // the fallback if that file fails to load.
+        var TRANSLATION_WORKER_URL = (window.rekindleSocialEndpoints && window.rekindleSocialEndpoints.translation)
+            || "https://rekindle-translate.rekindle-social.workers.dev";
+        var MODERATION_WORKER_URL = (window.rekindleSocialEndpoints && window.rekindleSocialEndpoints.moderation)
+            || "https://rekindle-moderate.rekindle-social.workers.dev";
         var currentRoomId = 'general';
         var isPro = false; // Pro Status
         var unsubscribeMsg = null;
@@ -1661,6 +2162,7 @@
         // general channel so child_added can dedupe across initial-load,
         // pagination, and live updates. Reset whenever the room changes.
         var renderedKindlechatIds = {};
+        var generalMsgData = {};          // Message bodies for rendered general msgs (avoids refetch on translation arrival)
         var generalDomMsgCount = 0;       // Counter replacing querySelectorAll('.msg') in kcAddedHandler
         var kcDeleteHandler = null;       // child_removed handler ref (on generalListener query)
         var kcChangedHandler = null;      // limitToLast(child_changed) handler ref
@@ -1680,6 +2182,41 @@
             batchSize: 20
         };
         var galleryRemovedHandler = null; // child_removed listener for art_index
+
+        // --- DIRECT MESSAGES (social RTDB only) ---
+        // All DM paths below are read from / written to socialRtdb, never the
+        // primary database. The client cannot write message/thread content;
+        // the moderation worker is the only writer.
+        var DM_THREADS_PATH = 'kindlechat/dm_threads';
+        var DM_MESSAGES_PATH = 'kindlechat/dm_messages';
+        var DM_USER_THREADS_PATH = 'kindlechat/dm_user_threads';
+        var DM_PREFS_PATH = 'kindlechat/dm_prefs';
+        var DM_SAFETY_ACK_KEY = 'rekindle_dm_safety_ack';
+        var DM_MAX_MESSAGE = 1000;
+        var DM_MAX_REQUEST = 300;
+
+        var dmEnabled = false;
+        var dmCanInitiate = false;
+        var dmInboxRef = null;
+        var dmThreadRef = null;
+        var dmThreadBaseRef = null;
+        var dmThreadAddedHandler = null;
+        var dmThreadRemovedHandler = null;
+        var dmThreads = {};              // threadId -> index row
+        var dmThreadState = null;        // index row for the open thread
+        var dmThreadPartner = '';        // partner uid for the open thread
+        var dmMessages = {};             // msgId -> message body (for de-dupe)
+        var dmMsgData = {};              // msgId -> message body (for report/delete actions)
+        var dmOldestTs = null;
+        var dmNoMore = false;
+        var dmLoadingMore = false;
+        var dmReadTimer = null;
+        var dmPrefsLoaded = false;
+        var dmAllowRequests = true;
+        var dmPartnerName = '';
+        var dmNameCache = {};
+        var dmRowAvatarCache = {};       // uid -> data URL of the sidebar avatar
+        var generalNeedsReload = false;
 
         function markAllAsRead() {
             // No-op: only general chat remains, no sidebar/unread tracking needed.
@@ -1726,16 +2263,43 @@
         var userLang = resolveUserLanguage();
 
         function getEffectiveTranslationLang() {
-            if (settings.translationLang && settings.translationLang !== 'auto') {
-                return settings.translationLang;
-            }
+            // Translations always use the user's system/UI language. The old
+            // separate translation-language dropdown was removed on 2026-10-27.
             return userLang;
+        }
+
+        // Only tag a post when the accurate detector is already loaded. Loading
+        // it inside the send handler competed with the POST on slow Kindle
+        // connections; the first message is tagged on view instead (auto source).
+        function detectPostLang(text) {
+            var pl = window.rekindlePostLanguage;
+            if (!pl || typeof pl.isReady !== 'function' || !pl.isReady()) return '';
+            return pl.detectLang(text);
+        }
+
+        function loadPostLanguageSoon() {
+            if (!window.rekindlePostLanguage) return;
+            setTimeout(function () { window.rekindlePostLanguage.load(); }, 4000);
+        }
+
+        // Base ISO 639-1 code: pt-BR -> pt, zh-Hans -> zh, en_US -> en.
+        function normalizeChatLang(code) {
+            if (!code) return '';
+            var client = window.rekindleTranslateClient;
+            if (client && typeof client.normalizeLang === 'function') return client.normalizeLang(code);
+            return String(code).toLowerCase().replace(/_/g, '-').split('-')[0];
+        }
+
+        function chatLangDiffers(a, b) {
+            var left = normalizeChatLang(a);
+            var right = normalizeChatLang(b);
+            if (!left) return true; // unknown -> keep the Translate link visible
+            return left !== right;
         }
 
         var settings = {
             showTranslations: true, // Default to true for all users to see translations
-            showAdminTools: false,
-            translationLang: 'auto'
+            showAdminTools: false
         };
         var isCurrentUserMod = false;
         var isModeratorMode = false;
@@ -1749,7 +2313,7 @@
         var currentUserRulesVersion = 0;
 
         // --- Reaction Keys (use new SVG-based keys) ---
-        var FONT_REACTIONS = ['rekindle', 'thumbsup', 'thumbsdown', 'heart', 'question', 'exclaim', 'laugh', 'sad'];
+        var FONT_REACTIONS = ['rekindle', 'thumbsup', 'thumbsdown', 'heart', 'question', 'exclaim', 'laugh', 'sad', 'angry', 'wave'];
 
 
         // --- INIT ---
@@ -1761,11 +2325,36 @@
             fetchSupporters(); // Load supporters list
 
             // Check Auth
+            // authInitHandled marks the first auth decision. It must NOT stop a
+            // later onAuthStateChanged(user) from replacing the guest screen:
+            // e-ink browsers can take longer than the 2.5s/6s grace to restore
+            // the session, and the old code latched the guest overlay forever
+            // (the "I am logged in but KindleChat says log in" reports).
             var authInitHandled = false;
+            var activeAuthUid = null;
+            var guestScreenShown = false;
+
+            function activateKindlechatForUser(user) {
+                if (!user || activeAuthUid === user.uid) return;
+                activeAuthUid = user.uid;
+                authInitHandled = true;
+                guestScreenShown = false;
+                var overlay = document.getElementById('guest-overlay');
+                if (overlay) overlay.style.display = 'none';
+                var appLayout = document.getElementById('app-layout');
+                if (appLayout) appLayout.style.display = '';
+                handleKindlechatAuth(user);
+            }
 
             function handleKindlechatAuth(user) {
                 currentUser = user;
                 currentUsername = (user.email || user.uid).split('@')[0];
+
+                // A late auth restore can land after the guest overlay was shown.
+                var guestOverlay = document.getElementById('guest-overlay');
+                if (guestOverlay) guestOverlay.style.display = 'none';
+                var layout = document.getElementById('app-layout');
+                if (layout) layout.style.display = '';
 
                 // Check active timeout and show banner
                 rtdb.ref('timeouts/' + user.uid).once('value').then(function (snap) {
@@ -1824,13 +2413,26 @@
                 // Age verification check (server-side enforced)
                 ensureAgeVerified(auth, { closable: false }).then(function () {
                     // Authenticate with social project before loading social data
-                    var getSocialToken = firebase.functions().httpsCallable('getSocialToken');
-                    return getSocialToken({}).then(function (result) {
-                        return socialAuth.signInWithCustomToken(result.data.token);
-                    });
+                    return window.rekindleEnsureSocialAuth(auth, socialAuth);
+                }).then(function () {
+                    // The social token carries the server-computed ``pro``
+                    // claim. Use it (not the loose localStorage default) to
+                    // decide whether the "New Message" button is shown; the
+                    // worker re-checks it on every request.
+                    if (socialAuth.currentUser) {
+                        return socialAuth.currentUser.getIdTokenResult().then(function (res) {
+                            dmCanInitiate = !!(res && res.claims && res.claims.pro === true);
+                        })['catch'](function () {
+                            dmCanInitiate = false;
+                        });
+                    }
                 }).then(function () {
                     // Username/avatar cache is populated lazily as messages render
                     // via rekindleFetchUserCard (reads tiny /user_cards records).
+
+                    // DM inbox is independent of chat rendering; attach it if
+                    // the server-side switch is on.
+                    initDm();
 
                     // Wait for supporters to load BEFORE loading messages to avoid race condition on Pro styling
                     fetchSupporters().then(function () {
@@ -1856,6 +2458,9 @@
 
             function handleKindlechatGuest() {
                 currentUser = null;
+                guestScreenShown = true;
+                var titleEl = document.querySelector('.title-text');
+                if (titleEl) titleEl.innerText = 'KindleChat';
                 document.getElementById('app-layout').style.display = 'none';
                 var overlay = document.getElementById('guest-overlay');
                 if (overlay) {
@@ -1870,29 +2475,64 @@
                     if (msgEl) msgEl.textContent = '';
                 }
                 if (socialAuth) socialAuth.signOut();
+                if (dmInboxRef) {
+                    dmInboxRef.off();
+                    dmInboxRef = null;
+                }
+                detachDmThreadListeners();
+                closeDmThread();
+                dmEnabled = false;
+                dmCanInitiate = false;
+                dmThreads = {};
+                dmNameCache = {};
+                dmRowAvatarCache = {};
+                currentRoomId = 'general';
+                var dmTab = document.getElementById('messages-tab');
+                if (dmTab) dmTab.style.display = 'none';
+                // Drop the split layout with the DM session, or the general chat
+                // would render in the right-hand pane.
+                var msgsView = document.getElementById('messages-view');
+                if (msgsView) msgsView.classList.remove('active');
+                applyDmLayout();
                 loadMessages();
             }
 
             auth.onAuthStateChanged(function (user) {
-                if (authInitHandled) return;
                 if (user) {
-                    authInitHandled = true;
-                    handleKindlechatAuth(user);
-                } else {
-                    // KINDLE COMPATIBILITY: E-ink browsers are slow to restore auth state
-                    // from IndexedDB/localStorage. Give it a moment before showing guest UI.
-                    setTimeout(function () {
-                        if (authInitHandled) return;
-                        if (auth.currentUser) {
-                            authInitHandled = true;
-                            handleKindlechatAuth(auth.currentUser);
-                        } else {
-                            authInitHandled = true;
-                            handleKindlechatGuest();
-                        }
-                    }, 2500);
+                    // Always allow a late restore to take over from the guest
+                    // screen (idempotent per uid).
+                    activateKindlechatForUser(user);
+                    return;
                 }
+                if (activeAuthUid) {
+                    // Signed out in another tab after a successful load.
+                    activeAuthUid = null;
+                    authInitHandled = false;
+                    handleKindlechatGuest();
+                    return;
+                }
+                if (authInitHandled) return;
+
+                // KINDLE COMPATIBILITY: E-ink browsers are slow to restore auth state
+                // from IndexedDB/localStorage. Give it a moment before showing guest UI.
+                setTimeout(function () {
+                    if (activeAuthUid || authInitHandled) return;
+                    if (auth.currentUser) {
+                        activateKindlechatForUser(auth.currentUser);
+                    } else {
+                        authInitHandled = true;
+                        handleKindlechatGuest();
+                    }
+                }, 2500);
             });
+
+            // Never leave the chat on "Connecting..." if auth never resolves.
+            // Do not latch: a slower auth restore may still replace this screen.
+            setTimeout(function () {
+                if (activeAuthUid || guestScreenShown) return;
+                authInitHandled = true;
+                handleKindlechatGuest();
+            }, 6000);
 
             // Listen for Pro status changes from other tabs (e.g. after subscribing)
             window.addEventListener('storage', function (e) {
@@ -1900,7 +2540,9 @@
                     var newIsPro = (e.newValue !== 'false');
                     if (newIsPro !== isPro) {
                         isPro = newIsPro;
-                        console.log("Pro Status Sync: ", isPro);
+                        // The worker re-checks the claim; this only keeps the
+                        // "New Message" affordance in sync after an upgrade.
+                        if (dmEnabled) dmCanInitiate = isPro;
                         // Re-render recent messages to update styling
                         reRenderRecentMessages();
                     }
@@ -1972,13 +2614,22 @@
             var overlay = document.getElementById('modal-overlay');
             document.getElementById('generic-modal-content').style.display = 'none';
             document.getElementById('rules-modal-content').style.display = 'none';
+            var dmModalIds = ['dm-new-modal-content', 'dm-safety-modal-content', 'dm-upsell-modal-content'];
+            for (var dmi = 0; dmi < dmModalIds.length; dmi++) {
+                var dmEl = document.getElementById(dmModalIds[dmi]);
+                if (dmEl) dmEl.style.display = 'none';
+            }
             document.getElementById('settings-modal-content').style.display = 'block';
 
             // Load settings
             document.getElementById('setting-enter-to-send').checked = (localStorage.getItem('rekindle_enter_to_send_chat') !== 'false');
             document.getElementById('setting-show-translations').checked = settings.showTranslations;
             document.getElementById('setting-show-admin-tools').checked = settings.showAdminTools;
-            document.getElementById('setting-translation-lang').value = settings.translationLang || 'auto';
+
+            var dmRequestsSetting = document.getElementById('dm-requests-setting');
+            var dmRequestsCheckbox = document.getElementById('setting-dm-requests');
+            if (dmRequestsSetting) dmRequestsSetting.style.display = dmEnabled ? 'block' : 'none';
+            if (dmRequestsCheckbox) dmRequestsCheckbox.checked = dmAllowRequests;
 
             // Admin check
             if (currentUser && currentUser.email === 'ukiyo@rekindle.ink') {
@@ -1997,6 +2648,11 @@
 
             document.getElementById('generic-modal-content').style.display = 'none';
             document.getElementById('settings-modal-content').style.display = 'none';
+            var dmModalIds = ['dm-new-modal-content', 'dm-safety-modal-content', 'dm-upsell-modal-content'];
+            for (var dmi = 0; dmi < dmModalIds.length; dmi++) {
+                var dmEl = document.getElementById(dmModalIds[dmi]);
+                if (dmEl) dmEl.style.display = 'none';
+            }
             document.getElementById('rules-modal-content').style.display = 'block';
 
             if (mode === 'accept') {
@@ -2030,17 +2686,26 @@
 
         function containsUrl(text) {
             if (!text) return false;
+            // js/link-guard.js normalises obfuscated links ("netlify,app",
+            // "netlify dot app", "[.]", full-width dots) before matching, so a
+            // domain split by commas/spaces cannot dodge the filter. The
+            // legacy checks below stay as a fallback if the helper failed to load.
+            if (window.rekindleContainsLink) return window.rekindleContainsLink(text);
             var t = String(text).toLowerCase();
-            var protocolLike = /h\s*t\s*t\s*p\s*s?\s*[:/]{1,4}/.test(t);
-            var wwwLike = /\bwww\./.test(t);
-            var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link)\b/.test(t);
-            var ipLike = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(t);
+            var protocolLike = /h\s*[xt]\s*[xt]\s*p\s*s?\s*[:/]{1,4}/.test(t);
+            var wwwLike = /\bwww\s*\./.test(t);
+            var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link|ly|sh)\b/.test(t);
+            var ipLike = /\b\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\b/.test(t);
             return protocolLike || wwwLike || domainLike || ipLike;
         }
 
         function containsPromotedTerm(text) {
             if (!text) return false;
-            return /\b(?:unreader|un-reader|inkchat|kindlehub)\b/i.test(String(text));
+            // js/promo-ban.js folds homoglyphs, leetspeak, "DOT" and separators
+            // before matching, so "kindlеhub", "khub" and "kindlehubDOTpro" are
+            // all caught. Fallback keeps a basic net if the helper failed to load.
+            if (window.rekindleContainsPromotedTerm) return window.rekindleContainsPromotedTerm(text);
+            return /\b(?:unreader|un-reader|inkchat|kindlehub|khub)\b/i.test(String(text));
         }
 
         // --- ASCII PICKER LOGIC ---
@@ -2188,8 +2853,19 @@
                 }
 
                 // SCROLL SPY LOGIC: LINEAR INTERPOLATION
+                // Per scroll event this used to force layout (scrollHeight), re-query
+                // the sidebar NodeList and run a smooth scrollIntoView animation
+                // (which re-enters this handler). Cache the list, throttle, and move
+                // the sidebar with scrollTop instead of animating.
+                var asciiSidebarItems = Array.prototype.slice.call(sidebar.querySelectorAll('.ascii-sidebar-item'));
+                var asciiSpyLast = 0;
+
                 content.addEventListener('scroll', function () {
                     if (!autoHighlightEnabled) return; // Skip if manually overridden
+
+                    var now = Date.now();
+                    if (now - asciiSpyLast < 120) return;
+                    asciiSpyLast = now;
 
                     // Calculate scroll percentage (0 to 1)
                     var maxScroll = content.scrollHeight - content.clientHeight;
@@ -2198,10 +2874,7 @@
                     var scrollPos = content.scrollTop;
                     var percentage = scrollPos / maxScroll;
 
-                    // Get all sidebar items
-                    var sidebarItems = sidebar.querySelectorAll('.ascii-sidebar-item');
-                    var totalItems = sidebarItems.length;
-
+                    var totalItems = asciiSidebarItems.length;
                     if (totalItems === 0) return;
 
                     var activeIndex = Math.floor(percentage * totalItems);
@@ -2209,16 +2882,20 @@
                     if (activeIndex < 0) activeIndex = 0;
                     if (activeIndex >= totalItems) activeIndex = totalItems - 1;
 
-                    // Update UI
-                    for (var i = 0; i < sidebarItems.length; i++) {
-                        var el = sidebarItems[i];
-                        if (i === activeIndex) {
-                            el.classList.add('active');
-                            // Smooth scroll into view for the category name if it's outside visible sidebar
-                            if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                        } else {
-                            el.classList.remove('active');
+                    // Update UI (only touch classes that actually change)
+                    for (var i = 0; i < totalItems; i++) {
+                        var el = asciiSidebarItems[i];
+                        var shouldBeActive = (i === activeIndex);
+                        if (el.classList.contains('active') !== shouldBeActive) {
+                            el.classList[shouldBeActive ? 'add' : 'remove']('active');
                         }
+                    }
+
+                    // Keep the category label visible without animating the page.
+                    var activeEl = asciiSidebarItems[activeIndex];
+                    if (activeEl && sidebar.scrollHeight > sidebar.clientHeight + 4) {
+                        var target = activeEl.offsetTop - Math.max(0, (sidebar.clientHeight - activeEl.offsetHeight) / 2);
+                        sidebar.scrollTop = Math.max(0, target);
                     }
                 });
 
@@ -2450,6 +3127,7 @@
                     // (insertBefore(firstChild) each iteration puts newest first otherwise.)
                     for (var i = batch.length - 1; i >= 0; i--) {
                         renderedKindlechatIds[batch[i].id] = true;
+                        generalMsgData[batch[i].id] = batch[i].data;
                         renderMessage(batch[i].data, batch[i].id, true);
                         generalDomMsgCount++;
                     }
@@ -2466,9 +3144,10 @@
                                     var transText = transSnap.val();
                                     if (!transText || currentRoomId !== 'general') return;
                                     langTranslations[id] = transText;
-                                    generalChatRef.child(id).once('value').then(function (msgSnap) {
-                                        if (msgSnap.val()) renderMessage(msgSnap.val(), id);
-                                    });
+                                    // The body is already cached above; this used to re-read
+                                    // the same node from RTDB (up to 25 extra GETs per page).
+                                    var cachedMsg = generalMsgData[id];
+                                    if (cachedMsg) renderMessage(cachedMsg, id);
                                 });
                         })(batch[j].id);
                     }
@@ -2487,47 +3166,6 @@
                     isLoadingMore = false;
                     hideLoadingIndicator();
                 });
-        }
-
-        // --- MESSAGE CACHING (localStorage) ---
-        var MSG_CACHE_PREFIX = 'kindlechat_msg_';
-        var MAX_CACHED_MESSAGES = 50;
-
-        function getMessageCacheKey(roomId) {
-            return MSG_CACHE_PREFIX + roomId;
-        }
-
-        function getCachedMessages(roomId) {
-            try {
-                var cached = localStorage.getItem(getMessageCacheKey(roomId));
-                if (cached) {
-                    var data = JSON.parse(cached);
-                    return data.messages || [];
-                }
-            } catch (e) { }
-            return [];
-        }
-
-        function getLastCachedTimestamp(roomId) {
-            try {
-                var cached = localStorage.getItem(getMessageCacheKey(roomId));
-                if (cached) {
-                    var data = JSON.parse(cached);
-                    return data.lastTimestamp || null;
-                }
-            } catch (e) { }
-            return null;
-        }
-
-        function cacheMessages(roomId, messages, lastTimestamp) {
-            try {
-                // Only keep last N messages
-                var toCache = messages.slice(-MAX_CACHED_MESSAGES);
-                localStorage.setItem(getMessageCacheKey(roomId), JSON.stringify({
-                    lastTimestamp: lastTimestamp,
-                    messages: toCache
-                }));
-            } catch (e) { }
         }
 
 
@@ -2553,6 +3191,35 @@
         }
 
         function loadMessages() {
+            // A non-general room id means a DM thread. Detach the general
+            // listeners first (one live room at a time keeps the Kindle lean)
+            // and render the thread with the lightweight DM renderer.
+            if (currentRoomId !== 'general') {
+                if (generalListener) {
+                    generalListener.off();
+                    generalListener = null;
+                }
+                if (generalTransRef) {
+                    generalTransRef.off();
+                    generalTransRef = null;
+                }
+                kcAddedHandler = null;
+                kcChangedHandler = null;
+                kcDeleteHandler = null;
+                kcTransAddedHandler = null;
+                kcTransChangedHandler = null;
+                renderedKindlechatIds = {};
+                generalMsgData = {};
+                langTranslations = {};
+                dmTranslations = {};
+                generalDomMsgCount = 0;
+                replyTarget = null;
+                loadDmThread(currentRoomId);
+                return;
+            }
+
+            generalNeedsReload = false;
+
             // Update Title to Loading
             var titleEl = document.querySelector('.title-text');
             if (titleEl) titleEl.innerText = 'Loading...';
@@ -2574,7 +3241,9 @@
             kcTransAddedHandler = null;
             kcTransChangedHandler = null;
             renderedKindlechatIds = {};
+            generalMsgData = {};
             langTranslations = {};
+            dmTranslations = {};
             generalDomMsgCount = 0;
             // Reset Pixel Cache on reload
             window.pixelGridCache = {};
@@ -2606,6 +3275,7 @@
             history.innerHTML = '<div style="text-align:center; padding:20px">Connecting...</div>';
 
             renderedKindlechatIds = {};
+            generalMsgData = {};
             oldestGeneralTimestamp = null;
             oldestGeneralKey = null;
             noMoreGeneralMessages = false;
@@ -2622,12 +3292,19 @@
                 history.innerHTML = '';
 
                 if (!snapshot.exists()) {
-                    history.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">No messages yet.</div>';
+                    history.innerHTML = window.rekindleEmptyState(
+                        window.t('kindlechat.chat.empty', 'No messages yet. Say hello to the room.'),
+                        { icon: 'chat', compact: true }
+                    );
                 } else {
+                    // Render the initial batch with the container hidden so the 50
+                    // appends don't each force a synchronous layout; one reflow on show.
+                    history.style.display = 'none';
                     snapshot.forEach(function (child) {
                         var data = child.val();
                         var msgId = child.key;
                         renderedKindlechatIds[msgId] = true;
+                        generalMsgData[msgId] = data;
                         if (oldestGeneralKey === null) oldestGeneralKey = msgId;
 
                         if (typeof data.timestamp === 'number') {
@@ -2640,6 +3317,7 @@
                         generalDomMsgCount++;
                     });
 
+                    history.style.display = '';
                     history.scrollTop = history.scrollHeight;
                 }
 
@@ -2653,6 +3331,7 @@
                     renderedKindlechatIds[msgId] = true;
 
                     var data = childSnap.val();
+                    generalMsgData[msgId] = data;
 
                     // Clear "No messages yet." placeholder if present
                     if (history.children.length === 1 &&
@@ -2683,6 +3362,7 @@
                 kcChangedHandler = function (childSnap) {
                     if (currentRoomId !== 'general') return;
                     if (!renderedKindlechatIds[childSnap.key]) return;
+                    generalMsgData[childSnap.key] = childSnap.val();
                     renderMessage(childSnap.val(), childSnap.key);
                 };
                 generalListener.on('child_changed', kcChangedHandler);
@@ -2691,6 +3371,7 @@
                     if (currentRoomId !== 'general') return;
                     if (!renderedKindlechatIds[childSnap.key]) return;
                     delete renderedKindlechatIds[childSnap.key];
+                    delete generalMsgData[childSnap.key];
                     var msgEl = history.querySelector('.msg[data-msg-id="' + childSnap.key + '"]');
                     if (msgEl && msgEl.parentNode) {
                         // Only compensate scrollTop if the element was already scrolled
@@ -2722,12 +3403,16 @@
                 // listener here syncs the ENTIRE per-language node (~25k entries /
                 // ~1 MB) on every page load, which kills the Kindle browser. Push IDs
                 // sort chronologically, so startAt(oldestGeneralKey) covers the live
-                // window plus all future messages. Paginated older messages fetch
-                // their translations on demand in loadMoreGeneralFromRTDB().
+                // window plus all future messages. Bounded with limitToLast(200):
+                // in a dormant room the startAt range can span months, so without the
+                // limit the listener still syncs every translation created since the
+                // oldest rendered message. The newest 200 keys always include the 50
+                // rendered messages; paginated older messages fetch their translations
+                // on demand in loadMoreGeneralFromRTDB().
                 var transBaseRef = socialRtdb.ref('kindlechat/translations_by_lang/' + getEffectiveTranslationLang());
                 generalTransRef = oldestGeneralKey
-                    ? transBaseRef.orderByKey().startAt(oldestGeneralKey)
-                    : transBaseRef;
+                    ? transBaseRef.orderByKey().startAt(oldestGeneralKey).limitToLast(200)
+                    : transBaseRef.orderByKey().limitToLast(200);
 
                 kcTransAddedHandler = function (childSnap) {
                     if (currentRoomId !== 'general') return;
@@ -2736,8 +3421,20 @@
                     if (!text) return;
                     langTranslations[msgId] = text;
                     if (renderedKindlechatIds[msgId]) {
+                        // Skip if the element has slid out of the live window -
+                        // re-rendering would re-append an out-of-window message.
+                        if (!history.querySelector('.msg[data-msg-id="' + msgId + '"]')) return;
+                        var cachedMsg = generalMsgData[msgId];
+                        if (cachedMsg) {
+                            if (!applyTranslationToRenderedMessage(msgId, text)) {
+                                renderMessage(cachedMsg, msgId);
+                            }
+                            return;
+                        }
                         generalChatRef.child(msgId).once('value').then(function (msgSnap) {
-                            if (msgSnap.val()) renderMessage(msgSnap.val(), msgId);
+                            if (msgSnap.val() && !applyTranslationToRenderedMessage(msgId, text)) {
+                                renderMessage(msgSnap.val(), msgId);
+                            }
                         });
                     }
                 };
@@ -2750,8 +3447,18 @@
                     if (!text) return;
                     langTranslations[msgId] = text;
                     if (renderedKindlechatIds[msgId]) {
+                        if (!history.querySelector('.msg[data-msg-id="' + msgId + '"]')) return;
+                        var cachedMsg = generalMsgData[msgId];
+                        if (cachedMsg) {
+                            if (!applyTranslationToRenderedMessage(msgId, text)) {
+                                renderMessage(cachedMsg, msgId);
+                            }
+                            return;
+                        }
                         generalChatRef.child(msgId).once('value').then(function (msgSnap) {
-                            if (msgSnap.val()) renderMessage(msgSnap.val(), msgId);
+                            if (msgSnap.val() && !applyTranslationToRenderedMessage(msgId, text)) {
+                                renderMessage(msgSnap.val(), msgId);
+                            }
                         });
                     }
                 };
@@ -2765,45 +3472,104 @@
         }
 
         function switchKindlechatTab(tab) {
-            if (tab !== 'chat' && tab !== 'gallery') return;
-            if (tab === 'gallery' && !galleryState.open) {
+            if (tab === 'chat') {
+                openGeneralChat();
+            } else if (tab === 'gallery') {
                 openGalleryView();
-            } else if (tab === 'chat' && galleryState.open) {
-                closeGalleryView();
+            } else if (tab === 'messages') {
+                openMessagesView();
             }
+        }
+
+        function setActiveTab(tab) {
+            var ids = { chat: 'chat-tab', gallery: 'gallery-tab', messages: 'messages-tab' };
+            for (var key in ids) {
+                if (!ids.hasOwnProperty(key)) continue;
+                var el = document.getElementById(ids[key]);
+                if (!el) continue;
+                if (key === tab) el.classList.add('active');
+                else el.classList.remove('active');
+            }
+        }
+
+        function openGeneralChat() {
+            if (galleryState.open) closeGalleryView();
+            var messagesView = document.getElementById('messages-view');
+            var chatView = document.getElementById('chat-view');
+            if (messagesView) messagesView.classList.remove('active');
+            if (chatView) chatView.style.display = 'flex';
+            setActiveTab('chat');
+
+            // Leaving a DM thread for the general room: detach DM listeners and
+            // reload the last 50 general messages.
+            if (currentRoomId !== 'general' || dmThreadState || generalNeedsReload) {
+                closeDmThread();
+                currentRoomId = 'general';
+                loadMessages();
+            }
+            applyDmLayout();
+        }
+
+        function openMessagesView() {
+            if (galleryState.open) closeGalleryView();
+            // Single-pane layout: the inbox replaces an open thread so its
+            // listener does not keep running behind the list. In the split
+            // layout the conversation stays on the right.
+            var split = dmSplitFits();
+            if (!split && (currentRoomId !== 'general' || dmThreadState)) {
+                closeDmThread();
+                currentRoomId = 'general';
+                generalNeedsReload = true;
+            }
+            var messagesView = document.getElementById('messages-view');
+            var chatView = document.getElementById('chat-view');
+            var galleryView = document.getElementById('gallery-view');
+            if (galleryView) galleryView.classList.remove('active');
+            if (chatView) chatView.style.display = (split && dmThreadOpen()) ? 'flex' : 'none';
+            if (messagesView) messagesView.classList.add('active');
+            setActiveTab('messages');
+            openDmSafetyIfNeeded();
+            renderDmInbox();
+            applyDmLayout();
         }
 
         function openGalleryView() {
             var galleryView = document.getElementById('gallery-view');
             var chatView = document.getElementById('chat-view');
-            var chatTab = document.getElementById('chat-tab');
-            var galleryTab = document.getElementById('gallery-tab');
+            var messagesView = document.getElementById('messages-view');
             if (!galleryView || !chatView) return;
 
+            // Gallery is a general-chat view; leave a DM thread first.
+            if (currentRoomId !== 'general' || dmThreadState) {
+                closeDmThread();
+                currentRoomId = 'general';
+                generalNeedsReload = true;
+            }
             galleryView.classList.add('active');
             chatView.style.display = 'none';
-            if (chatTab) chatTab.classList.remove('active');
-            if (galleryTab) galleryTab.classList.add('active');
+            if (messagesView) messagesView.classList.remove('active');
+            setActiveTab('gallery');
             galleryState.open = true;
             if (galleryState.items.length === 0) {
                 loadGallery(true);
             } else {
                 attachGalleryRemovedListener();
             }
+            applyDmLayout();
         }
 
         function closeGalleryView() {
             var galleryView = document.getElementById('gallery-view');
             var chatView = document.getElementById('chat-view');
-            var chatTab = document.getElementById('chat-tab');
-            var galleryTab = document.getElementById('gallery-tab');
             if (!galleryView || !chatView) return;
 
             galleryView.classList.remove('active');
             chatView.style.display = 'flex';
-            if (chatTab) chatTab.classList.add('active');
-            if (galleryTab) galleryTab.classList.remove('active');
+            setActiveTab(currentRoomId === 'general' ? 'chat' : 'messages');
             galleryState.open = false;
+            if (currentRoomId === 'general' && generalNeedsReload) {
+                loadMessages();
+            }
 
             // Fix: Detach from the scoped query
             if (galleryRemovedHandler && galleryLiveQuery) {
@@ -2811,6 +3577,1315 @@
                 galleryRemovedHandler = null;
                 galleryLiveQuery = null;
             }
+        }
+
+        // ==================================================================
+        // DIRECT MESSAGES
+        // All content is read from socialRtdb (rekindle-socials). Clients can
+        // never write thread/message content: only the moderation worker does.
+        // ==================================================================
+        function dmT(key, fallback) {
+            return (typeof window.t === 'function') ? window.t(key, fallback) : fallback;
+        }
+
+        function isDmBetaHost() {
+            return window.location.hostname === 'beta.rekindle.ink';
+        }
+
+        function dmFlagKey() {
+            return isDmBetaHost() ? 'dm_beta_enabled' : 'dm_enabled';
+        }
+
+        function initDm() {
+            if (!currentUser || !socialRtdb) return;
+            var tab = document.getElementById('messages-tab');
+            socialRtdb.ref('kindlechat/config/' + dmFlagKey()).once('value').then(function (snap) {
+                dmEnabled = snap.val() === true;
+                if (!dmEnabled) {
+                    if (tab) tab.style.display = 'none';
+                    return;
+                }
+                if (tab) tab.style.display = '';
+                loadDmPrefs();
+                attachDmInbox();
+            })['catch'](function (e) {
+                console.warn('DM config read failed:', e && e.message);
+                dmEnabled = false;
+                if (tab) tab.style.display = 'none';
+            });
+        }
+
+        function attachDmInbox() {
+            if (!socialRtdb || !currentUser) return;
+            if (dmInboxRef) {
+                dmInboxRef.off();
+                dmInboxRef = null;
+            }
+            // Last 50 conversations only: the inbox payload stays tiny on the
+            // Kindle (no message previews are stored in the index).
+            dmInboxRef = socialRtdb.ref(DM_USER_THREADS_PATH + '/' + currentUser.uid)
+                .orderByChild('lastMessageAt')
+                .limitToLast(50);
+            dmInboxRef.on('value', function (snap) {
+                dmThreads = {};
+                snap.forEach(function (child) {
+                    var row = child.val();
+                    if (row && typeof row === 'object') dmThreads[child.key] = row;
+                });
+                updateDmUnreadDot();
+                if (document.getElementById('messages-view') &&
+                    document.getElementById('messages-view').classList.contains('active')) {
+                    renderDmInbox();
+                }
+                if (dmThreadState && dmThreads[currentRoomId]) {
+                    dmThreadState = dmThreads[currentRoomId];
+                    // The header carries Block/Unblock, so it must follow a
+                    // status change that arrived from the other side too.
+                    updateDmHeader();
+                    updateDmBanner();
+                    updateDmComposer();
+                }
+            }, function (e) {
+                console.warn('DM inbox listener failed:', e && e.message);
+            });
+        }
+
+        function dmRowUnread(row) {
+            if (!row || !currentUser) return false;
+            if (row.status === 'declined' || row.status === 'blocked') return false;
+            var last = typeof row.lastMessageAt === 'number' ? row.lastMessageAt : 0;
+            var read = typeof row.lastReadAt === 'number' ? row.lastReadAt : 0;
+            if (row.status === 'pending' && row.requestedBy !== currentUser.uid) {
+                return !(read && read >= last);
+            }
+            return !!(row.lastMessageUid && row.lastMessageUid !== currentUser.uid && last > read);
+        }
+
+        function updateDmUnreadDot() {
+            var dot = document.getElementById('dm-tab-dot');
+            if (!dot) return;
+            var unread = false;
+            for (var id in dmThreads) {
+                if (!dmThreads.hasOwnProperty(id)) continue;
+                if (dmRowUnread(dmThreads[id])) {
+                    unread = true;
+                    break;
+                }
+            }
+            dot.style.display = unread ? 'inline-block' : 'none';
+        }
+
+        function getDmDisplayName(uid, callback) {
+            if (!uid) {
+                callback(dmT('kindlechat.dm.someone', 'Someone'));
+                return;
+            }
+            if (currentUser && uid === currentUser.uid) {
+                callback(dmT('kindlechat.msg.you', 'You'));
+                return;
+            }
+            if (dmNameCache[uid]) {
+                callback(dmNameCache[uid]);
+                return;
+            }
+            var fallback = String(uid).substring(0, 8);
+            if (typeof window.rekindleFetchUserCard !== 'function') {
+                callback(fallback);
+                return;
+            }
+            window.rekindleFetchUserCard(rtdb, uid, function (card) {
+                var name = (card && card.username) ? card.username : fallback;
+                dmNameCache[uid] = censorUsername(name);
+                callback(dmNameCache[uid]);
+            });
+        }
+
+        function dmStatusLabel(row) {
+            var uid = currentUser ? currentUser.uid : '';
+            if (!row) return '';
+            if (row.status === 'pending') {
+                return row.requestedBy === uid
+                    ? dmT('kindlechat.dm.request_sent', 'Request sent')
+                    : dmT('kindlechat.dm.request_received', 'Message request');
+            }
+            if (row.status === 'declined') return dmT('kindlechat.dm.declined', 'Declined');
+            if (row.status === 'blocked') {
+                return row.blockedBy === uid
+                    ? dmT('kindlechat.dm.blocked', 'Blocked')
+                    : dmT('kindlechat.dm.closed', 'Conversation closed');
+            }
+            var ts = typeof row.lastMessageAt === 'number' ? row.lastMessageAt : 0;
+            return ts ? formatChatTime(ts) : dmT('kindlechat.dm.conversation', 'Conversation');
+        }
+
+        // --- DM SPLIT LAYOUT (conversation list | open thread) ---
+        // Two panes need room for a 230px sidebar plus a readable bubble column.
+        // The .window is measured (not the viewport): it is centered and capped
+        // at 900px, and fullscreen/zoom change the usable layout width, so the
+        // viewport is a poor proxy for how much space the chat actually has.
+        var DM_SPLIT_MIN_WIDTH = 600;
+        var dmLayoutResizeTimer = null;
+
+        function dmSplitFits() {
+            var win = document.querySelector('.window');
+            var width = (win && win.clientWidth) ? win.clientWidth : window.innerWidth;
+            return width >= DM_SPLIT_MIN_WIDTH;
+        }
+
+        function dmThreadOpen() {
+            return !!(dmThreadState && currentRoomId && currentRoomId !== 'general');
+        }
+
+        function markActiveDmRow() {
+            var list = document.getElementById('dm-list');
+            if (!list) return;
+            var rows = list.querySelectorAll('.dm-row');
+            for (var i = 0; i < rows.length; i++) {
+                var on = rows[i].getAttribute('data-thread-id') === currentRoomId;
+                if (on) rows[i].classList.add('active');
+                else rows[i].classList.remove('active');
+            }
+        }
+
+        function applyDmLayout() {
+            var layout = document.getElementById('app-layout');
+            var messagesView = document.getElementById('messages-view');
+            if (!layout || !messagesView) return;
+
+            var threadOpen = dmThreadOpen();
+            var onMessages = messagesView.classList.contains('active') || threadOpen;
+            var split = onMessages && dmSplitFits();
+
+            if (split) {
+                layout.classList.add('dm-split');
+                // The sidebar carries the list, so keep it mounted while a
+                // thread is open in the right pane.
+                messagesView.classList.add('active');
+            } else {
+                layout.classList.remove('dm-split');
+                // Below the breakpoint the thread and the inbox are the same
+                // pane: the open thread must own it (single-pane behaviour).
+                if (threadOpen) messagesView.classList.remove('active');
+            }
+
+            var pane = document.getElementById('dm-empty-pane');
+            if (pane) {
+                if (split && !threadOpen) pane.classList.add('visible');
+                else pane.classList.remove('visible');
+            }
+
+            markActiveDmRow();
+        }
+
+        window.addEventListener('resize', function () {
+            if (dmLayoutResizeTimer) clearTimeout(dmLayoutResizeTimer);
+            dmLayoutResizeTimer = setTimeout(function () {
+                dmLayoutResizeTimer = null;
+                applyDmLayout();
+            }, 150);
+        });
+
+        function renderDmInbox() {
+            var list = document.getElementById('dm-list');
+            if (!list || !currentUser) return;
+            // In the split layout the list persists beside the thread and is
+            // rebuilt on every inbox update; keep the reader's scroll position.
+            var prevScroll = list.scrollTop;
+            list.innerHTML = '';
+
+            var ids = [];
+            for (var id in dmThreads) {
+                if (dmThreads.hasOwnProperty(id)) ids.push(id);
+            }
+            ids.sort(function (a, b) {
+                var at = dmThreads[a].lastMessageAt || 0;
+                var bt = dmThreads[b].lastMessageAt || 0;
+                return bt - at;
+            });
+
+            if (ids.length === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'dm-empty';
+                empty.textContent = dmCanInitiate
+                    ? dmT('kindlechat.dm.empty_pro', 'No conversations yet. Tap New Message to start one.')
+                    : dmT('kindlechat.dm.empty', 'No conversations yet. ReKindle+ members can start a new message.');
+                list.appendChild(empty);
+                return;
+            }
+
+            var fragment = document.createDocumentFragment();
+            ids.forEach(function (threadId) {
+                var row = dmThreads[threadId];
+                var rowEl = document.createElement('div');
+                rowEl.className = 'dm-row' + (threadId === currentRoomId ? ' active' : '');
+                rowEl.setAttribute('data-thread-id', threadId);
+                rowEl.onclick = function () { openDmThread(threadId); };
+
+                // Profile picture, like the general chat's message avatars.
+                rowEl.appendChild(makeDmRowAvatar(row.otherUid));
+
+                var main = document.createElement('div');
+                main.className = 'dm-row-main';
+
+                var nameEl = document.createElement('div');
+                nameEl.className = 'dm-row-name';
+                var nameTextEl = document.createElement('span');
+                nameTextEl.textContent = String(row.otherUid || '').substring(0, 8);
+                nameEl.appendChild(nameTextEl);
+
+                if (row.status === 'pending' && row.requestedBy !== currentUser.uid) {
+                    var tag = document.createElement('span');
+                    tag.className = 'dm-request-tag';
+                    tag.textContent = dmT('kindlechat.dm.request_short', 'Request');
+                    nameEl.appendChild(tag);
+                }
+
+                var metaEl = document.createElement('div');
+                metaEl.className = 'dm-row-meta';
+                metaEl.textContent = dmStatusLabel(row);
+
+                main.appendChild(nameEl);
+                main.appendChild(metaEl);
+                rowEl.appendChild(main);
+
+                if (dmRowUnread(row)) {
+                    var dot = document.createElement('div');
+                    dot.className = 'dm-row-dot';
+                    rowEl.appendChild(dot);
+                }
+
+                getDmDisplayName(row.otherUid, function (name) {
+                    if (nameTextEl.parentNode) nameTextEl.textContent = name;
+                });
+
+                fragment.appendChild(rowEl);
+            });
+            list.appendChild(fragment);
+            list.scrollTop = prevScroll;
+        }
+
+        function openDmThread(threadId) {
+            var row = dmThreads[threadId];
+            if (!row) {
+                showModal(dmT('kindlechat.dm.unavailable', 'This conversation is no longer available.'), false);
+                return;
+            }
+            if (!dmEnabled) {
+                showModal(dmT('kindlechat.dm.disabled', 'Direct messages are temporarily unavailable.'), false);
+                return;
+            }
+            dmThreadState = row;
+            dmThreadPartner = row.otherUid || '';
+            dmPartnerName = dmNameCache[dmThreadPartner] || '';
+            currentRoomId = threadId;
+            generalNeedsReload = true;
+
+            var messagesView = document.getElementById('messages-view');
+            var chatView = document.getElementById('chat-view');
+            if (messagesView) {
+                // Split layout: the conversation list stays in the left pane, so
+                // the thread opens beside it instead of replacing it.
+                if (dmSplitFits()) messagesView.classList.add('active');
+                else messagesView.classList.remove('active');
+            }
+            if (chatView) chatView.style.display = 'flex';
+            setActiveTab('messages');
+            updateDmHeader();
+            updateDmBanner();
+            updateDmComposer();
+            applyDmLayout();
+            loadMessages();
+        }
+
+        function detachDmThreadListeners() {
+            if (dmThreadRef) {
+                dmThreadRef.off();
+                dmThreadRef = null;
+            }
+            if (dmThreadBaseRef) {
+                dmThreadBaseRef.off();
+                dmThreadBaseRef = null;
+            }
+            dmThreadAddedHandler = null;
+            dmThreadRemovedHandler = null;
+        }
+
+        function closeDmThread() {
+            detachDmThreadListeners();
+            // Flush the read marker before leaving so a quick open/close does
+            // not leave an unread dot behind.
+            if (currentUser && currentRoomId && currentRoomId !== 'general') {
+                socialRtdb.ref(DM_USER_THREADS_PATH + '/' + currentUser.uid + '/' + currentRoomId + '/lastReadAt')
+                    .set(firebase.database.ServerValue.TIMESTAMP)['catch'](function () { });
+            }
+            if (dmReadTimer) {
+                clearTimeout(dmReadTimer);
+                dmReadTimer = null;
+            }
+            dmThreadState = null;
+            dmThreadPartner = '';
+            dmPartnerName = '';
+            dmMessages = {};
+            dmMsgData = {};
+            dmOldestTs = null;
+            dmNoMore = false;
+            dmLoadingMore = false;
+            setDmMediaButtons(false);
+            var header = document.getElementById('dm-thread-header');
+            if (header) header.style.display = 'none';
+            var banner = document.getElementById('dm-request-banner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        function setDmMediaButtons(isDm) {
+            // DMs are text-only: pixel art / flipbooks would post to the public
+            // gallery, so hide those buttons while a private thread is open.
+            var ids = ['pixel-btn', 'flipbook-btn'];
+            for (var i = 0; i < ids.length; i++) {
+                var el = document.getElementById(ids[i]);
+                if (el) el.style.display = isDm ? 'none' : '';
+            }
+        }
+
+        function updateDmHeader() {
+            var header = document.getElementById('dm-thread-header');
+            if (!header) return;
+            if (!dmThreadState) {
+                header.style.display = 'none';
+                return;
+            }
+            header.style.display = 'flex';
+            var blockBtn = document.getElementById('dm-block-btn');
+            if (blockBtn) {
+                var headerUid = currentUser ? currentUser.uid : '';
+                var threadStatus = dmThreadState.status;
+                var headerUnblock = threadStatus === 'blocked' && dmThreadState.blockedBy === headerUid;
+                var headerClosed = threadStatus === 'blocked' || threadStatus === 'declined';
+                blockBtn.style.display = (headerClosed && !headerUnblock) ? 'none' : 'block';
+                // The same button blocks, and unblocks the person you blocked.
+                var headerKey = headerUnblock ? 'kindlechat.dm.unblock' : 'kindlechat.dm.block';
+                if (blockBtn.getAttribute('data-i18n') !== headerKey) {
+                    blockBtn.setAttribute('data-i18n', headerKey);
+                }
+                var headerLabel = headerUnblock
+                    ? dmT('kindlechat.dm.unblock', 'Unblock')
+                    : dmT('kindlechat.dm.block', 'Block');
+                if (blockBtn.textContent !== headerLabel) blockBtn.textContent = headerLabel;
+            }
+            var nameEl = document.getElementById('dm-thread-name');
+            if (!nameEl) return;
+            nameEl.textContent = dmPartnerName || String(dmThreadPartner || '').substring(0, 8);
+            if (dmThreadPartner && !dmPartnerName) {
+                getDmDisplayName(dmThreadPartner, function (name) {
+                    dmPartnerName = name;
+                    var el = document.getElementById('dm-thread-name');
+                    if (el && dmThreadState) el.textContent = name;
+                    updateDmBanner();
+                });
+            }
+        }
+
+        // One header button serves both directions: Block while the
+        // conversation is open, Unblock once you have blocked the other person.
+        function dmHeaderBlockAction() {
+            var uid = currentUser ? currentUser.uid : '';
+            if (dmThreadState && dmThreadState.status === 'blocked' && dmThreadState.blockedBy === uid) {
+                dmAction('unblock');
+            } else {
+                dmAction('block');
+            }
+        }
+
+        function clearDmBannerActions() {
+            var actions = document.getElementById('dm-banner-actions');
+            if (!actions) return null;
+            while (actions.firstChild) actions.removeChild(actions.firstChild);
+            return actions;
+        }
+
+        function makeDmBannerButton(label, primary, handler) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dm-banner-btn' + (primary ? ' primary' : '');
+            btn.textContent = label;
+            btn.onclick = handler;
+            return btn;
+        }
+
+        function updateDmBanner() {
+            var banner = document.getElementById('dm-request-banner');
+            var textEl = document.getElementById('dm-banner-text');
+            if (!banner || !textEl) return;
+            if (!dmThreadState) {
+                banner.style.display = 'none';
+                return;
+            }
+            var uid = currentUser ? currentUser.uid : '';
+            var status = dmThreadState.status;
+            var who = dmPartnerName || dmT('kindlechat.dm.this_user', 'This user');
+            var actions = clearDmBannerActions();
+
+            if (status === 'accepted') {
+                banner.style.display = 'none';
+                return;
+            }
+
+            if (status === 'pending' && dmThreadState.requestedBy !== uid) {
+                textEl.textContent = dmT('kindlechat.dm.request_banner', '{name} wants to send you a message. Accept only if you want to talk to them.').replace('{name}', who);
+                banner.style.display = 'block';
+                if (actions) {
+                    actions.appendChild(makeDmBannerButton(dmT('kindlechat.dm.accept', 'Accept'), true, function () { dmAction('accept'); }));
+                    actions.appendChild(makeDmBannerButton(dmT('kindlechat.dm.decline', 'Decline'), false, function () { dmAction('decline'); }));
+                    actions.appendChild(makeDmBannerButton(dmT('kindlechat.dm.block', 'Block'), false, function () { dmAction('block'); }));
+                }
+                return;
+            }
+
+            if (status === 'pending') {
+                textEl.textContent = dmT('kindlechat.dm.waiting', 'Waiting for them to accept your message request.');
+                banner.style.display = 'block';
+                if (actions) {
+                    actions.appendChild(makeDmBannerButton(dmT('kindlechat.dm.block', 'Block'), false, function () { dmAction('block'); }));
+                }
+                return;
+            }
+
+            if (status === 'declined') {
+                textEl.textContent = dmT('kindlechat.dm.declined_banner', 'This message request was declined. This conversation cannot be restarted.');
+                banner.style.display = 'block';
+                return;
+            }
+
+            if (status === 'blocked') {
+                var youBlocked = dmThreadState.blockedBy === uid;
+                if (youBlocked) {
+                    textEl.textContent = dmT('kindlechat.dm.blocked_banner', 'You blocked this person. They cannot send you messages until you unblock them.');
+                    // A block is reversible by the person who set it. The
+                    // worker restores the conversation to its previous state.
+                    if (actions) {
+                        actions.appendChild(makeDmBannerButton(dmT('kindlechat.dm.unblock', 'Unblock'), false, function () { dmAction('unblock'); }));
+                    }
+                } else {
+                    textEl.textContent = dmT('kindlechat.dm.closed_banner', 'This conversation is closed.');
+                }
+                banner.style.display = 'block';
+            }
+        }
+
+        function updateDmComposer() {
+            var isDm = !!(currentRoomId && currentRoomId !== 'general' && dmThreadState);
+            setDmMediaButtons(isDm);
+            if (!isDm) return;
+
+            var accepted = dmThreadState.status === 'accepted';
+            setChatInputEnabled(accepted);
+
+            var input = document.getElementById('msg-input');
+            if (!input) return;
+            if (accepted) {
+                input.setAttribute('placeholder', dmT('kindlechat.dm.placeholder', 'Type a message...'));
+            } else if (dmThreadState.status === 'pending' && dmThreadState.requestedBy !== currentUser.uid) {
+                input.setAttribute('placeholder', dmT('kindlechat.dm.accept_to_reply', 'Accept the request to reply.'));
+            } else if (dmThreadState.status === 'pending') {
+                input.setAttribute('placeholder', dmT('kindlechat.dm.waiting_short', 'Waiting for them to accept...'));
+            } else {
+                input.setAttribute('placeholder', dmT('kindlechat.dm.closed_short', 'This conversation is closed.'));
+            }
+        }
+
+        function callDmWorker(payload) {
+            var tokenSource = (typeof socialAuth !== 'undefined' && socialAuth.currentUser)
+                ? socialAuth.currentUser
+                : currentUser;
+            if (!tokenSource) return Promise.reject(new Error('You need to sign in again.'));
+            return tokenSource.getIdToken(true).then(function (token) {
+                return fetch(MODERATION_WORKER_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify(payload)
+                });
+            }).then(function (resp) {
+                // readWorkerJson() returns null for the platform 1027/429 page,
+                // which has no CORS headers; flag it instead of letting
+                // resp.json() throw a misleading parsing error.
+                return readWorkerJson(resp).then(function (data) {
+                    return data || { __outage: true, __status: resp.status };
+                });
+            });
+        }
+
+        function sendDmMessage() {
+            if (isSendingMessage) return;
+            if (!dmThreadState) return;
+            if (serviceOutageActive()) {
+                showServiceOutage();
+                return;
+            }
+            if (dmThreadState.status !== 'accepted') {
+                showModal(dmT('kindlechat.dm.not_open', 'This conversation is not open.'), false);
+                return;
+            }
+
+            var inputEl = document.getElementById('msg-input');
+            var text = getComposerText().trim();
+            if (!text) return;
+            text = text.replace(/(\n\s*){3,}/g, '\n\n').trim();
+            if (text.length > DM_MAX_MESSAGE) {
+                showModal(dmT('kindlechat.dm.too_long', 'Messages cannot exceed 1000 characters.'), false);
+                return;
+            }
+            if (containsUrl(text)) {
+                showModal(dmT('kindlechat.dm.no_links', 'Links and URLs are not allowed.'), false);
+                return;
+            }
+            if (containsPromotedTerm(text)) {
+                showModal(dmT('kindlechat.dm.no_promo', 'Promotional content is not allowed.'), false);
+                return;
+            }
+
+            checkRules(function () {
+                isSendingMessage = true;
+                markSendBusy();
+                if (window.rekindleTranslateClient && window.rekindleTranslateClient.pauseAutoTranslate) {
+                    window.rekindleTranslateClient.pauseAutoTranslate();
+                }
+                setTimeout(function () { isSendingMessage = false; }, 4000);
+                var threadId = currentRoomId;
+                var dmLang = detectPostLang(text);
+                var dmPayload = { type: 'dm_message', threadId: threadId, text: text };
+                if (dmLang) dmPayload.lang = dmLang;
+                callDmWorker(dmPayload).then(function (result) {
+                    resetSendState();
+                    if (result.__outage) {
+                        showServiceOutage();
+                        return;
+                    }
+                    if (result.error || result.allowed === false) {
+                        if (result.code === 'dm_disabled') {
+                            dmEnabled = false;
+                            var tab = document.getElementById('messages-tab');
+                            if (tab) tab.style.display = 'none';
+                        }
+                        showModal(result.error || dmT('kindlechat.dm.send_failed', 'Unable to send message.'), false);
+                        return;
+                    }
+                    inputEl.innerHTML = '';
+                    loadPostLanguageSoon();
+                })['catch'](function (e) {
+                    resetSendState();
+                    console.error('DM send failed:', e);
+                    if (isTransportFailure(e) || serviceOutageActive()) {
+                        noteServiceOutage();
+                        showServiceOutage();
+                    } else {
+                        showModal(dmT('kindlechat.dm.send_failed', 'Unable to send message.'), false);
+                    }
+                });
+            });
+        }
+
+        function dmAction(action) {
+            if (!dmThreadState || !currentRoomId || currentRoomId === 'general') return;
+            var threadId = currentRoomId;
+            var run = function () {
+                callDmWorker({ type: 'dm_' + action, threadId: threadId }).then(function (result) {
+                    if (result.__outage) {
+                        showServiceOutage();
+                        return;
+                    }
+                    if (result.error) {
+                        showModal(result.error, false);
+                        return;
+                    }
+                    var row = dmThreads[threadId];
+                    if (row) {
+                        row.status = result.status || (action === 'accept' ? 'accepted' : (action === 'decline' ? 'declined' : 'blocked'));
+                        if (action === 'block' && currentUser) {
+                            row.blockedBy = currentUser.uid;
+                        } else if (action === 'unblock') {
+                            // Normally the block is gone; if the other person
+                            // had blocked back, the thread stays closed under
+                            // their name.
+                            if (result.blockedBy) row.blockedBy = result.blockedBy;
+                            else delete row.blockedBy;
+                        }
+                    }
+                    dmThreadState = row || dmThreadState;
+                    updateDmHeader();
+                    updateDmBanner();
+                    updateDmComposer();
+                    updateDmUnreadDot();
+                    renderDmInbox();
+                    if (action === 'accept' || (action === 'unblock' && row && row.status === 'accepted')) {
+                        var input = document.getElementById('msg-input');
+                        if (input && input.focus) input.focus();
+                    }
+                    if (action === 'block') {
+                        setTimeout(function () { switchKindlechatTab('messages'); }, 400);
+                    }
+                })['catch'](function (e) {
+                    console.error('DM action failed:', e);
+                    if (isTransportFailure(e) || serviceOutageActive()) {
+                        noteServiceOutage();
+                        showServiceOutage();
+                    } else {
+                        showModal(dmT('kindlechat.dm.action_failed', 'That action failed. Please try again.'), false);
+                    }
+                });
+            };
+
+            if (action === 'decline') {
+                showConfirmModal(dmT('kindlechat.dm.confirm_decline', 'Decline this message request? This cannot be undone.'), run);
+            } else if (action === 'block') {
+                showConfirmModal(dmT('kindlechat.dm.confirm_block', 'Block this person? They will not be able to message you again.'), run);
+            } else if (action === 'unblock') {
+                showConfirmModal(dmT('kindlechat.dm.confirm_unblock', 'Unblock this person? They will be able to contact you again.'), run);
+            } else {
+                run();
+            }
+        }
+
+        function loadDmThread(threadId) {
+            var historyEl = document.getElementById('chat-history');
+            if (!historyEl) return;
+            detachDmThreadListeners();
+            dmMessages = {};
+            dmMsgData = {};
+            dmOldestTs = null;
+            dmNoMore = false;
+            dmLoadingMore = false;
+
+            if (!dmThreadState && dmThreads[threadId]) dmThreadState = dmThreads[threadId];
+            updateDmHeader();
+            updateDmBanner();
+            updateDmComposer();
+            setDmMediaButtons(true);
+
+            var titleEl = document.querySelector('.title-text');
+            if (titleEl) titleEl.innerText = dmT('kindlechat.dm.title', 'Messages');
+
+            historyEl.innerHTML = '<div style="text-align:center; padding:20px">' +
+                dmT('kindlechat.dm.loading', 'Loading messages...') + '</div>';
+
+            var query = socialRtdb.ref(DM_MESSAGES_PATH + '/' + threadId)
+                .orderByChild('timestamp')
+                .limitToLast(50);
+            dmThreadRef = query;
+
+            query.once('value').then(function (snap) {
+                if (currentRoomId !== threadId || !dmThreadState) return;
+                historyEl.innerHTML = '';
+                var count = 0;
+                var fragment = document.createDocumentFragment();
+                snap.forEach(function (child) {
+                    var msg = child.val();
+                    if (!msg || typeof msg !== 'object') return;
+                    dmMessages[child.key] = msg;
+                    dmMsgData[child.key] = msg;
+                    if (typeof msg.timestamp === 'number') {
+                        if (dmOldestTs === null || msg.timestamp < dmOldestTs) dmOldestTs = msg.timestamp;
+                    }
+                    fragment.appendChild(renderDmMessage(msg, child.key, true));
+                    count++;
+                });
+                historyEl.appendChild(fragment);
+                if (count === 0) {
+                    var empty = document.createElement('div');
+                    empty.className = 'dm-empty';
+                    empty.textContent = dmT('kindlechat.dm.no_messages', 'No messages yet.');
+                    historyEl.appendChild(empty);
+                } else {
+                    historyEl.scrollTop = historyEl.scrollHeight;
+                }
+                dmNoMore = count < 50;
+                addDmLoadOlderButton();
+
+                // Live arrivals for this thread only (last 50 query).
+                dmThreadAddedHandler = query.on('child_added', function (child) {
+                    if (currentRoomId !== threadId || !dmThreadState) return;
+                    var msg = child.val();
+                    if (!msg || typeof msg !== 'object' || dmMessages[child.key]) return;
+                    dmMessages[child.key] = msg;
+                    dmMsgData[child.key] = msg;
+                    if (typeof msg.timestamp === 'number') {
+                        if (dmOldestTs === null || msg.timestamp < dmOldestTs) dmOldestTs = msg.timestamp;
+                    }
+                    var el = renderDmMessage(msg, child.key, false);
+                    if (el) historyEl.appendChild(el);
+                    historyEl.scrollTop = historyEl.scrollHeight;
+                    markDmRead();
+                });
+
+                // Genuine deletes only: a bare-ref listener avoids the
+                // limitToLast window-slide removing paginated messages.
+                dmThreadBaseRef = socialRtdb.ref(DM_MESSAGES_PATH + '/' + threadId);
+                dmThreadRemovedHandler = dmThreadBaseRef.on('child_removed', function (child) {
+                    if (currentRoomId !== threadId) return;
+                    delete dmMessages[child.key];
+                    delete dmMsgData[child.key];
+                    var el = historyEl.querySelector('[data-msg-id="' + child.key + '"]');
+                    if (el && el.parentNode) el.parentNode.removeChild(el);
+                });
+
+                markDmRead();
+            })['catch'](function (e) {
+                if (currentRoomId !== threadId) return;
+                console.error('DM thread load failed:', e);
+                historyEl.innerHTML = '';
+                var errEl = document.createElement('div');
+                errEl.className = 'dm-empty';
+                errEl.textContent = dmT('kindlechat.dm.load_failed', 'Unable to load this conversation.');
+                historyEl.appendChild(errEl);
+            });
+        }
+
+        function addDmLoadOlderButton() {
+            var historyEl = document.getElementById('chat-history');
+            if (!historyEl) return;
+            var existing = document.getElementById('dm-load-older');
+            if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+            if (dmNoMore) return;
+            var wrap = document.createElement('div');
+            wrap.id = 'dm-load-older';
+            wrap.style.cssText = 'text-align:center; padding:10px;';
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sys-btn';
+            btn.textContent = dmT('kindlechat.dm.load_older', 'Load Older');
+            btn.onclick = loadOlderDmMessages;
+            wrap.appendChild(btn);
+            historyEl.insertBefore(wrap, historyEl.firstChild);
+        }
+
+        function loadOlderDmMessages() {
+            if (dmLoadingMore || dmNoMore || dmOldestTs === null) return;
+            dmLoadingMore = true;
+            var historyEl = document.getElementById('chat-history');
+            var oldHeight = historyEl.scrollHeight;
+            var oldTop = historyEl.scrollTop;
+            var threadId = currentRoomId;
+
+            socialRtdb.ref(DM_MESSAGES_PATH + '/' + threadId)
+                .orderByChild('timestamp')
+                .endAt(dmOldestTs - 1)
+                .limitToLast(50)
+                .once('value').then(function (snap) {
+                    if (currentRoomId !== threadId || !dmThreadState) {
+                        dmLoadingMore = false;
+                        return;
+                    }
+                    var items = [];
+                    snap.forEach(function (child) {
+                        if (dmMessages[child.key]) return;
+                        var msg = child.val();
+                        if (!msg || typeof msg !== 'object') return;
+                        items.push({ key: child.key, msg: msg });
+                    });
+                    dmLoadingMore = false;
+                    if (items.length === 0) {
+                        dmNoMore = true;
+                        addDmLoadOlderButton();
+                        return;
+                    }
+                    var fragment = document.createDocumentFragment();
+                    items.forEach(function (item) {
+                        dmMessages[item.key] = item.msg;
+                        dmMsgData[item.key] = item.msg;
+                        if (typeof item.msg.timestamp === 'number') {
+                            if (dmOldestTs === null || item.msg.timestamp < dmOldestTs) dmOldestTs = item.msg.timestamp;
+                        }
+                        fragment.appendChild(renderDmMessage(item.msg, item.key, true));
+                    });
+                    var firstMsg = historyEl.querySelector('.msg');
+                    if (firstMsg) historyEl.insertBefore(fragment, firstMsg);
+                    else historyEl.appendChild(fragment);
+                    dmNoMore = items.length < 50;
+                    addDmLoadOlderButton();
+                    historyEl.scrollTop = historyEl.scrollHeight - oldHeight + oldTop;
+                })['catch'](function (e) {
+                    dmLoadingMore = false;
+                    console.error('DM pagination failed:', e);
+                });
+        }
+
+        // Profile picture next to each DM bubble, drawn exactly like the general
+        // chat: hash fallback immediately, then the user's customAvatar /
+        // avatarSeed from /user_cards (theme.js caches the lookup for both).
+        function resolveDmAvatar(uid, canvas) {
+            if (!uid || !canvas) return;
+            drawAvatar(canvas, uid);
+            if (typeof window.rekindleFetchUserCard !== 'function') return;
+            window.rekindleFetchUserCard(rtdb, uid, function (card) {
+                // The bubble may have been removed (thread switch / paging) while
+                // the card lookup was in flight.
+                if (!card || !canvas.parentNode) return;
+                drawAvatar(canvas, card.customAvatar || card.avatarSeed || uid);
+            });
+        }
+
+        // Sidebar (conversation list) avatars. The inbox is re-rendered on every
+        // thread update, so the finished 32x32 avatar is cached as a data URL
+        // per uid (declared with the other DM state) and reused as an <img>:
+        // each redraw costs ~256 fillRects and the Kindle runs a JIT-less V8,
+        // so only the first render pays for them.
+        function makeDmRowAvatar(uid) {
+            var cached = dmRowAvatarCache[uid];
+            if (cached) {
+                var img = document.createElement('img');
+                img.className = 'dm-row-avatar';
+                img.src = cached;
+                return img;
+            }
+
+            var canvas = document.createElement('canvas');
+            canvas.className = 'dm-row-avatar';
+            canvas.width = 32;
+            canvas.height = 32;
+            drawAvatar(canvas, uid); // instant hash fallback, works detached
+
+            if (!uid || typeof window.rekindleFetchUserCard !== 'function') return canvas;
+            window.rekindleFetchUserCard(rtdb, uid, function (card) {
+                // Nothing to cache if the row was rebuilt and no card came back:
+                // a cached hash would then shadow the real avatar for the session.
+                if (!card && !canvas.parentNode) return;
+                var seed = (card && (card.customAvatar || card.avatarSeed)) || uid;
+                drawAvatar(canvas, seed);
+                try {
+                    var url = canvas.toDataURL ? canvas.toDataURL() : '';
+                    if (url) dmRowAvatarCache[uid] = url;
+                } catch (e) { /* tainted canvas / no encoder: keep redrawing */ }
+            });
+            return canvas;
+        }
+
+        var pendingDmTranslations = {};
+        var dmTranslations = {};
+
+        function renderDmMessage(msg, msgId, returnOnly) {
+            var historyEl = document.getElementById('chat-history');
+            if (!historyEl || !msg) return null;
+            var isSelf = !!(currentUser && msg.uid === currentUser.uid);
+            var dmMsgLang = normalizeChatLang(msg.lang || '');
+            var dmMyLang = normalizeChatLang(getEffectiveTranslationLang());
+            var dmLangDiffers = chatLangDiffers(dmMsgLang, dmMyLang);
+            var dmKnownForeign = !!dmMsgLang && dmMsgLang !== dmMyLang;
+            var dmTranslated = settings.showTranslations ? (dmTranslations[msgId] || '') : '';
+
+            var el = document.createElement('div');
+            el.className = 'msg ' + (isSelf ? 'self' : 'other');
+            el.setAttribute('data-msg-id', msgId);
+            el.setAttribute('data-uid', msg.uid || '');
+            if (typeof msg.timestamp === 'number') el.setAttribute('data-ts', String(msg.timestamp));
+
+            var meta = document.createElement('div');
+            meta.className = 'msg-meta';
+            var nameEl = document.createElement('span');
+            nameEl.style.fontWeight = 'bold';
+            if (isSelf) {
+                nameEl.textContent = dmT('kindlechat.msg.you', 'You');
+            } else {
+                nameEl.textContent = dmPartnerName ||
+                    (dmThreadPartner ? String(dmThreadPartner).substring(0, 8) : dmT('kindlechat.dm.someone', 'Someone'));
+            }
+            var timeEl = document.createElement('span');
+            timeEl.textContent = msg.timestamp ? formatChatTime(msg.timestamp) : '';
+            meta.appendChild(nameEl);
+            meta.appendChild(timeEl);
+            var dmTranslateLink = null;
+            if (dmTranslated) {
+                var dmToggle = document.createElement('span');
+                dmToggle.id = 'toggle-dm-' + msgId;
+                dmToggle.style.cssText = 'font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;';
+                dmToggle.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
+                dmToggle.onclick = function () { toggleDmTranslation(msgId); };
+                meta.appendChild(dmToggle);
+            } else if (settings.showTranslations && !isSelf && currentUser && msg.text && String(msg.text).length > 1 && dmKnownForeign) {
+                dmTranslateLink = document.createElement('span');
+                dmTranslateLink.id = 'translate-dm-' + msgId;
+                dmTranslateLink.style.cssText = 'display:none; font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;';
+                dmTranslateLink.textContent = window.t('translate.btn.translate', 'Translate');
+                dmTranslateLink.onclick = function () { requestDmTranslation(msgId); };
+                meta.appendChild(dmTranslateLink);
+            }
+            el.appendChild(meta);
+
+            var avatarId = 'dm-avatar-' + msgId;
+            var avatarEl = document.createElement('canvas');
+            avatarEl.id = avatarId;
+            avatarEl.className = 'msg-avatar';
+            avatarEl.width = 32;
+            avatarEl.height = 32;
+            avatarEl.onclick = function () { openUserProfile(msg.uid || ''); };
+
+            var rowEl = document.createElement('div');
+            rowEl.className = 'msg-row';
+            rowEl.appendChild(avatarEl);
+
+            // Same order as the general chat: action buttons sit between the
+            // avatar and the bubble, so the report button is no longer a row
+            // underneath the message.
+            var contentEl = document.createElement('div');
+            contentEl.style.cssText = 'display:flex; align-items:center; min-width:0;';
+
+            if (!isSelf && msg.uid) {
+                var reportBtn = document.createElement('div');
+                reportBtn.className = 'report-btn';
+                reportBtn.title = dmT('kindlechat.btn.report', 'Report');
+                reportBtn.textContent = '!';
+                reportBtn.onclick = function () { openDmReport(msgId); };
+                contentEl.appendChild(reportBtn);
+            }
+
+            var bubble = document.createElement('div');
+            bubble.className = 'msg-bubble';
+            bubble.id = 'dm-bubble-' + msgId;
+            bubble.setAttribute('data-state', dmTranslated ? 'translated' : 'original');
+            bubble.setAttribute('data-lang', dmMsgLang);
+            bubble.setAttribute('data-original', msg.text || '');
+            bubble.setAttribute('data-translated', dmTranslated ? censorText(dmTranslated) : '');
+            if (dmTranslated) bubble.style.fontStyle = 'italic';
+            bubble.textContent = censorText(dmTranslated || msg.text || '');
+            contentEl.appendChild(bubble);
+            if (typeof window.renderEmojis === 'function') {
+                try { window.renderEmojis(bubble); } catch (e) { }
+            }
+
+            if (settings.showTranslations && !isSelf && currentUser && msg.text && String(msg.text).length > 1 &&
+                dmLangDiffers && !dmTranslated && !pendingDmTranslations[msgId]) {
+                queueDmAutoTranslation(msgId, msg.text || '', dmMsgLang || 'auto', dmMyLang);
+            }
+
+            rowEl.appendChild(contentEl);
+            el.appendChild(rowEl);
+
+            if (!returnOnly) historyEl.appendChild(el);
+            // Draw after the node is in the document: paginated renders append
+            // their fragment synchronously after this function returns.
+            setTimeout(function () { resolveDmAvatar(msg.uid, avatarEl); }, 0);
+            return el;
+        }
+
+        function applyDmTranslation(msgId, translated) {
+            var bubble = document.getElementById('dm-bubble-' + msgId);
+            if (!bubble) return;
+            var original = bubble.getAttribute('data-original') || '';
+            if (!translated || String(translated).toLowerCase().trim() === String(original).toLowerCase().trim()) return;
+            var safe = censorText(translated);
+            dmTranslations[msgId] = translated;
+            bubble.setAttribute('data-state', 'translated');
+            bubble.setAttribute('data-translated', safe);
+            bubble.textContent = safe;
+            if (typeof window.renderEmojis === 'function') {
+                try { window.renderEmojis(bubble); } catch (e) { }
+            }
+            var link = document.getElementById('translate-dm-' + msgId);
+            if (link && link.parentNode) link.parentNode.removeChild(link);
+            var msgEl = bubble.closest ? bubble.closest('.msg') : null;
+            var meta = msgEl ? msgEl.querySelector('.msg-meta') : null;
+            if (meta && !document.getElementById('toggle-dm-' + msgId)) {
+                var span = document.createElement('span');
+                span.id = 'toggle-dm-' + msgId;
+                span.style.cssText = 'font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;';
+                span.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
+                span.onclick = function () { toggleDmTranslation(msgId); };
+                meta.appendChild(span);
+            }
+        }
+
+        function toggleDmTranslation(msgId) {
+            var bubble = document.getElementById('dm-bubble-' + msgId);
+            var toggle = document.getElementById('toggle-dm-' + msgId);
+            if (!bubble || !toggle) return;
+            var original = bubble.getAttribute('data-original') || '';
+            var translated = bubble.getAttribute('data-translated') || '';
+            if (bubble.getAttribute('data-state') === 'translated') {
+                bubble.setAttribute('data-state', 'original');
+                bubble.textContent = censorText(original);
+                toggle.textContent = window.t('kindlechat.msg.show_translated', 'Show Translated');
+            } else {
+                bubble.setAttribute('data-state', 'translated');
+                bubble.textContent = censorText(translated);
+                toggle.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
+            }
+            if (typeof window.renderEmojis === 'function') {
+                try { window.renderEmojis(bubble); } catch (e) { }
+            }
+        }
+
+        function requestDmTranslation(msgId) {
+            var bubble = document.getElementById('dm-bubble-' + msgId);
+            var link = document.getElementById('translate-dm-' + msgId);
+            if (!bubble || !link || pendingDmTranslations[msgId]) return;
+            var text = bubble.getAttribute('data-original') || '';
+            if (!text) return;
+            if (!window.rekindleTranslateClient) {
+                link.textContent = window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+                return;
+            }
+            var target = getEffectiveTranslationLang();
+            var source = bubble.getAttribute('data-lang') || 'auto';
+            pendingDmTranslations[msgId] = true;
+            link.textContent = window.t('translate.msg.translating', 'Translating...');
+            window.rekindleTranslateClient.translate(text, source, target).then(function (translated) {
+                delete pendingDmTranslations[msgId];
+                if (!translated || String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                    link.textContent = window.t('translate.msg.same_language', 'Already in this language');
+                    return;
+                }
+                applyDmTranslation(msgId, translated);
+            })['catch'](function (e) {
+                delete pendingDmTranslations[msgId];
+                link.textContent = (e && e.code === 'budget')
+                    ? window.t('translate.msg.budget', 'Translation limit for this session reached. Try again later.')
+                    : window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+            });
+        }
+
+        function showDmTranslateLink(msgId) {
+            var link = document.getElementById('translate-dm-' + msgId);
+            if (link) link.style.display = 'inline-block';
+        }
+
+        function queueDmAutoTranslation(msgId, text, source, target) {
+            var client = window.rekindleTranslateClient;
+            if (!client || typeof client.autoTranslate !== 'function') return;
+            var queued = client.autoTranslate({
+                id: 'dm:' + msgId,
+                text: text,
+                source: source,
+                target: target,
+                apply: function (translated) {
+                    delete pendingDmTranslations[msgId];
+                    if (translated && String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                        var sameLink = document.getElementById('translate-dm-' + msgId);
+                        if (sameLink && sameLink.parentNode) sameLink.parentNode.removeChild(sameLink);
+                        return;
+                    }
+                    applyDmTranslation(msgId, translated);
+                },
+                onFail: function () {
+                    delete pendingDmTranslations[msgId];
+                    showDmTranslateLink(msgId);
+                }
+            });
+            // If the queue refused the job (cap/stopped), leave the manual link
+            // usable instead of parking a pending flag forever.
+            if (queued) pendingDmTranslations[msgId] = true;
+            else showDmTranslateLink(msgId);
+        }
+
+        function openDmReport(msgId) {
+            var msg = dmMsgData[msgId];
+            if (!msg || !dmThreadState) return;
+            if (typeof window.rekindleOpenReportModal !== 'function') return;
+            window.rekindleOpenReportModal({
+                contentType: 'dm_message',
+                contentId: msgId,
+                contentPath: DM_MESSAGES_PATH + '/' + currentRoomId + '/' + msgId,
+                reportedUserId: msg.uid || '',
+                contentSnapshot: msg.text || ''
+            });
+        }
+
+        function markDmRead() {
+            if (!currentUser || !currentRoomId || currentRoomId === 'general') return;
+            var threadId = currentRoomId;
+            if (dmReadTimer) clearTimeout(dmReadTimer);
+            dmReadTimer = setTimeout(function () {
+                socialRtdb.ref(DM_USER_THREADS_PATH + '/' + currentUser.uid + '/' + threadId + '/lastReadAt')
+                    .set(firebase.database.ServerValue.TIMESTAMP)
+                    .then(function () {
+                        if (dmThreads[threadId]) {
+                            dmThreads[threadId].lastReadAt = Date.now();
+                            updateDmUnreadDot();
+                        }
+                    })['catch'](function () { });
+            }, 1200);
+        }
+
+        function loadDmPrefs() {
+            if (!currentUser || !socialRtdb) return;
+            socialRtdb.ref(DM_PREFS_PATH + '/' + currentUser.uid + '/allowRequests').once('value').then(function (snap) {
+                dmAllowRequests = snap.val() !== false;
+                dmPrefsLoaded = true;
+                var cb = document.getElementById('setting-dm-requests');
+                if (cb) cb.checked = dmAllowRequests;
+            })['catch'](function () {
+                dmPrefsLoaded = true;
+            });
+        }
+
+        function saveDmPrefs() {
+            var cb = document.getElementById('setting-dm-requests');
+            if (!cb || !currentUser || !socialRtdb) return;
+            dmAllowRequests = cb.checked;
+            socialRtdb.ref(DM_PREFS_PATH + '/' + currentUser.uid + '/allowRequests')
+                .set(dmAllowRequests)
+                ['catch'](function (e) {
+                    console.warn('DM pref save failed:', e && e.message);
+                });
+        }
+
+        function showDmModal(id) {
+            var ids = ['generic-modal-content', 'settings-modal-content', 'rules-modal-content',
+                'dm-new-modal-content', 'dm-safety-modal-content', 'dm-upsell-modal-content'];
+            for (var i = 0; i < ids.length; i++) {
+                var el = document.getElementById(ids[i]);
+                if (el) el.style.display = 'none';
+            }
+            var target = document.getElementById(id);
+            if (target) target.style.display = 'block';
+            var overlay = document.getElementById('modal-overlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        function openDmSafetyIfNeeded() {
+            if (!dmEnabled) return;
+            try {
+                if (localStorage.getItem(DM_SAFETY_ACK_KEY) === '1') return;
+            } catch (e) {
+                return;
+            }
+            showDmModal('dm-safety-modal-content');
+        }
+
+        function acknowledgeDmSafety() {
+            try { localStorage.setItem(DM_SAFETY_ACK_KEY, '1'); } catch (e) { }
+            closeModal('dm-safety-modal-content');
+            closeModal('modal-overlay');
+        }
+
+        function showDmUpsell() {
+            showDmModal('dm-upsell-modal-content');
+        }
+
+        function openNewDmModal() {
+            if (!dmEnabled) {
+                showModal(dmT('kindlechat.dm.disabled', 'Direct messages are temporarily unavailable.'), false);
+                return;
+            }
+            if (!dmCanInitiate) {
+                showDmUpsell();
+                return;
+            }
+            var usernameEl = document.getElementById('dm-username');
+            var messageEl = document.getElementById('dm-message');
+            var errorEl = document.getElementById('dm-form-error');
+            var btn = document.getElementById('dm-request-send-btn');
+            if (usernameEl) usernameEl.value = '';
+            if (messageEl) messageEl.value = '';
+            if (errorEl) errorEl.textContent = '';
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = dmT('kindlechat.dm.send_request', 'Send Request');
+            }
+            showDmModal('dm-new-modal-content');
+            if (usernameEl && usernameEl.focus) usernameEl.focus();
+        }
+
+        function sendDmRequest() {
+            if (!currentUser || !dmCanInitiate) return;
+            if (currentUserRulesVersion < RULES_VERSION) {
+                openRulesModal('accept');
+                return;
+            }
+            var usernameEl = document.getElementById('dm-username');
+            var messageEl = document.getElementById('dm-message');
+            var errorEl = document.getElementById('dm-form-error');
+            var btn = document.getElementById('dm-request-send-btn');
+            var username = usernameEl ? usernameEl.value.trim().replace(/^@/, '') : '';
+            var text = messageEl ? messageEl.value.trim() : '';
+
+            var fail = function (message) {
+                if (errorEl) errorEl.textContent = message;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = dmT('kindlechat.dm.send_request', 'Send Request');
+                }
+            };
+
+            if (!username) { fail(dmT('kindlechat.dm.username_required', 'Enter a username.')); return; }
+            if (!text) { fail(dmT('kindlechat.dm.message_required', 'Enter a message.')); return; }
+            if (text.length > DM_MAX_REQUEST) {
+                fail(dmT('kindlechat.dm.request_too_long', 'Message requests cannot exceed 300 characters.'));
+                return;
+            }
+            if (containsUrl(text)) { fail(dmT('kindlechat.dm.no_links', 'Links and URLs are not allowed.')); return; }
+            if (containsPromotedTerm(text)) { fail(dmT('kindlechat.dm.no_promo', 'Promotional content is not allowed.')); return; }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = dmT('kindlechat.dm.sending', 'Sending...');
+            }
+
+            fetchProfileByUsername(username, function (profile) {
+                if (!profile || !profile.uid) {
+                    fail(dmT('kindlechat.dm.user_not_found', 'User not found.'));
+                    return;
+                }
+                if (profile.uid === currentUser.uid) {
+                    fail(dmT('kindlechat.dm.self', "You can't message yourself."));
+                    return;
+                }
+                var requestLang = detectPostLang(text);
+                var requestPayload = { type: 'dm_request', toUid: profile.uid, text: text };
+                if (requestLang) requestPayload.lang = requestLang;
+                callDmWorker(requestPayload).then(function (result) {
+                    if (result.error) {
+                        if (result.code === 'dm_exists' && result.threadId) {
+                            closeModal('dm-new-modal-content');
+                            closeModal('modal-overlay');
+                            if (!dmThreads[result.threadId]) {
+                                dmThreads[result.threadId] = {
+                                    otherUid: profile.uid,
+                                    requestedBy: currentUser.uid,
+                                    status: 'accepted',
+                                    lastMessageAt: Date.now(),
+                                    lastMessageUid: ''
+                                };
+                            }
+                            openDmThread(result.threadId);
+                            return;
+                        }
+                        if (result.code === 'pro_required') {
+                            closeModal('dm-new-modal-content');
+                            closeModal('modal-overlay');
+                            showDmUpsell();
+                            return;
+                        }
+                        if (result.code === 'dm_disabled') {
+                            closeModal('dm-new-modal-content');
+                            closeModal('modal-overlay');
+                            dmEnabled = false;
+                            var tab = document.getElementById('messages-tab');
+                            if (tab) tab.style.display = 'none';
+                            showModal(result.error, false);
+                            return;
+                        }
+                        fail(result.error);
+                        return;
+                    }
+
+                    closeModal('dm-new-modal-content');
+                    closeModal('modal-overlay');
+                    dmThreads[result.threadId] = {
+                        otherUid: profile.uid,
+                        requestedBy: currentUser.uid,
+                        status: 'pending',
+                        lastMessageAt: Date.now(),
+                        lastMessageUid: currentUser.uid
+                    };
+                    updateDmUnreadDot();
+                    openDmThread(result.threadId);
+                    loadPostLanguageSoon();
+                })['catch'](function (e) {
+                    console.error('DM request failed:', e);
+                    fail(dmT('kindlechat.dm.network', 'Network error. Please try again.'));
+                });
+            });
         }
 
         // --- GALLERY LOGIC ---
@@ -2969,7 +5044,7 @@
 
             var thumb = getGalleryThumbnail(msg);
             var typeLabel = getGalleryTypeLabel(msg);
-            var authorName = escapeHtml(msg.user ? msg.user.split('@')[0] : (msg.uid ? msg.uid.substring(0, 8) : 'Unknown'));
+            var authorName = escapeHtml(censorUsername(msg.user ? msg.user.split('@')[0] : (msg.uid ? msg.uid.substring(0, 8) : 'Unknown')));
             var timeStr = msg.timestamp ? formatChatTime(msg.timestamp) : '';
             var text = msg.text || '';
             if (text) text = censorText(text);
@@ -3008,7 +5083,7 @@
                 drawAvatar(avatarId, seed);
                 var username = card.username || uid.substring(0, 8);
                 var nameEl = itemEl.querySelector('.gallery-author');
-                if (nameEl) nameEl.textContent = escapeHtml(username);
+                if (nameEl) nameEl.textContent = censorUsername(username);
                 // Cache for other lookups
                 if (username && !usernameToProfile[username]) {
                     usernameToProfile[username] = { uid: uid, avatarSeed: seed };
@@ -3076,17 +5151,9 @@
 
             var reportButtonHtml = '';
             if (currentUser && msg.uid && msg.uid !== currentUser.uid && msg.uid !== 'xEtAch5i5tdiMDTOnL8dXFxM5Nt1') {
-                var safeMsgId2 = safeMsgId.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-                var safeReportedUid = safeUid.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-                var safeSnapshot = ('[Pixel Art] ' + (caption || ''))
-                    .replace(/\\/g, '\\\\\\\\')
-                    .replace(/'/g, "\\'")
-                    .replace(/\n/g, '\\n')
-                    .replace(/\r/g, '\\r')
-                    .replace(/\u0026/g, '\u0026amp;')
-                    .replace(/\u003c/g, '\u0026lt;')
-                    .replace(/\u003e/g, '\u0026gt;')
-                    .replace(/"/g, '\u0026quot;');
+                var safeMsgId2 = escapeJsString(msgId || '');
+                var safeReportedUid = escapeJsString(msg.uid || '');
+                var safeSnapshot = escapeJsString('[Pixel Art] ' + (caption || ''));
                 reportButtonHtml = '<div class="report-btn" style="width:auto; height:auto; padding:4px 10px; border-radius:0; font-size:0.8rem; opacity:1; margin-left:8px;" onclick="rekindleOpenReportModal({contentType:\'kindlechat\',contentId:\'' + safeMsgId2 + '\',contentPath:\'kindlechat/messages/' + safeMsgId2 + '\',reportedUserId:\'' + safeReportedUid + '\',contentSnapshot:\'' + safeSnapshot + '\'})" title="Report" data-i18n="kindlechat.btn.report">Report</div>';
             }
 
@@ -3102,7 +5169,7 @@
                 '</div>' +
                 headerHtml +
                 '<div style="padding: 15px;">' +
-                '<img src="' + safeSrc + '" style="width:512px; height:512px; max-width:100%; border:2px solid black; image-rendering:pixelated; image-rendering:crisp-edges; display:block; margin:0 auto;">' +
+                '<img src="' + safeSrc + '" alt="' + escapeHtml(caption || 'Pixel art') + '" style="width:512px; height:512px; max-width:100%; border:2px solid black; image-rendering:pixelated; image-rendering:crisp-edges; display:block; margin:0 auto;">' +
                 (safeCaption ? '<div style="margin-top:10px; font-size:0.9rem; word-break:break-word;">' + safeCaption + '</div>' : '') +
                 galleryActionsHtml +
                 '</div>';
@@ -3118,7 +5185,7 @@
                     drawAvatar('pixel-modal-avatar', seed);
                     var username = card.username || msg.uid.substring(0, 8);
                     var nameEl = document.getElementById('pixel-modal-username');
-                    if (nameEl) nameEl.textContent = escapeHtml(username);
+                    if (nameEl) nameEl.textContent = censorUsername(username);
                 });
             }
         }
@@ -3187,6 +5254,7 @@
             var frameIdx = 0;
             function loop() {
                 if (imgEl.dataset.playing !== "true") return;
+                if (!imgEl.isConnected) { imgEl.dataset.playing = "false"; return; }
                 frameIdx = (frameIdx + 1) % frames.length;
                 imgEl.src = frames[frameIdx];
                 imgEl.playTimer = setTimeout(loop, 1000 / fps);
@@ -3215,8 +5283,19 @@
         }
 
         function censorText(text) {
-            if (window.filterBadWords) return window.filterBadWords(text);
-            return text;
+            if (!text) return text;
+            var out = text;
+            // Promo mentions are masked even in already-stored messages so old
+            // KindleHub spam stops showing up as free advertising.
+            if (window.rekindleCensorPromotedTerms) out = window.rekindleCensorPromotedTerms(out);
+            if (window.filterBadWords) out = window.filterBadWords(out);
+            return out;
+        }
+
+        function censorUsername(username) {
+            if (!username) return username;
+            if (window.rekindleCensorPromotedUsername) return window.rekindleCensorPromotedUsername(username);
+            return username;
         }
 
         function linkify(inputText) {
@@ -3273,8 +5352,11 @@
         }
 
         // --- DRAW AVATAR (Ported from Neighbourhood/Topics) ---
+        // Accepts an element id or the canvas element itself, so callers can
+        // pre-render while detached (the DM sidebar caches avatars as data URLs
+        // and the bubble helper redraws a canvas it already holds).
         function drawAvatar(canvasId, seed) {
-            var canvas = document.getElementById(canvasId);
+            var canvas = (canvasId && canvasId.nodeType === 1) ? canvasId : document.getElementById(canvasId);
             if (!canvas) return;
             var ctx = canvas.getContext('2d');
             ctx.fillStyle = '#fff';
@@ -3356,9 +5438,9 @@
                     } else if (isPro) {
                         var crownSvg = '<svg class="supporter-crown" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 4L5 18H19L22 4L15 11L12 4L9 11L2 4Z" stroke="black" stroke-width="2" fill="none"/></svg>';
                         var crown = '<a href="http://link.rekindle.ink/donate" target="_blank" style="text-decoration:none;" title="Supporter">' + crownSvg + '</a>';
-                        nameContent = isSelf ? crown + window.t('kindlechat.msg.you', 'You') : crown + '<span style="font-weight:bold;">' + escapeHtml(username) + '</span>';
+                        nameContent = isSelf ? crown + window.t('kindlechat.msg.you', 'You') : crown + '<span style="font-weight:bold;">' + escapeHtml(censorUsername(username)) + '</span>';
                     } else {
-                        nameContent = isSelf ? window.t('kindlechat.msg.you', 'You') : '<span style="font-weight:bold;">' + escapeHtml(username) + '</span>';
+                        nameContent = isSelf ? window.t('kindlechat.msg.you', 'You') : '<span style="font-weight:bold;">' + escapeHtml(censorUsername(username)) + '</span>';
                     }
                     nameEl.innerHTML = nameContent;
                     nameEl.onclick = function () { openUserProfile(uid, username); };
@@ -3379,7 +5461,7 @@
                 // Update game link starter name (if present)
                 var gameStarterEl = msgEl.querySelector('.game-starter-name');
                 if (gameStarterEl) {
-                    gameStarterEl.textContent = username;
+                    gameStarterEl.textContent = censorUsername(username);
                 }
 
                 // Cache for username lookups
@@ -3584,8 +5666,8 @@
             var snippet = escapeHtml(text.substring(0, 80));
             if (text.length > 80) snippet += '...';
 
-            var safeOriginalMsgId = (replyTo.msgId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var safeUsername = escapeHtml(username);
+            var safeOriginalMsgId = escapeJsString(replyTo.msgId || '');
+            var safeUsername = escapeHtml(censorUsername(username));
 
             return '<div class="reply-context" onclick="scrollToReplyMessage(\'' + safeOriginalMsgId + '\')">' +
                 '<div class="reply-context-author">@' + safeUsername + '</div>' +
@@ -3597,6 +5679,12 @@
             var history = document.getElementById('chat-history');
             var div = document.createElement('div');
             var toggleBtnHtml = '';
+            var translateBtnHtml = '';
+            var autoTranslateText = '';
+            var autoTranslateSource = '';
+            var msgLang = normalizeChatLang(msg.lang || '');
+            var myLang = normalizeChatLang(getEffectiveTranslationLang());
+            var langDiffers = chatLangDiffers(msgLang, myLang);
 
             // Determine where this message will be inserted so we can decide
             // whether a reply context preview is needed.
@@ -3612,11 +5700,13 @@
             if (typeof msg.timestamp === 'number') div.dataset.ts = msg.timestamp;
 
             var safeUid = escapeHtml(msg.uid || '');
+            var jsUid = escapeJsString(msg.uid || '');
             var avatarId = 'avatar-' + (msgId || Math.random().toString(36).substr(2, 9));
             var safeUser = escapeHtml(msg.uid ? msg.uid.substring(0, 8) : '');
+            var jsUser = escapeJsString(msg.uid ? msg.uid.substring(0, 8) : '');
             var nameHtml = isSelf
-                ? '<span class="author-name-field" onclick="openUserProfile(\'' + safeUid + '\', \'\')">' + window.t('kindlechat.msg.you', 'You') + '</span>'
-                : '<span class="author-name-field" onclick="openUserProfile(\'' + safeUid + '\', \'\')" style="font-weight:bold;">' + safeUser + '</span>';
+                ? '<span class="author-name-field" onclick="openUserProfile(\'' + jsUid + '\', \'\')">' + window.t('kindlechat.msg.you', 'You') + '</span>'
+                : '<span class="author-name-field" onclick="openUserProfile(\'' + jsUid + '\', \'' + jsUser + '\')" style="font-weight:bold;">' + safeUser + '</span>';
 
 
             var timeStr = msg.timestamp ? formatChatTime(msg.timestamp) : "";
@@ -3627,17 +5717,7 @@
             if (currentUser && currentUsername === 'ukiyo') {
                 if (settings.showAdminTools) {
                     // Escape for JS string literal (single-quoted) inside HTML attribute (double-quoted)
-                    var safeText = msg.text
-                        ? msg.text
-                            .replace(/\\/g, '\\\\\\\\')
-                            .replace(/'/g, "\\'")
-                            .replace(/\n/g, '\\n')
-                            .replace(/\r/g, '\\r')
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/"/g, '&quot;')
-                        : "";
+                    var safeText = escapeJsString(msg.text || '');
 
                     // Reprocess Button
                     if (currentRoomId === 'general') {
@@ -3648,9 +5728,9 @@
                     adminControlsHtml += '<div class="del-btn" onclick="deleteGeneralMessage(\'' + msgId + '\')">✕</div>';
                 }
             } else if (currentUser && isCurrentUserMod && isModeratorMode && currentRoomId === 'general') {
-                var timeoutUidKc = (msg.uid || '').replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+                var timeoutUidKc = escapeJsString(msg.uid || '');
                 if (timeoutUidKc && msg.uid !== currentUser.uid) {
-                    modControlsHtml += '<button style="background:#8a4800;color:white;border:none;padding:1px 6px;font-size:0.7rem;cursor:pointer;font-family:inherit;margin-left:4px;" onclick="timeoutUser(\'' + timeoutUidKc + '\', \'' + (msg.user || '').replace(/\\/g, "\\\\").replace(/'/g, "\\'") + '\')">Timeout</button>';
+                    modControlsHtml += '<button style="background:#8a4800;color:white;border:none;padding:1px 6px;font-size:0.7rem;cursor:pointer;font-family:inherit;margin-left:4px;" onclick="timeoutUser(\'' + timeoutUidKc + '\', \'' + escapeJsString(msg.user || '') + '\')">Timeout</button>';
                 }
                 modControlsHtml += '<button style="background:black;color:white;border:none;padding:1px 6px;font-size:0.7rem;cursor:pointer;font-family:inherit;margin-left:4px;" onclick="deleteGeneralMessage(\'' + msgId + '\')">Delete</button>';
             }
@@ -3658,8 +5738,8 @@
             // REPORT BUTTON (visible to all authenticated users) - circular button like react-btn
             var reportButton = '';
             if (currentUser && msg.uid && msg.uid !== currentUser.uid && msg.uid !== 'xEtAch5i5tdiMDTOnL8dXFxM5Nt1') {
-                var safeMsgId = msgId.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-                var safeReportedUid = (msg.uid || '').replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+                var safeMsgId = escapeJsString(msgId);
+                var safeReportedUid = escapeJsString(msg.uid || '');
                 var msgSnapshot = msg.text || '';
                 if (msg.is_pixel_art && msg.pixel_art) {
                     msgSnapshot = '[Pixel Art] ' + msgSnapshot;
@@ -3667,15 +5747,7 @@
                 if (msg.is_flipnote && msg.flipnote_data) {
                     msgSnapshot = '[Flipbook] ' + msgSnapshot;
                 }
-                var safeSnapshot = msgSnapshot
-                    .replace(/\\/g, '\\\\\\\\')
-                    .replace(/'/g, "\\'")
-                    .replace(/\n/g, '\\n')
-                    .replace(/\r/g, '\\r')
-                    .replace(/\u0026/g, '\u0026amp;')
-                    .replace(/\u003c/g, '\u0026lt;')
-                    .replace(/\u003e/g, '\u0026gt;')
-                    .replace(/"/g, '\u0026quot;');
+                var safeSnapshot = escapeJsString(msgSnapshot);
                 reportButton = '<div class="report-btn" onclick="rekindleOpenReportModal({contentType:\'kindlechat\',contentId:\'' + safeMsgId + '\',contentPath:\'kindlechat/messages/' + safeMsgId + '\',reportedUserId:\'' + safeReportedUid + '\',contentSnapshot:\'' + safeSnapshot + '\'})" title="Report">!</div>';
             }
 
@@ -3703,12 +5775,14 @@
             }
 
             if (msg.is_reaction_image) {
-                bubbleContent = '<div class="msg-bubble ascii">' + messageText + '</div>';
+                bubbleContent = '<div class="msg-bubble ascii">' + escapeHtml(messageText) + '</div>';
                 isSpecialMessage = true;
             } else if (msg.is_game_link) {
                 var parts = msg.text.split(':');
-                var gameType = parts[0];
-                var gameId = parts[1];
+                // msg.text is client-writable: only allow a plain game slug and
+                // encode the id before either is used in an href.
+                var gameType = String(parts[0] || '').replace(/[^a-z0-9_-]/gi, '');
+                var gameId = encodeURIComponent(String(parts[1] || ''));
                 var gameName = gameType.charAt(0).toUpperCase() + gameType.slice(1);
                 var isStarter = msg.uid === currentUser.uid;
 
@@ -3742,8 +5816,8 @@
                 bubbleContent = '<div class="msg-bubble art-bubble" style="padding: 5px; background: white !important; color: black !important; border: 2px solid black !important; outline: none !important;">' +
                     '<a href="flipbook?source=kindlechat" style="font-weight:bold; margin-bottom:5px; font-size:0.8rem; display:block; text-decoration:none; color:black;">' + window.t('kindlechat.art.flipbook', 'Flipbook') + '</a>' +
                     '<div id="flipnote-view-' + msgId + '" style="width:128px; height:128px; border:2px solid black; margin:0 auto; background:white; position:relative; cursor:pointer;" onclick="openGalleryItem(\'' + msgId + '\')">' +
-                    '<img id="flipnote-img-' + msgId + '" src="' + thumb + '" style="width:100%; height:100%; image-rendering:pixelated; display:block;">' +
-                    '<div id="flipnote-overlay-' + msgId + '" style="position:absolute; top:0; left:0; width:100%; height:100%; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.1); font-size:2rem; color:white; text-shadow:1px 1px 0 black;">▶</div>' +
+                    '<img id="flipnote-img-' + escapeHtml(msgId) + '" src="' + escapeHtml(thumb) + '" style="width:100%; height:100%; image-rendering:pixelated; display:block;">' +
+                    '<div id="flipnote-overlay-' + escapeHtml(msgId) + '" style="position:absolute; top:0; left:0; width:100%; height:100%; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.1); font-size:2rem; color:white; text-shadow:1px 1px 0 black;">▶</div>' +
                     '</div>' +
                     ((messageText && messageText !== 'undefined' && messageText !== 'null') ? ('<div style="margin-top:5px; font-size:0.9rem;">' + escapeHtml(messageText) + '</div>') : '') +
                     '</div>';
@@ -3757,7 +5831,7 @@
 
                 bubbleContent = '<div class="msg-bubble art-bubble" style="padding: 5px; background: white !important; color: black !important; border: 2px solid black !important; outline: none !important;">' +
                     '<a href="pixel?source=kindlechat" style="font-weight:bold; margin-bottom:5px; font-size:0.8rem; display:block; text-decoration:none; color:black;">' + window.t('kindlechat.art.pixel', 'Pixel Art') + '</a>' +
-                    '<img src="' + msg.pixel_art + '" onclick="openGalleryItem(\'' + msgId + '\')" style="' +
+                    '<img src="' + escapeHtml(msg.pixel_art) + '" alt="' + escapeHtml(messageText || 'Pixel art') + '" onclick="openGalleryItem(\'' + escapeJsString(msgId) + '\')" style="' +
                     'image-rendering: -webkit-optimize-contrast; ' +
                     'image-rendering: crisp-edges; ' +
                     'image-rendering: pixelated; ' +
@@ -3814,7 +5888,7 @@
                 if (settings.showTranslations && hasTranslation) {
                     textToDisplay = wrapAsciiEmojis(linkify(escapeHtml(translationText)));
                     // Tagify translation too? Maybe not purely necessary but consistent. Let's tagify it.
-                    textToDisplay = tagify(textToDisplay, msgId);
+                    textToDisplay = tagify(textToDisplay);
 
                     toggleBtnHtml = ' <span id="toggle-' + msgId + '" onclick="toggleTranslation(\'' + msgId + '\')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left: 5px;">' + window.t('kindlechat.msg.show_original', 'Show Original') + '</span>';
 
@@ -3824,9 +5898,35 @@
                     // It should also do tagify.
 
                     // Store escaped original text
-                    bubbleContent = '<div id="bubble-' + msgId + '" class="msg-bubble" data-state="translated" data-original="' + escapeHtml(messageText) + '" data-translated="' + escapeHtml(translationText) + '">' + textToDisplay + '</div>';
+                    bubbleContent = '<div id="bubble-' + msgId + '" class="msg-bubble" data-state="translated" data-lang="' + escapeHtml(msgLang) + '" data-original="' + escapeHtml(messageText) + '" data-translated="' + escapeHtml(translationText) + '">' + textToDisplay + '</div>';
                 } else {
-                    bubbleContent = '<div class="msg-bubble">' + tagify(linkify(wrapAsciiEmojis(textToDisplay)), msgId) + '</div>';
+                    // Keep the id + original text on an untranslated bubble so a
+                    // later on-demand translation can patch it in place (and so
+                    // toggleTranslation can restore the original).
+                    bubbleContent = '<div id="bubble-' + msgId + '" class="msg-bubble" data-state="original" data-lang="' + escapeHtml(msgLang) + '" data-original="' + escapeHtml(messageText) + '">' + tagify(linkify(wrapAsciiEmojis(textToDisplay))) + '</div>';
+
+                    // On-demand translation link. The server-side fan-out that
+                    // filled translations_by_lang is dead (Google's gtx endpoint
+                    // blocks every client since 2026-10-19), so the reader
+                    // translates what they actually want to read, in their own
+                    // browser. See js/translate-client.js.
+                    //
+                    // The button is rendered only for a message whose stored
+                    // language is KNOWN and differs from the reader's. Unknown
+                    // legacy messages do not show a button; the auto queue
+                    // detects them on view and either translates them (adding
+                    // Show Original) or leaves them alone.
+                    if (settings.showTranslations && !isSelf && currentUser && messageText && String(messageText).length > 1) {
+                        var knownForeign = !!msgLang && msgLang !== myLang;
+                        if (knownForeign) {
+                            translateBtnHtml = ' <span id="translate-' + msgId + '" onclick="requestTranslation(\'' + msgId + '\')" style="display:none; font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left: 5px;">' + window.t('translate.btn.translate', 'Translate') + '</span>';
+                        }
+                        if (langDiffers) {
+                            // Known foreign or unknown/legacy: translate on view.
+                            autoTranslateText = messageText;
+                            autoTranslateSource = msgLang || 'auto';
+                        }
+                    }
                 }
             }
 
@@ -3846,9 +5946,9 @@
                 ? '<div class="save-btn" onclick="savePixelArt(\'' + msgId + '\', \'' + escapeHtml(msg.uid || '') + '\', this)">' + (window.t ? window.t('pixel.btn.save', 'Save') : 'Save') + '</div>'
                 : '';
 
-            // TRANSLATION BUTTON (Client-side fallback) - REMOVED
-            // TRANSLATION BUTTON (Client-side fallback) - REMOVED for special messages
-            var transBtnHtml = (isSpecialMessage || msg.is_pixel_art) ? '' : toggleBtnHtml;
+            // "Show Original" (stored translation) or "Translate" (on demand).
+            // Special/pixel messages carry no body text to translate.
+            var transBtnHtml = (isSpecialMessage || msg.is_pixel_art) ? '' : (toggleBtnHtml + translateBtnHtml);
 
             var replyContextHtml = '';
             if (msg.replyTo && shouldShowReplyContext(msg.replyTo, insertionInfo, history)) {
@@ -3858,7 +5958,7 @@
             div.innerHTML = '<div class="msg-meta">' + nameHtml + '<span>' + timeStr + '</span>' + transBtnHtml + modControlsHtml + '</div>' +
                 replyContextHtml +
                 '<div class="msg-row">' +
-                '<canvas id="' + avatarId + '" class="msg-avatar" width="32" height="32" onclick="openUserProfile(\'' + safeUid + '\', \'' + safeUser + '\')"></canvas>' +
+                '<canvas id="' + avatarId + '" class="msg-avatar" width="32" height="32" onclick="openUserProfile(\'' + jsUid + '\', \'' + jsUser + '\')"></canvas>' +
                 '<div style="display:flex; align-items:center; min-width: 0;">' +
                 (isSelf ? reactButton + replyButton + reportButton + saveButton + adminControlsHtml : '') +
                 bubbleContent +
@@ -3925,15 +6025,78 @@
             // Resolve avatar after DOM insertion.
             resolveMessageAuthor(msg.uid, div, avatarId);
 
+            if (autoTranslateText && !langTranslations[msgId] && !pendingTranslations[msgId]) {
+                queueMessageAutoTranslation(msgId, autoTranslateText, autoTranslateSource, myLang);
+            }
+
             if (msg.is_flipnote && msg.flipnote_data) {
                 setTimeout(function () { playFlipnote(msgId); }, 200);
             }
+        }
+
+        // --- WORKER OUTAGE HANDLING ---
+        // Cloudflare's Workers Free plan allows 100k requests/day across ALL
+        // Workers *and* Pages Functions. When that is used up, every worker URL
+        // answers 429 with the plain-text "error code: 1027" page, which carries
+        // no CORS headers. The browser therefore rejects the fetch itself with
+        // Safari's "Load failed" / Chrome's "Failed to fetch", so the user used
+        // to see "Unable to post: Load failed" on every attempt, with a fresh
+        // alert each time (suggestions reports 2026-10-24: "Failed To fetch" and
+        // "Remove the alerts in ... KindleChat").
+        //
+        // Treat any transport failure, or a non-JSON 429/5xx, as a temporary
+        // service outage: show ONE plain message and stop hitting the worker for
+        // two minutes so a quota-exhausted day is not made worse.
+        var SERVICE_OUTAGE_COOLDOWN_MS = 120000;
+        var SERVICE_OUTAGE_MESSAGE = 'Chat is temporarily unavailable. Please try again in a few minutes.';
+        var serviceOutageUntil = 0;
+
+        function isTransportFailure(e) {
+            if (!e) return false;
+            var msg = String(e.message || '');
+            return e.name === 'TypeError' || /load failed|failed to fetch|networkerror|network request failed/i.test(msg);
+        }
+
+        function serviceOutageActive() {
+            return serviceOutageUntil > Date.now();
+        }
+
+        function noteServiceOutage() {
+            serviceOutageUntil = Date.now() + SERVICE_OUTAGE_COOLDOWN_MS;
+        }
+
+        function showServiceOutage() {
+            showModal(SERVICE_OUTAGE_MESSAGE, false);
+        }
+
+        // Parses a worker response. Returns the JSON body (with __status), or
+        // null when the response is a platform outage (non-JSON 429/5xx) after
+        // arming the cooldown. Throws for other non-JSON responses.
+        function readWorkerJson(resp) {
+            return resp.text().then(function (raw) {
+                var data = null;
+                if (raw) {
+                    try { data = JSON.parse(raw); } catch (e) { data = null; }
+                }
+                if (!data) {
+                    if (resp.status === 429 || resp.status >= 500) {
+                        noteServiceOutage();
+                        return null;
+                    }
+                    throw new Error('HTTP ' + resp.status);
+                }
+                data.__status = resp.status;
+                return data;
+            });
         }
 
         var isSendingMessage = false;
 
         function resetSendState() {
             isSendingMessage = false;
+            if (window.rekindleTranslateClient && window.rekindleTranslateClient.resumeAutoTranslate) {
+                window.rekindleTranslateClient.resumeAutoTranslate();
+            }
             var sendBtn = document.getElementById('send-btn');
             if (sendBtn) {
                 sendBtn.disabled = false;
@@ -3954,6 +6117,13 @@
             if (isSendingMessage) return;
             if (!currentUser) return;
 
+            // DMs have their own send path (acceptance state, text-only, no
+            // shared chat spam state - the worker's dm bucket owns that).
+            if (currentRoomId !== 'general') {
+                sendDmMessage();
+                return;
+            }
+
             var inputEl = document.getElementById('msg-input');
             var text = getComposerText().trim();
 
@@ -3964,7 +6134,7 @@
 
             // Force reply @username prefix when replying to a specific message
             if (replyTarget) {
-                var prefix = '@' + replyTarget.username + ' ';
+                var prefix = '@' + censorUsername(replyTarget.username) + ' ';
                 if (text.indexOf(prefix) !== 0) {
                     text = prefix + text;
                     // Show the prefix in the composer without destroying emoji images
@@ -3977,36 +6147,48 @@
             if (containsUrl(text)) { showModal('Links and URLs are not allowed.'); return; }
             if (containsPromotedTerm(text)) { showModal('Promotional content is not allowed.'); return; }
 
+            // Repeated-message guard. The moderation worker enforces the same
+            // rule server-side; this local mirror blocks the obvious repeat
+            // instantly (e.g. "hello hello hello" for the tenth time) without
+            // a round-trip. State is localStorage only - no Firebase calls.
+            var spamCheck = window.rekindleChatSpamCheck ? window.rekindleChatSpamCheck(text) : null;
+            if (spamCheck && spamCheck.blocked) {
+                showModal(spamCheck.message, false);
+                return;
+            }
+
             checkRules(function () {
-                // Timeout check
-                rtdb.ref('timeouts/' + currentUser.uid).once('value').then(function (snap) {
-                    var t = snap.val();
-                    console.log('[Timeout check] Data:', t);
-                    if (t && t.until > Date.now()) {
-                        var remaining = Math.ceil((t.until - Date.now()) / 60000);
-                        showModal('You are timed out. Please wait ' + remaining + ' minute(s) before posting.');
-                        resetSendState();
-                        return;
-                    }
-                    doSendMessage(inputEl, text);
-                }).catch(function (err) {
-                    console.error('[Timeout check] Error reading timeout:', err && err.code ? err.code : err);
-                    doSendMessage(inputEl, text);
-                });
+                // Timeout is enforced server-side by the moderation worker;
+                // its error response is shown via showModal(result.error) in doSendMessage.
+                doSendMessage(inputEl, text);
             });
         }
 
         function doSendMessage(inputEl, text) {
             if (isSendingMessage) return;
+            if (serviceOutageActive()) {
+                // One message per cooldown instead of an alert on every click.
+                showServiceOutage();
+                return;
+            }
             isSendingMessage = true;
             markSendBusy();
-            setTimeout(function () { isSendingMessage = false; }, 3000); // failsafe unlock
+            if (window.rekindleTranslateClient && window.rekindleTranslateClient.pauseAutoTranslate) {
+                window.rekindleTranslateClient.pauseAutoTranslate();
+            }
+            // Escape hatch only for a genuinely stuck request: every settle path
+            // calls resetSendState(). At 3s this fired while a slow moderation
+            // POST was still in flight and let the same text be sent twice.
+            setTimeout(function () { isSendingMessage = false; }, 30000);
 
             // SPAM PROTECTION + MODERATION: Enforced via Cloudflare Worker
             var tokenSource = socialAuth.currentUser || currentUser;
-            console.log('[KindleChat] Post token source:', tokenSource === socialAuth.currentUser ? 'social' : 'main', 'socialAuth.currentUser:', !!socialAuth.currentUser, 'currentUser:', !!currentUser);
-            tokenSource.getIdToken(true).then(function (token) {
+            // Cached token first; only force a refresh if the worker rejects it
+            // (this used to cost an Identity Toolkit round trip per message).
+            tokenSource.getIdToken().then(function (token) {
+                var detectedLang = detectPostLang(text);
                 var bodyObj = { type: 'kindlechat', text: text };
+                if (detectedLang) bodyObj.lang = detectedLang;
                 if (replyTarget) {
                     bodyObj.replyTo = {
                         msgId: replyTarget.msgId,
@@ -4015,18 +6197,33 @@
                         text: (replyTarget.text || '').substring(0, 120)
                     };
                 }
-                return fetch(MODERATION_WORKER_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
-                    },
-                    body: JSON.stringify(bodyObj)
-                }).then(function (resp) { return resp.json(); });
+                function postWith(t) {
+                    return fetch(MODERATION_WORKER_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + t
+                        },
+                        body: JSON.stringify(bodyObj)
+                    });
+                }
+                return postWith(token).then(function (resp) {
+                    if (resp.status === 401 || resp.status === 403) {
+                        return tokenSource.getIdToken(true).then(postWith);
+                    }
+                    return resp;
+                }).then(readWorkerJson);
             }).then(function (result) {
+                if (!result) {
+                    resetSendState();
+                    showServiceOutage();
+                    return;
+                }
                 if (result.allowed === false) {
                     var waitSec = Math.ceil((result.retryAfter || 20000) / 1000);
-                    showModal('Please wait ' + waitSec + ' seconds before posting again.', false);
+                    // The worker now sends a specific reason for repeat-spam
+                    // rejections; fall back to the generic wait message.
+                    showModal(result.error || ('Please wait ' + waitSec + ' seconds before posting again.'), false);
                     resetSendState();
                     return;
                 }
@@ -4038,13 +6235,24 @@
                 inputEl.innerHTML = '';
                 replyTarget = null;
                 resetSendState();
-                if (TRANSLATION_WORKER_URL) {
-                    fireTranslationRequest(currentUser.uid, text, result.key, 1);
-                }
+                if (window.rekindleRecordChatMessage) window.rekindleRecordChatMessage(text);
+                loadPostLanguageSoon();
+                // Server-side translation fan-out disabled 2026-10-26: it cost up
+                // to 4 Worker invocations and 4 forced token refreshes per message
+                // and has produced nothing since Google blocked the gtx endpoint on
+                // 2026-10-19. Readers now translate on demand in their own browser
+                // (requestTranslation + js/translate-client.js). Re-enable only
+                // together with a keyed provider.
             }).catch(function (e) {
                 resetSendState();
                 console.error('Error posting message:', e);
-                if (e && e.code === 'PERMISSION_DENIED') {
+                if (isTransportFailure(e) || serviceOutageActive()) {
+                    // A transport failure here is almost always the quota-limited
+                    // Cloudflare 1027 page (no CORS headers), not a real bug in
+                    // the message. Do not surface "Load failed" to the user.
+                    noteServiceOutage();
+                    showServiceOutage();
+                } else if (e && e.code === 'PERMISSION_DENIED') {
                     showModal('Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.', false);
                 } else {
                     showModal('Unable to post: ' + (e && e.message ? e.message : 'Unknown error') + '. Please try again.', false);
@@ -4055,7 +6263,6 @@
 
         function saveSettings() {
             settings.showTranslations = document.getElementById('setting-show-translations').checked;
-            settings.translationLang = document.getElementById('setting-translation-lang').value || 'auto';
             var enterToSend = document.getElementById('setting-enter-to-send').checked;
 
             if (currentUsername === 'ukiyo') {
@@ -4064,6 +6271,10 @@
 
             localStorage.setItem('kindlechat_settings', JSON.stringify(settings));
             localStorage.setItem('rekindle_enter_to_send_chat', enterToSend);
+
+            // DM request preference is server-side (worker reads it before
+            // creating a request from a ReKindle+ member).
+            if (dmEnabled) saveDmPrefs();
 
             // Reload messages to apply changes
             loadMessages();
@@ -4083,7 +6294,6 @@
                     var parsed = JSON.parse(saved);
                     settings.showTranslations = parsed.showTranslations !== undefined ? parsed.showTranslations : settings.showTranslations;
                     settings.showAdminTools = parsed.showAdminTools !== undefined ? parsed.showAdminTools : false;
-                    settings.translationLang = parsed.translationLang || 'auto';
                 } catch (e) { }
             }
 
@@ -4105,7 +6315,6 @@
             if (!currentUser) return;
 
             // Visual feedback?
-            console.log("Reprocessing message:", msgId);
 
             var tokenSource = socialAuth.currentUser || currentUser;
             tokenSource.getIdToken(true).then(function (token) {
@@ -4122,10 +6331,11 @@
                         reprocess: true
                     })
                 })
-                    .then(function (resp) { return resp.json(); })
+                    .then(readWorkerJson)
                     .then(function (data) {
-                        if (data.success) {
-                            console.log("Reprocess success:", data);
+                        if (!data) {
+                            showServiceOutage();
+                        } else if (data.success) {
                             // No need to reload, RTDB listener will update the translation
                         } else {
                             console.error("Reprocess error:", data);
@@ -4134,7 +6344,12 @@
                     })
                 ['catch'](function (err) {
                     console.error("Reprocess network error:", err);
-                    showModal("Network error during reprocess.");
+                    if (isTransportFailure(err) || serviceOutageActive()) {
+                        noteServiceOutage();
+                        showServiceOutage();
+                    } else {
+                        showModal("Network error during reprocess.");
+                    }
                 });
             });
         }
@@ -4192,7 +6407,7 @@
             var deleteErrorEl = document.createElement('div');
             deleteErrorEl.style.cssText = 'min-height:16px;color:red;font-size:0.8rem;margin-bottom:8px;';
             var btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+            btnRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:end;gap:8px;';
             var cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = 'font-family:inherit;font-size:0.8rem;border:2px solid black;background:white;padding:4px 12px;cursor:pointer;box-shadow:2px 2px 0 black;';
@@ -4241,7 +6456,7 @@
             durLabel.style.cssText = 'display:block;font-weight:bold;font-size:0.8rem;margin-bottom:4px;';
             durLabel.textContent = 'Duration';
             var durRow = document.createElement('div');
-            durRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;';
+            durRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:start;gap:8px;align-items:center;margin-bottom:10px;';
             var durInput = document.createElement('input');
             durInput.type = 'number';
             durInput.min = '1';
@@ -4273,7 +6488,7 @@
             var errorEl = document.createElement('div');
             errorEl.style.cssText = 'min-height:16px;color:red;font-size:0.8rem;margin-bottom:8px;';
             var btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+            btnRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:end;gap:8px;';
             var cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = 'font-family:inherit;font-size:0.8rem;border:2px solid black;background:white;padding:4px 12px;cursor:pointer;box-shadow:2px 2px 0 black;';
@@ -4398,6 +6613,10 @@
         var TRANSLATION_MAX_ATTEMPTS = 4;
         var TRANSLATION_RETRY_DELAYS_MS = [20000, 60000, 180000]; // delay before attempts 2, 3, 4
 
+        // RETIRED 2026-10-26 — do not call this. The worker's provider (Google
+        // gtx) is blocked (see js/translate-client.js), so every attempt failed
+        // while still costing a Worker invocation and a forced token refresh.
+        // Kept only as the reference implementation for a future keyed provider.
         function fireTranslationRequest(uid, text, msgId, attempt, missingLangs, sourceLang) {
             if (!currentUser) return;
             attempt = attempt || 1;
@@ -4417,6 +6636,13 @@
                 }, delay);
             };
 
+            // Do not add more requests while the account is quota-limited: the
+            // next scheduled attempt re-checks after the cooldown.
+            if (serviceOutageActive()) {
+                scheduleRetry(missingLangs || null, sourceLang || null);
+                return;
+            }
+
             var tokenSource = socialAuth.currentUser || currentUser;
             tokenSource.getIdToken(true).then(function (token) {
                 fetch(TRANSLATION_WORKER_URL, {
@@ -4427,15 +6653,24 @@
                     },
                     body: JSON.stringify(body)
                 }).then(function (resp) {
+                    // 1027/429 comes from the Cloudflare edge as plain text with
+                    // no CORS headers. There is nothing to retry for a few
+                    // minutes, so arm the cooldown and drop this attempt.
+                    if (resp.status === 429 || resp.status >= 500) {
+                        noteServiceOutage();
+                        return null;
+                    }
                     if (!resp.ok) throw new Error("HTTP " + resp.status);
                     return resp.json();
                 }).then(function (json) {
+                    if (!json) return;
                     var missing = (json && json.missing) || [];
                     var src = (json && json.sourceLang) || sourceLang || null;
                     if (missing.length > 0) {
                         scheduleRetry(missing, src);
                     }
                 })['catch'](function (err) {
+                    if (isTransportFailure(err)) noteServiceOutage();
                     console.warn("Translation request failed (attempt " + attempt + "):", err);
                     scheduleRetry(missingLangs || null, sourceLang || null);
                 });
@@ -4445,61 +6680,10 @@
             });
         }
 
-        // --- GENERAL CHANNEL: Send via Worker ---
-        function sendGeneralMessageViaWorker(text) {
-            if (!currentUser) {
-                console.error("Cannot send message: Not authenticated");
-                sendGeneralMessageToRTDB(text);
-                return;
-            }
-            if (containsUrl(text)) { showModal('Links and URLs are not allowed.'); return; }
-            if (containsPromotedTerm(text)) { showModal('Promotional content is not allowed.'); return; }
-
-            // Write message immediately so it appears at once, then translate in background
-            var messageData = {
-                uid: currentUser.uid,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                text: text
-            };
-
-            generalChatRef.push(messageData).then(function (ref) {
-                var msgId = ref.key;
-
-                resetSendState();
-
-                // Fire translation in background with retry — child_changed will update the bubble when done
-                fireTranslationRequest(currentUser.uid, text, msgId, 1);
-            })['catch'](function (e) {
-                resetSendState();
-                console.error("Error sending general message:", e);
-                if (e && e.code === 'PERMISSION_DENIED') {
-                    showModal('Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.', false);
-                } else {
-                    showModal('Unable to post: ' + (e && e.message ? e.message : 'Unknown error') + '. Please try again.', false);
-                }
-            });
-        }
-
-        // --- GENERAL CHANNEL: Send to Realtime Database (Direct/Fallback) ---
-        function sendGeneralMessageToRTDB(text) {
-            var messageData = {
-                uid: currentUser.uid,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                text: text
-            };
-
-            generalChatRef.push(messageData).then(function () {
-                resetSendState();
-            })['catch'](function (e) {
-                resetSendState();
-                console.error("Error sending general message:", e);
-                if (e && e.code === 'PERMISSION_DENIED') {
-                    showModal('Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.', false);
-                } else {
-                    showModal('Unable to post: ' + (e && e.message ? e.message : 'Unknown error') + '. Please try again.', false);
-                }
-            });
-        }
+        // The old sendGeneralMessageViaWorker()/sendGeneralMessageToRTDB() pair
+        // was removed: nothing called it, and it wrote straight to
+        // kindlechat/messages, bypassing the moderation worker, the rate limit
+        // and the repetition guard. doSendMessage() is the only send path.
 
         // --- DMs: Send to Firestore ---
         // --- PIXEL ART SAVING ---
@@ -4685,7 +6869,152 @@
             });
         }
 
+        // --- ON-DEMAND TRANSLATION (2026-10-26) ---
+        // The server-side fan-out is dead: Google's unofficial gtx endpoint
+        // answers every non-Google client with a bot-block page (verified
+        // 2026-10-26 from a residential IP and from Cloudflare egress, and every
+        // public lingva mirror is down with it). Translations therefore run in
+        // this browser via js/translate-client.js, one request per explicit tap,
+        // never during a feed render: the per-IP budget is characters/day.
+        var pendingTranslations = {};
+
+        // Feed-view auto translation. Queued by js/translate-client.js (one
+        // request at a time) so a busy room cannot fire 30 MyMemory calls in one
+        // paint; `langTranslations` makes a re-render free.
+        function showChatTranslateLink(msgId) {
+            var link = document.getElementById('translate-' + msgId);
+            if (link) link.style.display = 'inline-block';
+        }
+
+        function queueMessageAutoTranslation(msgId, text, source, target) {
+            var client = window.rekindleTranslateClient;
+            if (!client || typeof client.autoTranslate !== 'function') return;
+            var queued = client.autoTranslate({
+                id: 'kindlechat:' + msgId,
+                text: text,
+                source: source,
+                target: target,
+                onFail: function () { showChatTranslateLink(msgId); },
+                apply: function (translated) {
+                    if (!translated) return;
+                    if (String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                        // Detection says this is already the reader's language;
+                        // retire the manual link rather than leaving a no-op.
+                        var sameLink = document.getElementById('translate-' + msgId);
+                        if (sameLink && sameLink.parentNode) sameLink.parentNode.removeChild(sameLink);
+                        return;
+                    }
+                    langTranslations[msgId] = translated;
+                    applyTranslationToRenderedMessage(msgId, translated);
+                    var link = document.getElementById('translate-' + msgId);
+                    if (link && link.parentNode) link.parentNode.removeChild(link);
+                }
+            });
+            // Hidden unless automatic translation could not be queued (budget,
+            // cap, offline). This is the "translate buttons hidden by default"
+            // fallback.
+            if (!queued) showChatTranslateLink(msgId);
+        }
+
+        function requestTranslation(msgId) {
+            var link = document.getElementById('translate-' + msgId);
+            if (!link || pendingTranslations[msgId] || langTranslations[msgId]) return;
+
+            var bubble = document.getElementById('bubble-' + msgId);
+            var text = bubble ? (bubble.getAttribute('data-original') || '') : '';
+            if (!text) {
+                var cachedMsg = generalMsgData[msgId];
+                text = (cachedMsg && cachedMsg.text) || '';
+            }
+            if (!text) return;
+
+            if (!window.rekindleTranslateClient) {
+                link.textContent = window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+                return;
+            }
+
+            var target = getEffectiveTranslationLang();
+            // Use the stored detection as the source when we have it: it is more
+            // accurate than re-detecting a short message, and MyMemory then gets
+            // an explicit pair instead of its own guess.
+            var knownSource = bubble ? (bubble.getAttribute('data-lang') || '') : '';
+            if (!knownSource) {
+                var knownMsg = generalMsgData[msgId];
+                knownSource = (knownMsg && knownMsg.lang) || '';
+            }
+            var source = knownSource || 'auto';
+            pendingTranslations[msgId] = true;
+            link.textContent = window.t('translate.msg.translating', 'Translating...');
+
+            window.rekindleTranslateClient.translate(text, source, target).then(function (translated) {
+                delete pendingTranslations[msgId];
+                if (!translated || String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                    // Already written in the reader's language: nothing to show.
+                    link.textContent = window.t('translate.msg.same_language', 'Already in this language');
+                    return;
+                }
+                langTranslations[msgId] = translated;
+                applyTranslationToRenderedMessage(msgId, translated);
+                if (link.parentNode) link.parentNode.removeChild(link);
+            })['catch'](function (e) {
+                delete pendingTranslations[msgId];
+                var message = (e && e.code === 'budget')
+                    ? window.t('translate.msg.budget', 'Translation limit for this session reached. Try again later.')
+                    : window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+                link.textContent = message;
+            });
+        }
+
         // --- TRANSLATION FUNCTION ---
+        // A translation arriving used to force a full renderMessage() rebuild of
+        // the bubble (innerHTML + emoji walk + avatar redraw + author lookup), for
+        // every message in the live window on load. Patch the bubble in place.
+        // Returns true when the message was handled (or did not need handling).
+        function applyTranslationToRenderedMessage(msgId, text) {
+            if (!settings.showTranslations) return true;
+            var bubble = document.getElementById('bubble-' + msgId);
+            if (!bubble) return false;
+
+            var cachedMsg = generalMsgData[msgId];
+            var originalText = (cachedMsg && cachedMsg.text) || bubble.getAttribute('data-original') || '';
+            if (!originalText) return false;
+            if (String(text).toLowerCase().trim() === String(originalText).toLowerCase().trim()) {
+                return true; // identity translation: nothing to show
+            }
+
+            var safeText = censorText(text);
+            bubble.setAttribute('data-state', 'translated');
+            // Store raw text: setAttribute does not parse HTML entities. Escaping
+            // here would store `&#039;` literally, and toggleTranslation() would
+            // escape it again on the way out (the "I&#039;ll" bug).
+            bubble.setAttribute('data-original', originalText);
+            bubble.setAttribute('data-translated', safeText);
+            bubble.innerHTML = tagify(wrapAsciiEmojis(linkify(escapeHtml(safeText))));
+
+            var link = document.getElementById('translate-' + msgId);
+            if (link && link.parentNode) link.parentNode.removeChild(link);
+
+            // .msg-meta is a sibling of .msg-row, not a descendant of the
+            // bubble's immediate parent. Walking up to .msg is what makes the
+            // Show Original control appear for an on-view translation.
+            var msgEl = bubble.closest ? bubble.closest('.msg') : null;
+            if (!msgEl) {
+                var walker = bubble;
+                while (walker && !(walker.classList && walker.classList.contains('msg'))) walker = walker.parentNode;
+                msgEl = walker;
+            }
+            var meta = msgEl ? msgEl.querySelector('.msg-meta') : null;
+            if (meta && !document.getElementById('toggle-' + msgId)) {
+                var span = document.createElement('span');
+                span.id = 'toggle-' + msgId;
+                span.style.cssText = 'font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;';
+                span.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
+                span.onclick = function () { toggleTranslation(msgId); };
+                meta.appendChild(span);
+            }
+            return true;
+        }
+
         function toggleTranslation(msgId) {
             var bubble = document.getElementById('bubble-' + msgId);
             var toggleBtn = document.getElementById('toggle-' + msgId);
@@ -4699,68 +7028,28 @@
                 // Switch to Original
                 // Need to re-apply linkify AND tagify
                 var safeOriginal = escapeHtml(originalText);
-                bubble.innerHTML = tagify(linkify(safeOriginal), msgId);
+                bubble.innerHTML = tagify(linkify(safeOriginal));
                 bubble.setAttribute('data-state', 'original');
                 toggleBtn.textContent = window.t('kindlechat.msg.show_translated', 'Show Translated');
             } else {
                 // Switch back to Translated
                 var safeTranslated = escapeHtml(translatedText);
-                bubble.innerHTML = tagify(linkify(safeTranslated), msgId);
+                bubble.innerHTML = tagify(linkify(safeTranslated));
                 bubble.setAttribute('data-state', 'translated');
                 toggleBtn.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
             }
         }
 
         // --- TAGGING FUNCTIONS ---
-        function tagify(htmlText, msgId) {
+        function tagify(htmlText) {
             // Regex to match @username. 
             // We use a negative lookbehind or simple boundary check.
             // Be careful not to break HTML attributes (like href from linkify).
             // A simple approach: match @username that is preceded by start-of-line or whitespace/tags
             // and followed by non-word char.
             return htmlText.replace(/(^|\s|>|&nbsp;)@([a-zA-Z0-9_]+)/g, function (match, prefix, username) {
-                return prefix + '<span class="user-tag" onclick="scrollToLastUserMessage(\'' + username + '\', \'' + msgId + '\')">@' + username + '</span>';
+                return prefix + '<span class="user-tag">@' + username + '</span>';
             });
-        }
-
-        function scrollToLastUserMessage(targetUser, currentMsgId) {
-            // Stop propagation not needed if we are careful, but good practice if bubble had click
-            if (window.event) window.event.stopPropagation();
-
-            var allMsgs = Array.from(document.querySelectorAll('.msg'));
-            // Find index of current message
-            var currentIdx = allMsgs.findIndex(function (m) { return m.dataset.msgId === currentMsgId; });
-
-            if (currentIdx <= 0) {
-                return;
-            }
-
-            // Search backwards
-            for (var i = currentIdx - 1; i >= 0; i--) {
-                if (allMsgs[i].dataset.user === targetUser) {
-                    var targetMsg = allMsgs[i];
-                    targetMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                    // Visual feedback (flash border)
-                    var bubble = targetMsg.querySelector('.msg-bubble');
-                    if (bubble) {
-                        var originalBorder = bubble.style.borderColor;
-                        var originalShadow = bubble.style.boxShadow;
-
-                        bubble.style.borderColor = 'black';
-                        bubble.style.boxShadow = '0 0 10px yellow'; // Highlight
-
-                        setTimeout(function () {
-                            bubble.style.borderColor = originalBorder;
-                            bubble.style.boxShadow = originalShadow;
-                        }, 1500);
-                    }
-                    return;
-                }
-            }
-            // If not found
-            // If not found
-            showModal("No previous messages found from @" + targetUser + " in loaded history.", false);
         }
 
         // LEGACY: Old translateMessage removed.
@@ -4772,7 +7061,6 @@
         function toggleGeneralReactionRTDB(msgId, reaction) {
             var userUID = currentUser.uid;
             var reactionRef = socialRtdb.ref('kindlechat/messages/' + msgId + '/reactions/' + userUID);
-            var msgRef = socialRtdb.ref('kindlechat/messages/' + msgId);
 
             // Get current reaction first
             reactionRef.once('value').then(function (snapshot) {
@@ -4781,21 +7069,32 @@
 
                 if (currentReaction === reaction) {
                     // REMOVE: User clicks same reaction
-                    return reactionRef.remove();
+                    return reactionRef.remove().then(function () {
+                        applyLocalReaction(msgId, userUID, null);
+                    });
                 } else {
                     // ADD/CHANGE
-                    return reactionRef.set({ reaction: reaction, username: currentUsername });
+                    return reactionRef.set({ reaction: reaction, username: currentUsername }).then(function () {
+                        applyLocalReaction(msgId, userUID, reaction);
+                    });
                 }
-            }).then(function () {
-                // RTDB listener will auto-update the UI, but let's re-fetch and render immediately for responsiveness
-                msgRef.once('value').then(function (snap) {
-                    if (snap.exists()) {
-                        renderMessage(snap.val(), msgId);
-                    }
-                });
             })['catch'](function (e) {
                 console.error("Error toggling general reaction:", e);
             });
+        }
+
+        // Optimistically mirror a reaction write in the local cache and re-render.
+        // The RTDB child_changed listener stays the source of truth.
+        function applyLocalReaction(msgId, userUID, reaction) {
+            var msg = generalMsgData[msgId];
+            if (!msg) return; // Not a rendered general message (e.g. DM room) - listener will handle it
+            if (!msg.reactions) msg.reactions = {};
+            if (reaction === null) {
+                delete msg.reactions[userUID];
+            } else {
+                msg.reactions[userUID] = { reaction: reaction, username: currentUsername };
+            }
+            renderMessage(msg, msgId);
         }
 
         // --- DMs: Toggle reaction in Firestore ---
@@ -4806,6 +7105,29 @@
         }
 
         // --- FLIPNOTE PLAYER ---
+        // Only one thumbnail animates at a time. Every rendered flipnote used to
+        // start its own 6 fps timer that never stopped, and every reaction or
+        // translation re-render re-armed it, so a feed with three flipbooks kept
+        // three permanent timers alive writing base64 frames into <img src>.
+        var activeFlipnoteId = null;
+
+        function stopFlipnote(msgId) {
+            if (!msgId) return;
+            var img = document.getElementById('flipnote-img-' + msgId);
+            if (img) {
+                img.dataset.playing = "false";
+                if (img.playTimer) { clearTimeout(img.playTimer); img.playTimer = null; }
+            }
+            var overlay = document.getElementById('flipnote-overlay-' + msgId);
+            if (overlay) overlay.style.display = "flex";
+            if (activeFlipnoteId === msgId) activeFlipnoteId = null;
+        }
+
+        window.addEventListener('pagehide', function () { stopFlipnote(activeFlipnoteId); });
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) stopFlipnote(activeFlipnoteId);
+        });
+
         function playFlipnote(msgId) {
             if (!window.flipnoteData || !window.flipnoteData[msgId]) return;
 
@@ -4829,6 +7151,8 @@
             }
 
             // Start
+            if (activeFlipnoteId && activeFlipnoteId !== msgId) stopFlipnote(activeFlipnoteId);
+            activeFlipnoteId = msgId;
             imgEl.dataset.playing = "true";
             overlay.style.display = "none";
 
@@ -4836,6 +7160,7 @@
 
             function loop() {
                 if (imgEl.dataset.playing !== "true") return;
+                if (!imgEl.isConnected) { imgEl.dataset.playing = "false"; if (activeFlipnoteId === msgId) activeFlipnoteId = null; return; }
                 frameIdx = (frameIdx + 1) % frames.length;
                 imgEl.src = frames[frameIdx];
                 imgEl.playTimer = setTimeout(loop, 1000 / fps);
@@ -4846,6 +7171,19 @@
 
         // --- SUPPORTER LOGIC ---
         function fetchSupporters() {
+            var CACHE_KEY = 'rekindle_supporters_cache';
+            var CACHE_TTL = 3600000; // 1h
+            try {
+                var raw = localStorage.getItem(CACHE_KEY);
+                if (raw) {
+                    var cached = JSON.parse(raw);
+                    if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL && cached.data) {
+                        supporterUsers = cached.data;
+                        reRenderRecentMessages();
+                        return Promise.resolve(cached.data);
+                    }
+                }
+            } catch (e) { }
             return db.collection('config').doc('supporters').get().then(function (doc) {
                 if (doc.exists) {
                     var data = doc.data();
@@ -4889,6 +7227,8 @@
                     // Trigger a re-render of recent messages now that we have the list
                     reRenderRecentMessages();
                 }
+                try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: supporterUsers })); } catch (e) { }
+                return supporterUsers;
             })['catch'](function (e) {
                 console.error("Error loading supporters:", e);
                 throw e;
@@ -4939,6 +7279,22 @@
             if (!text) return "";
             var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
             return text.replace(/[&<>"']/g, function (m) { return map[m]; });
+        }
+
+        // Escape a value that will sit inside a single-quoted JS string in an
+        // HTML attribute. Backslashes/quotes/newlines are JS-escaped and the
+        // HTML metacharacters are entity-encoded so the attribute survives.
+        function escapeJsString(text) {
+            if (text === null || text === undefined) return "";
+            return String(text)
+                .replace(/\\/g, "\\\\")
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
         }
 
         function formatChatTime(timestamp) {
@@ -5003,6 +7359,7 @@
 
         function toggleFullScreen() {
             document.querySelector('.window').classList.toggle('fullscreen');
+            applyDmLayout();
         }
 
         function showConfirm(msg, onOk, onCancel) {
@@ -5046,12 +7403,17 @@
                 if (generalListener) { generalListener.off(); generalListener = null; }
                 if (generalTransRef) { generalTransRef.off(); generalTransRef = null; }
                 if (rulesListenerRef) { rulesListenerRef.off(); rulesListenerRef = null; }
+                if (dmInboxRef) { dmInboxRef.off(); dmInboxRef = null; }
+                if (dmThreadRef) { dmThreadRef.off(); dmThreadRef = null; }
+                if (dmThreadBaseRef) { dmThreadBaseRef.off(); dmThreadBaseRef = null; }
+                if (dmReadTimer) { clearTimeout(dmReadTimer); dmReadTimer = null; }
                 kcAddedHandler = null;
                 kcChangedHandler = null;
                 kcTransAddedHandler = null;
                 kcTransChangedHandler = null;
                 renderedKindlechatIds = {};
                 langTranslations = {};
+                dmTranslations = {};
             } catch (e) { /* ignore — page is going away */ }
         }
         window.addEventListener('pagehide', kcDetachAllListeners);
@@ -5062,7 +7424,7 @@
 
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
     <!-- Duplicate Modal Removed -->
     <!-- REKINDLE CONFIRM MODAL -->
     <div id="confirm-modal-custom" class="modal-overlay"

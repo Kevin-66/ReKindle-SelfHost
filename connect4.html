@@ -260,9 +260,9 @@
             box-shadow: none;
         }
     </style>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -352,12 +352,12 @@
             if (num === 4) {
                 ROWS = 6;
                 COLS = 7;
-                const title4 = window.t ? window.t('connect4.title.4inrow') : "4 in a Row";
+                const title4 = window.t ? window.t('connect4.title.4inrow', "4 in a Row") : "4 in a Row";
                 document.querySelector('.title-text').innerText = title4;
             } else {
                 ROWS = 7;
                 COLS = 9;
-                const title5 = window.t ? window.t('connect4.title.5inrow') : "5 in a Row";
+                const title5 = window.t ? window.t('connect4.title.5inrow', "5 in a Row") : "5 in a Row";
                 document.querySelector('.title-text').innerText = title5;
             }
             const modeBtn = document.getElementById('mode-btn');
@@ -482,13 +482,13 @@
                 cpuTimer = null;
             }
             if (winner === 'draw') {
-                document.getElementById('status-bar').innerText = window.t ? window.t('connect4.msg.draw') : "Draw!";
+                document.getElementById('status-bar').innerText = window.t ? window.t('connect4.msg.draw', "Draw!") : "Draw!";
             } else if (winner === HUMAN) {
-                const template = window.t ? window.t('connect4.msg.win') : "${pName} Wins!";
+                const template = window.t ? window.t('connect4.msg.win', "${pName} Wins!") : "${pName} Wins!";
                 document.getElementById('status-bar').innerText = template.replace('${pName}', 'You');
                 highlightWin(winCoords);
             } else {
-                const template = window.t ? window.t('connect4.msg.win') : "${pName} Wins!";
+                const template = window.t ? window.t('connect4.msg.win', "${pName} Wins!") : "${pName} Wins!";
                 document.getElementById('status-bar').innerText = template.replace('${pName}', 'CPU');
                 highlightWin(winCoords);
             }
@@ -498,9 +498,9 @@
 
         function updateStatus() {
             if (currentPlayer === HUMAN) {
-                document.getElementById('status-bar').innerText = window.t ? window.t('connect4.turn.p1') : "Your Turn (Black)";
+                document.getElementById('status-bar').innerText = window.t ? window.t('connect4.turn.p1', "Player 1's Turn (Black)") : "Your Turn (Black)";
             } else {
-                document.getElementById('status-bar').innerText = window.t ? window.t('connect4.turn.p2') : "CPU Thinking...";
+                document.getElementById('status-bar').innerText = window.t ? window.t('connect4.turn.p2', "Player 2's Turn (White)") : "CPU Thinking...";
             }
         }
 
@@ -756,7 +756,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" defer></script>
 
 
 </body></html>

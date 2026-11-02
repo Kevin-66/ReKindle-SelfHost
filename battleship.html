@@ -357,9 +357,9 @@
             box-shadow: none;
         }
     </style>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -426,11 +426,11 @@
             const btnsEl = document.getElementById('modal-btns');
             messageEl.textContent = msg;
             if (isConfirm) {
-                btnsEl.innerHTML = '<button class="modal-btn" id="modal-cancel">' + (window.t ? window.t('battleship.btn.cancel') : 'Cancel') + '</button><button class="modal-btn" id="modal-ok">' + (window.t ? window.t('battleship.btn.ok') : 'OK') + '</button>';
+                btnsEl.innerHTML = '<button class="modal-btn" id="modal-cancel">' + (window.t ? window.t('battleship.btn.cancel', "Cancel") : 'Cancel') + '</button><button class="modal-btn" id="modal-ok">' + (window.t ? window.t('battleship.btn.ok', "OK") : 'OK') + '</button>';
                 document.getElementById('modal-cancel').onclick = function () { overlay.style.display = 'none'; if (callback) callback(false); };
                 document.getElementById('modal-ok').onclick = function () { overlay.style.display = 'none'; if (callback) callback(true); };
             } else {
-                btnsEl.innerHTML = '<button class="modal-btn" onclick="hideModal()">' + (window.t ? window.t('battleship.btn.ok') : 'OK') + '</button>';
+                btnsEl.innerHTML = '<button class="modal-btn" onclick="hideModal()">' + (window.t ? window.t('battleship.btn.ok', "OK") : 'OK') + '</button>';
             }
             overlay.style.display = 'flex';
         }
@@ -539,7 +539,7 @@
         function updateSetupMsg() {
             const shipDef = SHIPS[state.placingShipIdx];
             const shipName = window.t ? window.t('battleship.ship.' + shipDef.name.toLowerCase()) : shipDef.name;
-            const template = window.t ? window.t('battleship.setup.msg') : '${pName}: Place ${ship} (${size})';
+            const template = window.t ? window.t('battleship.setup.msg', "${pName}: Place ${ship} (${size})") : '${pName}: Place ${ship} (${size})';
             document.getElementById('setup-msg').innerText = interpolate(template, { pName: 'You', ship: shipName, size: shipDef.size });
         }
 
@@ -627,7 +627,7 @@
             } else {
                 const msg = document.getElementById('setup-msg');
                 const original = msg.innerText;
-                msg.innerText = window.t ? window.t('battleship.setup.invalid') : "Invalid Position!";
+                msg.innerText = window.t ? window.t('battleship.setup.invalid', "Invalid Position!") : "Invalid Position!";
                 setTimeout(function () { msg.innerText = original; }, 1000);
             }
         }
@@ -652,7 +652,7 @@
             placeShipsRandomly(state.cpu);
             state.phase = 'play';
             showScreen('game-screen');
-            document.getElementById('game-msg').innerText = window.t ? window.t('battleship.turn.your') : "Your Turn";
+            document.getElementById('game-msg').innerText = window.t ? window.t('battleship.turn.your', "Your Turn") : "Your Turn";
             renderGameBoard();
             renderPlayerBoard();
             renderFleetStatus();
@@ -730,7 +730,7 @@
 
             if (val === 1) {
                 enemy.board[y][x] = 3;
-                document.getElementById('game-msg').innerText = window.t ? window.t('battleship.msg.hit') : "HIT!";
+                document.getElementById('game-msg').innerText = window.t ? window.t('battleship.msg.hit', "HIT!") : "HIT!";
                 updateShipHits(state.cpu, x, y);
                 renderGameBoard();
                 renderFleetStatus();
@@ -745,7 +745,7 @@
                 // We'll keep player's turn after hit.
             } else {
                 enemy.board[y][x] = 2;
-                document.getElementById('game-msg').innerText = window.t ? window.t('battleship.msg.miss') : "MISS";
+                document.getElementById('game-msg').innerText = window.t ? window.t('battleship.msg.miss', "MISS") : "MISS";
                 renderGameBoard();
                 setTimeout(cpuTurn, 1000);
             }
@@ -786,7 +786,7 @@
             if (val === 1) {
                 state.player.board[y][x] = 3;
                 updateShipHits(state.player, x, y);
-                result = window.t ? window.t('battleship.msg.hit') : "HIT";
+                result = window.t ? window.t('battleship.msg.hit', "HIT!") : "HIT";
                 document.getElementById('game-msg').innerText = 'CPU ' + result + ' at ' + String.fromCharCode(65 + x) + (y + 1);
 
                 // Update hunt state
@@ -825,7 +825,7 @@
                 return;
             } else {
                 state.player.board[y][x] = 2;
-                result = window.t ? window.t('battleship.msg.miss') : "MISS";
+                result = window.t ? window.t('battleship.msg.miss', "MISS") : "MISS";
                 document.getElementById('game-msg').innerText = 'CPU ' + result + ' at ' + String.fromCharCode(65 + x) + (y + 1);
                 renderPlayerBoard();
 
@@ -939,7 +939,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" defer></script>
 
 
 </body></html>

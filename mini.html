@@ -4,10 +4,12 @@
     
     <title>Mini Crossword</title>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
+    <script src="js/i18n.js?v=4"></script>
 
     <style>
         /* SYSTEM 7 AESTHETICS */
@@ -352,7 +354,7 @@
             margin-left: 10px;
 }
     </style>
-    <script src="theme.js?v=18"></script>
+    <script src="theme.js?v=35"></script>
 </head>
 
 <body>
@@ -444,11 +446,11 @@
                 const statusBar = document.getElementById('status-bar');
                 if (user) {
                     currentUser = user;
-                    statusBar.innerText = window.t ? window.t('mini.status.synced').replace('${email}', user.email) : "Synced: " + user.email;
+                    statusBar.innerText = window.t ? window.t('mini.status.synced', "Synced: ${email}").replace('${email}', user.email) : "Synced: " + user.email;
                     statusBar.removeAttribute('data-i18n');
                     loadProgress();
                 } else {
-                    statusBar.innerText = window.t ? window.t('mini.status.guest') : "Guest Mode (Local)";
+                    statusBar.innerText = window.t ? window.t('mini.status.guest', "Guest Mode (Local)") : "Guest Mode (Local)";
                     statusBar.removeAttribute('data-i18n');
                     loadProgress();
                 }
@@ -558,7 +560,7 @@
             if (start !== -1) selectCell(start);
             else selectCell(0);
 
-            document.getElementById('clue-bar').innerText = window.t ? window.t('mini.status.resumed') : "Game Resumed";
+            document.getElementById('clue-bar').innerText = window.t ? window.t('mini.status.resumed', "Game Resumed") : "Game Resumed";
             document.getElementById('clue-bar').removeAttribute('data-i18n');
             updateUI();
         }
@@ -568,7 +570,7 @@
         async function newGame() {
             clearSave();
             const clueBar = document.getElementById('clue-bar');
-            clueBar.innerText = window.t ? window.t('mini.status.loading') : "Loading Mini...";
+            clueBar.innerText = window.t ? window.t('mini.status.loading', "Loading Mini...") : "Loading Mini...";
             clueBar.removeAttribute('data-i18n');
             document.getElementById('grid-container').innerHTML = '';
 
@@ -590,7 +592,7 @@
             } catch (e) {
                 console.error(e);
                 const clueBar = document.getElementById('clue-bar');
-                clueBar.innerText = window.t ? window.t('mini.status.error') : "Error loading puzzle.";
+                clueBar.innerText = window.t ? window.t('mini.status.error', "Error loading puzzle.") : "Error loading puzzle.";
                 clueBar.removeAttribute('data-i18n');
             }
         }
@@ -698,8 +700,8 @@
         function renderClueList() {
             const acrossContainer = document.getElementById('across-clues');
             const downContainer = document.getElementById('down-clues');
-            acrossContainer.innerHTML = `<h4 data-i18n="mini.label.across">${window.t ? window.t('mini.label.across') : 'ACROSS'}</h4>`;
-            downContainer.innerHTML = `<h4 data-i18n="mini.label.down">${window.t ? window.t('mini.label.down') : 'DOWN'}</h4>`;
+            acrossContainer.innerHTML = `<h4 data-i18n="mini.label.across">${window.t ? window.t('mini.label.across', "ACROSS") : 'ACROSS'}</h4>`;
+            downContainer.innerHTML = `<h4 data-i18n="mini.label.down">${window.t ? window.t('mini.label.down', "DOWN") : 'DOWN'}</h4>`;
 
             const acrossClues = currentPuzzle.clues.Across;
             const downClues = currentPuzzle.clues.Down;
@@ -786,7 +788,7 @@
             }
 
             const clueHeader = window.t ? window.t(`mini.label.direction.${direction.toLowerCase()}`) : direction.toUpperCase();
-            const clueText = currentPuzzle.clues[direction][clueNum] || (window.t ? window.t('mini.label.no_clue') : "(No Clue)");
+            const clueText = currentPuzzle.clues[direction][clueNum] || (window.t ? window.t('mini.label.no_clue', "(No Clue)") : "(No Clue)");
             const clueBar = document.getElementById('clue-bar');
             clueBar.innerText = `${clueNum} ${clueHeader}: ${clueText}`;
             clueBar.removeAttribute('data-i18n');
@@ -882,13 +884,13 @@
 
             const bar = document.getElementById('clue-bar');
             if (isEmpty) {
-                bar.innerText = window.t ? window.t('mini.msg.empty') : "Grid is empty.";
+                bar.innerText = window.t ? window.t('mini.msg.empty', "Grid is empty.") : "Grid is empty.";
             } else if (hasError) {
-                bar.innerText = window.t ? window.t('mini.msg.errors') : "Errors found.";
+                bar.innerText = window.t ? window.t('mini.msg.errors', "Errors found.") : "Errors found.";
             } else if (!isFull) {
-                bar.innerText = window.t ? window.t('mini.msg.correct') : "Correct so far!";
+                bar.innerText = window.t ? window.t('mini.msg.correct', "Correct so far!") : "Correct so far!";
             } else {
-                bar.innerText = window.t ? window.t('mini.msg.solved') : "PUZZLE SOLVED!";
+                bar.innerText = window.t ? window.t('mini.msg.solved', "PUZZLE SOLVED!") : "PUZZLE SOLVED!";
                 bar.style.backgroundColor = "black";
                 bar.style.color = "white";
                 clearSave();
@@ -957,7 +959,7 @@
 
 
     </script>
-    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11"></script>
+    <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675" data-utcoffset="11" defer></script>
 
 
 </body></html>

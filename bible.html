@@ -7,12 +7,11 @@
     <meta charset="UTF-8">
     <title>Scriptures</title>
 
-    <script src="time.js"></script>
-    <script src="icons.js?v=2"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
-    <link rel="stylesheet" href="css/custom-select.css">
+    <script src="time.js?v=5"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/custom-select.js?v=2"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
 
     <style>
         /* COMPATIBILITY FIX: Global Animation Kill Switch for E-ink */
@@ -141,8 +140,9 @@
             background: #eee;
             font-family: inherit;
             flex-wrap: wrap;
-            gap: 4px;
         }
+
+        .toolbar > * + * { margin-left: 4px; }
 
         .controls-group {
             display: flex;
@@ -647,21 +647,32 @@ const QURAN_SURAHS = [
             return books[currentBookIdx] ? books[currentBookIdx].ch : 1;
         }
 
-        async function init() {
-            // Pre-load all local scripture data
+        // Load only the dataset the current library/translation actually needs.
+        // init() used to fetch all four (~272 KB of JSON) before the first
+        // chapter, even though the default library is the Bible.
+        async function ensureLocalScriptureData() {
             try {
-                const [dResp, dThanResp, tResp, tMitchResp] = await Promise.all([
-                    fetch('data/dhammapada.json'),
-                    fetch('data/dhammapada-than.json'),
-                    fetch('data/tao-te-ching.json'),
-                    fetch('data/tao-te-ching-mitchell.json')
-                ]);
-                dhammapadaData = await dResp.json();
-                dhammapadaThanData = await dThanResp.json();
-                taoData = await tResp.json();
-                taoMitchellData = await tMitchResp.json();
-            } catch(e) {}
+                if (currentLibrary === 'dhammapada') {
+                    if (currentTranslation === 'thanissaro') {
+                        if (!dhammapadaThanData) {
+                            dhammapadaThanData = await (await fetch('data/dhammapada-than.json')).json();
+                        }
+                    } else if (!dhammapadaData) {
+                        dhammapadaData = await (await fetch('data/dhammapada.json')).json();
+                    }
+                } else if (currentLibrary === 'tao') {
+                    if (currentTranslation === 'mitchell') {
+                        if (!taoMitchellData) {
+                            taoMitchellData = await (await fetch('data/tao-te-ching-mitchell.json')).json();
+                        }
+                    } else if (!taoData) {
+                        taoData = await (await fetch('data/tao-te-ching.json')).json();
+                    }
+                }
+            } catch (e) { /* offline: getBooks() falls back to default chapter counts */ }
+        }
 
+        async function init() {
             try {
                 const saved = localStorage.getItem('rekindle_scriptures_state');
                 if (saved) {
@@ -682,6 +693,8 @@ const QURAN_SURAHS = [
                     }
                 }
             } catch(e) {}
+
+            await ensureLocalScriptureData();
 
             document.getElementById('lib-select').value = currentLibrary;
             updateUIForLibrary();
@@ -772,12 +785,13 @@ const QURAN_SURAHS = [
             chSelect.value = currentChapter;
         }
 
-        function onLibraryChange() {
+        async function onLibraryChange() {
             currentLibrary = document.getElementById('lib-select').value;
             currentBookIdx = 0;
             currentChapter = 1;
             currentTranslation = DEFAULT_TRANSLATIONS[currentLibrary] || 'web';
             updateUIForLibrary();
+            await ensureLocalScriptureData();
             populateBooks();
             populateChapters();
             fetchChapter();

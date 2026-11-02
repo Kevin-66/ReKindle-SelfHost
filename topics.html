@@ -7,7 +7,6 @@
     <meta charset="UTF-8">
 
     <title>Topics</title>
-    <script src="js/reports.js"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -192,6 +191,7 @@
             cursor: pointer;
             display: flex;
             flex-direction: column;
+            contain: layout style;
         }
 
         .topic-item:hover {
@@ -325,28 +325,43 @@
 
         /* Report button - matches kindlechat circular style */
         .report-btn {
-            width: 20px;
-            height: 20px;
-            border: 1px solid black;
-            border-radius: 50%;
-            background: white;
+            /* Full 48x48 touch target (AGENTS section 3) with the familiar 20px
+               dot inside. It takes real layout space so the hit area cannot
+               overlap the timestamp / Edit button next to it. */
+            width: 48px;
+            height: 48px;
+            margin: 0 0 0 4px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
             cursor: pointer;
-            text-align: center;
-            line-height: 18px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            box-shadow: 1px 1px 0 #999;
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1;
             flex-shrink: 0;
-            opacity: 0.5;
-            color: #cc0000;
-            margin-left: 4px;
         }
 
-        .report-btn:hover {
+        .report-btn .report-dot {
+            width: 20px;
+            height: 20px;
+            border: 1px solid black;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 1px 1px 0 #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            line-height: 1;
+            font-weight: bold;
+            opacity: 0.5;
+            color: #cc0000;
+        }
+
+        .report-btn:hover .report-dot,
+        .report-btn:active .report-dot {
             opacity: 1.0;
             background: #ffe6e6;
         }
@@ -508,6 +523,7 @@
             position: relative;
             margin-bottom: 10px;
             min-width: 0;
+            contain: layout style;
         }
 
         .msg.self {
@@ -518,6 +534,16 @@
         .msg.other {
             align-self: flex-start;
             align-items: flex-start;
+        }
+
+        /* Translation controls read as small buttons, not tiny buried links. */
+        [id^="topic-toggle-"], [id^="topic-translate-"] {
+            display: inline-block;
+            border: 1px solid #666;
+            background: #fff;
+            padding: 1px 4px;
+            margin-top: 3px;
+            text-decoration: none !important;
         }
 
         .msg-meta {
@@ -750,13 +776,26 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(0,0,0,0.45);
             z-index: 200;
             align-items: center;
             justify-content: center;
             flex-direction: column;
             text-align: center;
             padding: 20px;
+        }
+
+        #login-overlay .modal-box {
+            text-align: center;
+        }
+
+        #login-overlay .sys-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 10px 20px;
+            margin: 10px auto 0;
         }
 
         /* FULLSCREEN TOGGLE */
@@ -796,19 +835,14 @@
     </style>
 
     <!-- FIREBASE -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="bad_words.js?v=4"></script>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
-    <script src="js/age-verification.js?v=2"></script>
-    <script src="js/emoji-render.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<link rel="preconnect" href="https://rekindle-socials-default-rtdb.firebaseio.com">
+    <script src="theme.js?v=35"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="js/i18n.js?v=4"></script>
+    <link rel="stylesheet" href="js/system-dialog.css?v=2">
 </head>
 
 <body>
@@ -847,7 +881,7 @@
                         <button class="sys-btn" onclick="openTopicModal()" data-i18n="topics.btn.new" style="flex: 1; margin-right: 5px;">+ New</button>
                         <button class="sys-btn" onclick="markAllAsRead()" style="flex: 1; padding: 2px 5px; font-size: 0.8rem;" data-i18n="topics.btn.mark_read">Mark Read</button>
                     </div>
-                    <input type="text" id="topic-search" class="full-input" placeholder="Search topics..." data-i18n-placeholder="topics.ph.search" oninput="renderSidebar()" style="margin-bottom:0;">
+                    <input type="text" id="topic-search" class="full-input" placeholder="Search topics..." data-i18n-placeholder="topics.ph.search" oninput="debouncedRenderSidebar()" style="margin-bottom:0;">
                 </div>
                 <div id="topic-list">
                     <div style="text-align:center; padding:20px; color:#666;" data-i18n="topics.msg.loading">Loading...
@@ -867,7 +901,7 @@
                         </div>
                     </div>
                     <div style="display:flex; align-items:center;">
-                        <div id="header-report-btn" class="report-btn" style="display:none;" title="Report">!</div>
+                        <div id="header-report-btn" class="report-btn" style="display:none;" title="Report"><span class="report-dot">!</span></div>
                         <button id="header-edit-btn" class="sys-btn"
                             style="display:none; margin-left:8px; padding:2px 8px; font-size:0.7rem;"
                             onclick="openTopicModal(currentTopicId)">Edit</button>
@@ -1025,11 +1059,38 @@
     </div>
     <!-- LOGIN OVERLAY -->
     <div id="login-overlay" style="display: none;">
-        <h2 id="login-overlay-title" data-i18n="suggestions.msg.login_required">Please Log In</h2>
-        <p id="login-overlay-message" style="font-size: 0.9rem; color: #666; margin: 10px 0; max-width: 300px;"></p>
-        <button class="sys-btn" onclick="window.location.href='index?login=true'" data-i18n="suggestions.btn.login">Log
-            In</button>
+        <div class="modal-box rk-dialog">
+            <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="login-overlay-title" data-i18n="topics.login.title">Log in to join the conversation</span></div>
+            <div class="rk-dialog-body">
+                <p id="login-overlay-desc" data-i18n="topics.login.desc">Create topics and comment with other ReKindle readers.</p>
+                <p id="login-overlay-message" style="font-size: 0.9rem; color: #666; margin: 10px 0; max-width: 300px;"></p>
+                <button class="sys-btn rk-primary" onclick="window.location.href='index?login=true'" data-i18n="login.btn.login">Log
+                    In</button>
+            </div>
+        </div>
     </div>
+
+    <!-- Loaded here, after the markup, so the shell paints before the
+         Firebase SDK downloads and parses (2026-10-26 load-path pass).
+         Order is unchanged: this block still runs before the app script. -->
+    <script src="js/reports.js?v=4"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/social-token-cache.js?v=1"></script>
+    <script src="time.js?v=5"></script>
+    <script src="bad_words.js?v=4"></script>
+    <script src="js/promo-ban.js?v=1"></script>
+    <script src="js/link-guard.js?v=1"></script>
+    <script src="js/social-endpoints.js?v=1"></script>
+    <script src="js/worker-client.js?v=1"></script>
+    <script src="js/custom-select.js?v=2"></script>
+    <script src="js/age-verification.js?v=2"></script>
+    <script src="js/emoji-render.js?v=1"></script>
+    <script src="js/translate-client.js?v=3"></script>
+    <script src="js/post-language.js?v=1"></script>
 
     <script>
         // CONFIG
@@ -1060,11 +1121,28 @@
         var mainDb = firebase.firestore();
         var socialDb = socialApp.firestore();
         var socialAuth = socialApp.auth();
-        var MODERATION_WORKER_URL = "https://rekindle-moderate.timjarnott.workers.dev";
+        var MODERATION_WORKER_URL = (window.rekindleSocialEndpoints && window.rekindleSocialEndpoints.moderation)
+            || "https://rekindle-moderate.rekindle-social.workers.dev";
         var ADMIN_EMAIL = 'ukiyo@rekindle.ink';
         var supporterUsers = {};
 
+        var SUPPORTERS_CACHE_KEY = 'rekindle_supporters_cache';
+        var SUPPORTERS_CACHE_TTL = 3600000; // 1 hour
+
         function fetchSupporters() {
+            // Cache-first: reuse the final supporter map for up to 1h to avoid
+            // a config doc read on every page load.
+            try {
+                var cachedRaw = localStorage.getItem(SUPPORTERS_CACHE_KEY);
+                if (cachedRaw) {
+                    var cached = JSON.parse(cachedRaw);
+                    if (cached && cached.data && typeof cached.ts === 'number' && (Date.now() - cached.ts) < SUPPORTERS_CACHE_TTL) {
+                        supporterUsers = cached.data;
+                        return Promise.resolve();
+                    }
+                }
+            } catch (e) { /* localStorage unavailable or corrupt — fall through to fetch */ }
+
             return mainDb.collection('config').doc('supporters').get().then(function (doc) {
                 if (doc.exists) {
                     var data = doc.data();
@@ -1104,6 +1182,9 @@
                         }
                     }
                 }
+                try {
+                    localStorage.setItem(SUPPORTERS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: supporterUsers }));
+                } catch (e) { /* ignore — cache is best-effort */ }
             })['catch'](function (e) {
                 console.error("Error loading supporters:", e);
             });
@@ -1161,6 +1242,61 @@
 
         var currentUser = null;
         var currentUserName = "Anonymous";
+
+        // The resolved UI language (i18n.js writes documentElement.lang). Base
+        // code only, so pt-BR / zh-Hans compare equal to the stored `lang`.
+        function detectPostLang(text) {
+            var pl = window.rekindlePostLanguage;
+            if (!pl || typeof pl.isReady !== 'function' || !pl.isReady()) return '';
+            return pl.detectLang(text);
+        }
+
+        function loadPostLanguageSoon() {
+            if (!window.rekindlePostLanguage) return;
+            setTimeout(function () { window.rekindlePostLanguage.load(); }, 4000);
+        }
+
+        function topicUserLang() {
+            // i18n.js writes the resolved language to <html lang>. Before it has
+            // fetched the locale file, fall back to the user's explicit choice,
+            // then the browser. navigator.language alone is wrong on Kindles:
+            // it can stay en-US while the account is set to Spanish.
+            var lang = document.documentElement.lang;
+            if (!lang) {
+                lang = localStorage.getItem('rekindle_language') || 'auto';
+                if (!lang || lang === 'auto') {
+                    lang = '';
+                    try {
+                        var loc = JSON.parse(localStorage.getItem('rekindle_location_manual'));
+                        if (loc && loc.country_code) {
+                            var cc = String(loc.country_code).toUpperCase();
+                            var byCountry = {
+                                ES: 'es', MX: 'es', AR: 'es', CL: 'es', CO: 'es', PE: 'es', VE: 'es', UY: 'es',
+                                PT: 'pt', BR: 'pt', PL: 'pl', DE: 'de', AT: 'de', CH: 'de', IT: 'it', FR: 'fr',
+                                BE: 'fr', CA: 'fr', RU: 'ru', BY: 'ru', KZ: 'ru', CN: 'zh', TW: 'zh', HK: 'zh',
+                                SG: 'zh', VN: 'vi'
+                            };
+                            lang = byCountry[cc] || '';
+                        }
+                    } catch (e) { /* no saved location */ }
+                    if (!lang) lang = navigator.language || 'en';
+                }
+            }
+            var base = String(lang).toLowerCase().replace(/_/g, '-').split('-')[0];
+            var client = window.rekindleTranslateClient;
+            return client && client.normalizeLang ? client.normalizeLang(base) : base;
+        }
+
+        function topicLangDiffers(detected) {
+            var left = detected ? String(detected).toLowerCase().replace(/_/g, '-').split('-')[0] : '';
+            if (!left) return true; // unknown -> keep the Translate link
+            return left !== topicUserLang();
+        }
+
+        // Language detection is a lazy bundle (js/post-language.js); start it
+        // when a composer is focused and once after the page settles.
+        var topicTranslations = {};
+        var pendingTopicTranslations = {};
         var currentTopicId = null;
         var userTopicStates = {}; // { topicId: { lastReadCount: N, lastReadTime: T } }
         var topicStatesLoaded = false;
@@ -1181,6 +1317,13 @@
         var topicsListenerRef = null;
         var rulesListenerRef = null;
         var sidebarRenderTimer = null;
+        // Only the most recently active topics load by default. The previous
+        // limit(200) cost ~120k Firestore reads/day at ~600 topics page loads —
+        // more than half of the social project's reads, which sits on the Spark
+        // 50k reads/day tier. Older topics stay searchable and can be loaded
+        // explicitly with the "Show all topics" button.
+        var TOPICS_INITIAL_LIMIT = 60;
+        var showAllTopics = false;
         var fullTopicsSnapshot = null;    // one-time fetch for search (sorted desc, 5-min TTL)
         var fullTopicsSnapshotExpiry = 0;
         var isFetchingFullTopics = false;
@@ -1189,13 +1332,13 @@
         var isLoadingMoreComments = false;    // re-entry guard for paginated fetches
         var noMoreComments = false;           // True once we've reached the oldest comment in RTDB
         // Poll state
-        var pollVotesUnsubscribe = null;
         var currentPollVotes = {};            // { uid: optionIndex }
         var currentUserPollVote = null;       // optionIndex or null
 
         // --- PRESENCE LOGIC ---
         function initPresence(uid) {
-            // Presence is now handled automatically site-wide by theme.js
+            // Presence is opt-in on theme.js and only index.html reads it (live
+            // game listings), so Topics does not write presence/ at all.
         }
 
         // AUTH
@@ -1244,10 +1387,7 @@
 
             // Age verification check (server-side enforced)
             ensureAgeVerified(auth, { closable: false }).then(function () {
-                var getSocialToken = firebase.functions().httpsCallable('getSocialToken');
-                return getSocialToken({}).then(function (result) {
-                    return socialAuth.signInWithCustomToken(result.data.token);
-                });
+                return window.rekindleEnsureSocialAuth(auth, socialAuth);
             }).then(function () {
                 fetchSupporters().then(function () {
                     if (topicsLoaded) return;
@@ -1279,27 +1419,40 @@
                             }
                         }
 
-                        // Eager one-time fetch so the sidebar isn't blank while the listener connects
-                        socialDb.collection('topics')
-                            .orderBy('lastActive', 'desc').limit(200)
-                            .get().then(function(snapshot) {
-                                allTopicsCache = [];
-                                snapshot.forEach(function(doc) {
-                                    allTopicsCache.push(processTopicDoc(doc));
-                                });
-                                onTopicsReady();
-                            }).catch(function(err) {
-                                console.error('Topics initial get error:', err);
-                            });
-
+                        // The standing listener delivers the initial batch on its first
+                        // snapshot — no separate eager .get() (that would double-download).
+                        var firstSnapshot = true;
                         topicsListenerRef = socialDb.collection('topics')
-                            .orderBy('lastActive', 'desc').limit(200)
+                            .orderBy('lastActive', 'desc').limit(TOPICS_INITIAL_LIMIT)
                             .onSnapshot(function(snapshot) {
-                                allTopicsCache = [];
-                                snapshot.forEach(function(doc) {
-                                    allTopicsCache.push(processTopicDoc(doc));
-                                });
-                                debouncedRenderSidebar();
+                                if (firstSnapshot) {
+                                    allTopicsCache = [];
+                                    snapshot.forEach(function(doc) {
+                                        allTopicsCache.push(processTopicDoc(doc));
+                                    });
+                                } else {
+                                    // Any comment in any topic bumps lastActive, so a full
+                                    // re-map of 200 docs ran constantly. Patch instead.
+                                    snapshot.docChanges().forEach(function(change) {
+                                        var idx = -1;
+                                        for (var i = 0; i < allTopicsCache.length; i++) {
+                                            if (allTopicsCache[i].id === change.doc.id) { idx = i; break; }
+                                        }
+                                        if (change.type === 'removed') {
+                                            if (idx !== -1) allTopicsCache.splice(idx, 1);
+                                        } else if (idx !== -1) {
+                                            allTopicsCache[idx] = processTopicDoc(change.doc);
+                                        } else {
+                                            allTopicsCache.push(processTopicDoc(change.doc));
+                                        }
+                                    });
+                                }
+                                if (firstSnapshot) {
+                                    firstSnapshot = false;
+                                    onTopicsReady(); // immediate render for the initial batch
+                                } else {
+                                    debouncedRenderSidebar();
+                                }
                                 if (!deepLinkChecked) {
                                     deepLinkChecked = true;
                                     var params = new URLSearchParams(window.location.search);
@@ -1352,8 +1505,8 @@
                 var msgEl = document.getElementById('login-overlay-message');
                 if (titleEl) {
                     titleEl.textContent = (typeof window.t === 'function')
-                        ? window.t('suggestions.msg.login_required', 'Please Log In')
-                        : 'Please Log In';
+                        ? window.t('topics.login.title', 'Log in to join the conversation')
+                        : 'Log in to join the conversation';
                 }
                 if (msgEl) msgEl.textContent = '';
             }
@@ -1457,17 +1610,32 @@
 
         function containsUrl(text) {
             if (!text) return false;
+            // js/link-guard.js normalises obfuscated links ("netlify,app",
+            // "netlify dot app", "[.]", full-width dots) before matching, so a
+            // domain split by commas/spaces cannot dodge the filter. The
+            // legacy checks below stay as a fallback if the helper failed to load.
+            if (window.rekindleContainsLink) return window.rekindleContainsLink(text);
             var t = String(text).toLowerCase();
-            var protocolLike = /h\s*t\s*t\s*p\s*s?\s*[:/]{1,4}/.test(t);
-            var wwwLike = /\bwww\./.test(t);
-            var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link)\b/.test(t);
-            var ipLike = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(t);
+            var protocolLike = /h\s*[xt]\s*[xt]\s*p\s*s?\s*[:/]{1,4}/.test(t);
+            var wwwLike = /\bwww\s*\./.test(t);
+            var domainLike = /\b[a-z0-9-]+\s*\.\s*(com|net|org|io|co|ai|app|dev|edu|gov|mil|int|biz|info|name|pro|museum|aero|coop|jobs|mobi|travel|arpa|asia|cat|tel|xxx|post|geo|mail|onion|bit|crypto|eth|us|uk|au|ca|de|fr|jp|cn|kr|ru|br|mx|es|it|nl|se|no|fi|dk|pl|cz|at|ch|be|pt|ie|nz|za|in|sg|hk|tw|id|th|vn|ph|my|xyz|club|online|site|top|ink|cc|tv|ws|me|nu|gg|to|vc|link|ly|sh)\b/.test(t);
+            var ipLike = /\b\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\s*\.\s*\d{1,3}\b/.test(t);
             return protocolLike || wwwLike || domainLike || ipLike;
         }
 
         function containsPromotedTerm(text) {
             if (!text) return false;
-            return /\b(?:unreader|un-reader|inkchat|kindlehub)\b/i.test(String(text));
+            // js/promo-ban.js folds homoglyphs, leetspeak, "DOT" and separators
+            // before matching, so "kindlеhub", "khub" and "kindlehubDOTpro" are
+            // all caught. Fallback keeps a basic net if the helper failed to load.
+            if (window.rekindleContainsPromotedTerm) return window.rekindleContainsPromotedTerm(text);
+            return /\b(?:unreader|un-reader|inkchat|kindlehub|khub)\b/i.test(String(text));
+        }
+
+        function censorPromo(text) {
+            if (!text) return text;
+            if (window.rekindleCensorPromotedTerms) return window.rekindleCensorPromotedTerms(text);
+            return text;
         }
 
         function loadTopicStates() {
@@ -1565,6 +1733,8 @@
                     var subMatch = t.subheading && t.subheading.toLowerCase().indexOf(searchQuery) !== -1;
                     return titleMatch || subMatch;
                 });
+            } else if (showAllTopics && fullTopicsSnapshot) {
+                topicsToShow = fullTopicsSnapshot;
             } else {
                 topicsToShow = allTopicsCache;
             }
@@ -1578,15 +1748,14 @@
                 var el = document.createElement('div');
 
                 // Auto-sync: If this is the currently viewed topic, keep lastReadCount up to date
-                // so switching away won't show false unread badges
+                // locally so switching away won't show false unread badges. Persisted to RTDB
+                // only in selectTopic() and on pagehide — NOT here (this render fires on every
+                // comment posted to any of the top-60 topics).
                 if (t.id === currentTopicId && topicStatesLoaded) {
                     var currentCount = t.commentCount || 0;
                     if (!userTopicStates[t.id]) userTopicStates[t.id] = {};
                     if ((userTopicStates[t.id].lastReadCount || 0) < currentCount) {
                         userTopicStates[t.id].lastReadCount = currentCount;
-                        if (currentUser) {
-                            db.ref('users_private/' + currentUser.uid + '/topic_states/' + t.id + '/lastReadCount').set(currentCount);
-                        }
                     }
                 }
 
@@ -1647,14 +1816,30 @@
                     '<div style="display:flex; align-items:center;">' +
                     '<div class="topic-icon">' + iconSvg + '</div>' +
                     '<div class="topic-item-content">' +
-                    '<div class="topic-item-title">' + delBtn + escapeHtml(t.title) + '</div>' +
-                    (t.subheading ? '<div class="topic-item-subheading">' + escapeHtml(t.subheading) + '</div>' : '') +
+                    '<div class="topic-item-title">' + delBtn + escapeHtml(censorPromo(t.title)) + '</div>' +
+                    (t.subheading ? '<div class="topic-item-subheading">' + escapeHtml(censorPromo(t.subheading)) + '</div>' : '') +
                     '<div class="topic-item-meta">' + countStr + ' messages' + unreadBadge + ' • ' + lastActiveStr + '</div>' +
                     '</div>' +
                     '</div>';
                 listEl.appendChild(el);
                 renderEmojis(el);
             });
+
+            // Older topics live outside the live 60-doc window. They remain
+            // available through search; this loads the full list once on demand.
+            if (!searchQuery && !showAllTopics && allTopicsCache.length >= TOPICS_INITIAL_LIMIT) {
+                var moreEl = document.createElement('div');
+                moreEl.className = 'topic-item';
+                moreEl.style.textAlign = 'center';
+                moreEl.style.cursor = 'pointer';
+                moreEl.innerHTML = '<div class="topic-item-title" style="font-weight:normal; text-decoration:underline;">' +
+                    window.t('topics.btn.show_all', 'Show all topics') + '</div>';
+                moreEl.onclick = function () {
+                    showAllTopics = true;
+                    fetchAllTopicsForSearch();
+                };
+                listEl.appendChild(moreEl);
+            }
         }
 
         function selectTopic(id, forceReload) {
@@ -1685,9 +1870,10 @@
 
             // Mark as read
             var newReadCount = topic.commentCount || 0;
+            if (id === '__proto__' || id === 'constructor' || id === 'prototype') return;
             if (!userTopicStates[id] || userTopicStates[id].lastReadCount < newReadCount) {
                 // Update local first for snappy UI
-                if (!userTopicStates[id] || id === '__proto__' || id === 'constructor' || id === 'prototype') userTopicStates[id] = {};
+                if (!userTopicStates[id]) userTopicStates[id] = {};
                 userTopicStates[id].lastReadCount = newReadCount;
                 userTopicStates[id].lastReadTime = firebase.database.ServerValue.TIMESTAMP;
 
@@ -1703,10 +1889,10 @@
             // Re-render sidebar to clear unread status for this topic
             renderSidebar();
 
-            document.getElementById('current-topic-title').innerText = topic.title;
+            document.getElementById('current-topic-title').innerText = censorPromo(topic.title);
             var subheadingEl = document.getElementById('current-topic-subheading');
             if (subheadingEl) {
-                var subText = topic.subheading || '';
+                var subText = censorPromo(topic.subheading || '');
                 if (isModMode && topic.authorId) {
                     var creatorInfo = 'Creator: (' + topic.authorId + ')';
                     subText = subText ? subText + ' • ' + creatorInfo : creatorInfo;
@@ -1740,17 +1926,9 @@
             // Show Report button for non-authors
             var reportBtn = document.getElementById('header-report-btn');
             if (currentUser && topic.authorId && topic.authorId !== currentUser.uid) {
-                var safeTopicId = topic.id.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-                var safeReportedTopicUid = (topic.authorId || '').replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-                var topicSnapshot = ((topic.title || '') + ' - ' + (topic.subheading || ''))
-                    .replace(/\\/g, '\\\\\\\\')
-                    .replace(/'/g, "\\'")
-                    .replace(/\n/g, '\\n')
-                    .replace(/\r/g, '\\r')
-                    .replace(/\u0026/g, '\u0026amp;')
-                    .replace(/\u003c/g, '\u0026lt;')
-                    .replace(/\u003e/g, '\u0026gt;')
-                    .replace(/"/g, '\u0026quot;');
+                var safeTopicId = escapeJsString(topic.id);
+                var safeReportedTopicUid = escapeJsString(topic.authorId || '');
+                var topicSnapshot = escapeJsString((topic.title || '') + ' - ' + (topic.subheading || ''));
                 reportBtn.setAttribute('onclick', "rekindleOpenReportModal({contentType:'topic',contentId:'" + safeTopicId + "',contentPath:'topics/" + safeTopicId + "',reportedUserId:'" + safeReportedTopicUid + "',contentSnapshot:'" + topicSnapshot + "'})");
                 reportBtn.style.display = 'flex';
             } else {
@@ -1787,37 +1965,43 @@
             var liveCommentsQuery = socialDb.collection('topics').doc(id).collection('comments')
                 .orderBy('timestamp', 'asc').limitToLast(MESSAGES_INITIAL_LOAD);
 
-            // Eager one-time fetch so chat isn't blank while the listener connects
-            liveCommentsQuery.get().then(function(snapshot) {
-                if (commentsListener !== id) return;
-                snapshot.forEach(function(doc) {
-                    var data = doc.data();
-                    data.id = doc.id;
-
-                    if (data.timestamp && typeof data.timestamp.toMillis === 'function') {
-                        data.timestamp = data.timestamp.toMillis();
-                    }
-
-                    if (!data.timestamp) return;
-                    if (renderedCommentIds[doc.id]) return;
-                    renderedCommentIds[doc.id] = true;
-
-                    if (typeof data.timestamp === 'number') {
-                        if (oldestRenderedTs === null || data.timestamp < oldestRenderedTs) {
-                            oldestRenderedTs = data.timestamp;
-                        }
-                    }
-
-                    appendMessage(data);
-                });
-                historyEl.scrollTop = historyEl.scrollHeight;
-            }).catch(function(err) {
-                console.error('Comments initial get error:', err);
-            });
-
-            // Real-time listener for new/removed comments
+            // The standing listener delivers the initial batch on its first snapshot —
+            // no separate eager .get() (that would double-download). First snapshot is
+            // batched into a single DocumentFragment; later snapshots are incremental.
+            var firstSnapshot = true;
             commentsUnsubscribe = liveCommentsQuery.onSnapshot(function(snapshot) {
                 if (commentsListener !== id) return; // stale event after topic switch
+                if (firstSnapshot) {
+                    firstSnapshot = false;
+                    var fragment = document.createDocumentFragment();
+                    snapshot.docChanges().forEach(function(change) {
+                        if (change.type !== 'added') return;
+                        var doc = change.doc;
+                        var data = doc.data();
+                        data.id = doc.id;
+
+                        // Normalize Firestore Timestamp to ms
+                        if (data.timestamp && typeof data.timestamp.toMillis === 'function') {
+                            data.timestamp = data.timestamp.toMillis();
+                        }
+
+                        if (!data.timestamp) return; // skip pending server timestamp
+                        if (renderedCommentIds[doc.id]) return;
+                        renderedCommentIds[doc.id] = true;
+
+                        // Track range bounds for pagination
+                        if (typeof data.timestamp === 'number') {
+                            if (oldestRenderedTs === null || data.timestamp < oldestRenderedTs) {
+                                oldestRenderedTs = data.timestamp;
+                            }
+                        }
+
+                        appendMessage(data, false, fragment);
+                    });
+                    historyEl.appendChild(fragment);
+                    historyEl.scrollTop = historyEl.scrollHeight;
+                    return;
+                }
                 snapshot.docChanges().forEach(function(change) {
                     var doc = change.doc;
                     var data = doc.data();
@@ -1921,9 +2105,9 @@
 
                 if (hasVoted) {
                     btn.disabled = true;
-                    btn.innerHTML = escapeHtml(topic.poll.options[i]) + ' <span style="float:right;">' + counts[i] + ' (' + percent + '%)</span>';
+                    btn.innerHTML = escapeHtml(censorPromo(topic.poll.options[i])) + ' <span style="float:right;">' + counts[i] + ' (' + percent + '%)</span>';
                 } else {
-                    btn.textContent = topic.poll.options[i];
+                    btn.textContent = censorPromo(topic.poll.options[i]);
                     (function(idx) {
                         btn.onclick = function() {
                             castPollVote(topic.id, idx);
@@ -1942,25 +2126,21 @@
             voteRef.set({
                 optionIndex: optionIndex,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(function() {
+                // No standing listener — refresh counts once after our own vote lands.
+                loadPollVotesOnce(topicId);
             }).catch(function(err) {
                 console.error('Error casting vote:', err);
                 showAlertModal('Unable to cast vote. Please try again.');
             });
         }
 
-        function setupPollVotesListener(topicId) {
-            if (pollVotesUnsubscribe) {
-                pollVotesUnsubscribe();
-                pollVotesUnsubscribe = null;
-            }
-            currentPollVotes = {};
-            currentUserPollVote = null;
-            if (!topicId) return;
-            var topic = allTopicsCache.find(function(t) { return t.id === topicId; });
-            if (!topic || !topic.poll) return;
-
-            pollVotesUnsubscribe = socialDb.collection('topics').doc(topicId).collection('pollVotes')
-                .onSnapshot(function(snapshot) {
+        // One-time fetch of all votes (no standing listener — that would download
+        // every vote ever cast, live, on every topic open). Counts update on topic
+        // open and after the current user votes.
+        function loadPollVotesOnce(topicId) {
+            socialDb.collection('topics').doc(topicId).collection('pollVotes').get()
+                .then(function(snapshot) {
                     if (currentTopicId !== topicId) return;
                     currentPollVotes = {};
                     snapshot.forEach(function(doc) {
@@ -1975,9 +2155,20 @@
                     }
                     var t = allTopicsCache.find(function(item) { return item.id === topicId; });
                     if (t) updatePollUI(t);
-                }, function(err) {
-                    console.error('Poll votes listener error:', err);
+                })
+                .catch(function(err) {
+                    console.error('Poll votes fetch error:', err);
                 });
+        }
+
+        function setupPollVotesListener(topicId) {
+            currentPollVotes = {};
+            currentUserPollVote = null;
+            if (!topicId) return;
+            var topic = allTopicsCache.find(function(t) { return t.id === topicId; });
+            if (!topic || !topic.poll) return;
+
+            loadPollVotesOnce(topicId);
         }
 
         function showCommentsLoadingIndicator() {
@@ -2198,8 +2389,8 @@
             }
         }
 
-        function appendMessage(msg, prepend) {
-            var historyEl = document.getElementById('chat-history');
+        function appendMessage(msg, prepend, container) {
+            var historyEl = container || document.getElementById('chat-history');
 
             var isSelf = msg.authorId === (currentUser ? currentUser.uid : null);
             var msgEl = document.createElement('div');
@@ -2227,26 +2418,38 @@
             // Report button for topic comments (visible to all authenticated users) - circular ! style
             var reportCommentBtn = '';
             if (currentUser && msg.authorId && msg.authorId !== currentUser.uid) {
-                var safeTopicCommentId = escapeHtml(msg.id);
-                var safeReportedCommentUid = escapeHtml(msg.authorId);
-                var commentSnapshot = (msg.body || '')
-                    .replace(/\\/g, '\\\\\\\\')
-                    .replace(/'/g, "\\'")
-                    .replace(/\n/g, '\\n')
-                    .replace(/\r/g, '\\r')
-                    .replace(/\u0026/g, '\u0026amp;')
-                    .replace(/\u003c/g, '\u0026lt;')
-                    .replace(/\u003e/g, '\u0026gt;')
-                    .replace(/"/g, '\u0026quot;');
-                reportCommentBtn = '<div class="report-btn" onclick="rekindleOpenReportModal({contentType:\'topic_comment\',contentId:\'' + safeTopicCommentId + '\',contentPath:\'topics/' + escapeHtml(currentTopicId) + '/comments/' + safeTopicCommentId + '\',reportedUserId:\'' + safeReportedCommentUid + '\',contentSnapshot:\'' + commentSnapshot + '\'})" title="Report">!</div>';
+                var safeTopicCommentId = escapeJsString(msg.id);
+                var safeReportedCommentUid = escapeJsString(msg.authorId);
+                var commentSnapshot = escapeJsString(msg.body || '');
+                reportCommentBtn = '<div class="report-btn" onclick="rekindleOpenReportModal({contentType:\'topic_comment\',contentId:\'' + safeTopicCommentId + '\',contentPath:\'topics/' + escapeJsString(currentTopicId) + '/comments/' + safeTopicCommentId + '\',reportedUserId:\'' + safeReportedCommentUid + '\',contentSnapshot:\'' + commentSnapshot + '\'})" title="Report"><span class="report-dot">!</span></div>';
             }
 
             var authorNameSpanId = 'author-name-' + msg.id;
 
             // Profanity Filter (Always enforced)
             var displayBody = msg.body;
+            if (window.rekindleCensorPromotedTerms) {
+                displayBody = window.rekindleCensorPromotedTerms(displayBody);
+            }
             if (window.filterBadWords) {
                 displayBody = window.filterBadWords(displayBody);
+            }
+
+            var topicOriginalBody = displayBody;
+            var msgLang = msg.lang ? String(msg.lang).toLowerCase().replace(/_/g, '-').split('-')[0] : '';
+            var myLang = topicUserLang();
+            var langDiffers = topicLangDiffers(msgLang);
+            var msgKnownForeign = !!msgLang && msgLang !== myLang;
+            var topicTranslated = msg.id ? topicTranslations[msg.id] : '';
+            var topicToggleHtml = '';
+            var topicTranslateHtml = '';
+            if (topicTranslated) {
+                displayBody = topicTranslated;
+                if (window.rekindleCensorPromotedTerms) displayBody = window.rekindleCensorPromotedTerms(displayBody);
+                if (window.filterBadWords) displayBody = window.filterBadWords(displayBody);
+                topicToggleHtml = '<span id="topic-toggle-' + escapeHtml(msg.id) + '" onclick="toggleTopicTranslation(\'' + escapeJsString(msg.id) + '\')" style="font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;">' + window.t('kindlechat.msg.show_original', 'Show Original') + '</span>';
+            } else if (msg.id && msgKnownForeign && currentUser && msg.authorId && msg.authorId !== currentUser.uid) {
+                topicTranslateHtml = '<span id="topic-translate-' + escapeHtml(msg.id) + '" onclick="requestTopicTranslation(\'' + escapeJsString(msg.id) + '\')" style="display:none; font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;">' + window.t('translate.btn.translate', 'Translate') + '</span>';
             }
 
             var nameBadge = '';
@@ -2275,12 +2478,12 @@
 
             msgEl.innerHTML =
                 '<div class="msg-meta">' +
-                '<b class="author-name-field" onclick="openUserProfile(\'' + escapeHtml(msg.authorId) + '\')">' + nameBadge + safeName + '</b> • <span title="' + dateHeader + '">' + timeStr + '</span> ' + delBtn +
+                '<b class="author-name-field" onclick="openUserProfile(\'' + escapeHtml(msg.authorId) + '\')">' + nameBadge + safeName + '</b> • <span title="' + dateHeader + '">' + timeStr + '</span> ' + delBtn + topicToggleHtml + topicTranslateHtml +
                 '</div>' +
                 '<div class="msg-row">' +
                 '<canvas id="' + avatarId + '" class="msg-avatar" width="32" height="32" onclick="openUserProfile(\'' + escapeHtml(msg.authorId) + '\')"></canvas>' +
                 '<div style="display:flex; align-items:center; min-width: 0;">' +
-                '<div class="msg-bubble ' + bubbleClass + '">' + escapeHtml(displayBody) + '</div>' +
+                '<div id="topic-bubble-' + escapeHtml(msg.id || '') + '" class="msg-bubble ' + bubbleClass + '" data-state="' + (topicTranslated ? 'translated' : 'original') + '" data-lang="' + escapeHtml(msgLang) + '" data-original="' + escapeHtml(topicOriginalBody) + '" data-translated="' + escapeHtml(topicTranslated || '') + '" style="' + (topicTranslated ? 'font-style:italic;' : '') + '">' + escapeHtml(displayBody) + '</div>' +
                 reportCommentBtn +
                 '</div>' +
                 '</div>';
@@ -2292,11 +2495,124 @@
 
             renderEmojis(msgEl);
 
+            if (msg.id && currentUser && msg.authorId && msg.authorId !== currentUser.uid && langDiffers && !topicTranslated) {
+                queueTopicAutoTranslation(msg, msgLang || 'auto', myLang);
+            }
+
             // Resolve real name and avatar (the underlying DB call is already async)
             if (msg.authorId) {
                 var nameEl = msgEl.querySelector('.author-name-field');
                 resolveAuthorName(msg.authorId, nameEl, avatarId);
             }
+        }
+
+        function applyTopicTranslation(msgId, translated) {
+            var bubble = document.getElementById('topic-bubble-' + msgId);
+            if (!bubble) return;
+            var original = bubble.getAttribute('data-original') || '';
+            if (!translated || String(translated).toLowerCase().trim() === String(original).toLowerCase().trim()) return;
+            var safe = translated;
+            if (window.rekindleCensorPromotedTerms) safe = window.rekindleCensorPromotedTerms(safe);
+            if (window.filterBadWords) safe = window.filterBadWords(safe);
+            bubble.setAttribute('data-state', 'translated');
+            bubble.setAttribute('data-translated', safe);
+            bubble.style.fontStyle = 'italic';
+            bubble.textContent = safe;
+            if (typeof window.renderEmojis === 'function') {
+                try { window.renderEmojis(bubble); } catch (e) { }
+            }
+            var link = document.getElementById('topic-translate-' + msgId);
+            if (link && link.parentNode) link.parentNode.removeChild(link);
+            var meta = bubble.closest ? bubble.closest('.msg') : null;
+            meta = meta ? meta.querySelector('.msg-meta') : null;
+            if (meta && !document.getElementById('topic-toggle-' + msgId)) {
+                var span = document.createElement('span');
+                span.id = 'topic-toggle-' + msgId;
+                span.style.cssText = 'font-size:0.7rem; color:#666; text-decoration:underline; cursor:pointer; margin-left:5px;';
+                span.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
+                span.onclick = function () { toggleTopicTranslation(msgId); };
+                meta.appendChild(span);
+            }
+        }
+
+        function toggleTopicTranslation(msgId) {
+            var bubble = document.getElementById('topic-bubble-' + msgId);
+            var toggle = document.getElementById('topic-toggle-' + msgId);
+            if (!bubble || !toggle) return;
+            var original = bubble.getAttribute('data-original') || '';
+            var translated = bubble.getAttribute('data-translated') || '';
+            if (bubble.getAttribute('data-state') === 'translated') {
+                bubble.setAttribute('data-state', 'original');
+                bubble.style.fontStyle = 'normal';
+                bubble.textContent = original;
+                toggle.textContent = window.t('kindlechat.msg.show_translated', 'Show Translated');
+            } else {
+                bubble.setAttribute('data-state', 'translated');
+                bubble.style.fontStyle = 'italic';
+                bubble.textContent = translated;
+                toggle.textContent = window.t('kindlechat.msg.show_original', 'Show Original');
+            }
+            if (typeof window.renderEmojis === 'function') {
+                try { window.renderEmojis(bubble); } catch (e) { }
+            }
+        }
+
+        function requestTopicTranslation(msgId) {
+            var bubble = document.getElementById('topic-bubble-' + msgId);
+            var link = document.getElementById('topic-translate-' + msgId);
+            if (!bubble || !link || pendingTopicTranslations[msgId]) return;
+            var text = bubble.getAttribute('data-original') || '';
+            if (!text) return;
+            if (!window.rekindleTranslateClient) {
+                link.textContent = window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+                return;
+            }
+            var target = topicUserLang();
+            var source = bubble.getAttribute('data-lang') || 'auto';
+            pendingTopicTranslations[msgId] = true;
+            link.textContent = window.t('translate.msg.translating', 'Translating...');
+            window.rekindleTranslateClient.translate(text, source, target).then(function (translated) {
+                delete pendingTopicTranslations[msgId];
+                if (!translated || String(translated).toLowerCase().trim() === String(text).toLowerCase().trim()) {
+                    link.textContent = window.t('translate.msg.same_language', 'Already in this language');
+                    return;
+                }
+                topicTranslations[msgId] = translated;
+                applyTopicTranslation(msgId, translated);
+            })['catch'](function (e) {
+                delete pendingTopicTranslations[msgId];
+                link.textContent = (e && e.code === 'budget')
+                    ? window.t('translate.msg.budget', 'Translation limit for this session reached. Try again later.')
+                    : window.t('translate.msg.unavailable', 'Translation is unavailable right now. Try again later.');
+            });
+        }
+
+        function showTopicTranslateLink(msgId) {
+            var link = document.getElementById('topic-translate-' + msgId);
+            if (link) link.style.display = 'inline-block';
+        }
+
+        function queueTopicAutoTranslation(msg, source, target) {
+            var client = window.rekindleTranslateClient;
+            if (!client || typeof client.autoTranslate !== 'function') return;
+            var queued = client.autoTranslate({
+                id: 'topic-comment:' + msg.id,
+                text: msg.body || '',
+                source: source,
+                target: target,
+                onFail: function () { showTopicTranslateLink(msg.id); },
+                apply: function (translated) {
+                    if (!translated) return;
+                    if (String(translated).toLowerCase().trim() === String(msg.body || '').toLowerCase().trim()) {
+                        var sameLink = document.getElementById('topic-translate-' + msg.id);
+                        if (sameLink && sameLink.parentNode) sameLink.parentNode.removeChild(sameLink);
+                        return;
+                    }
+                    topicTranslations[msg.id] = translated;
+                    applyTopicTranslation(msg.id, translated);
+                }
+            });
+            if (!queued) showTopicTranslateLink(msg.id);
         }
 
         function openUserProfile(uid) {
@@ -2336,7 +2652,7 @@
             var deleteErrorEl = document.createElement('div');
             deleteErrorEl.style.cssText = 'min-height:16px;color:red;font-size:0.8rem;margin-bottom:8px;';
             var btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+            btnRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:end;gap:8px;';
             var cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = 'font-family:inherit;font-size:0.8rem;border:2px solid black;background:white;padding:4px 12px;cursor:pointer;box-shadow:2px 2px 0 black;';
@@ -2385,7 +2701,7 @@
             durLabel.style.cssText = 'display:block;font-weight:bold;font-size:0.8rem;margin-bottom:4px;';
             durLabel.textContent = 'Duration';
             var durRow = document.createElement('div');
-            durRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;';
+            durRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:start;gap:8px;align-items:center;margin-bottom:10px;';
             var durInput = document.createElement('input');
             durInput.type = 'number';
             durInput.min = '1';
@@ -2417,7 +2733,7 @@
             var errorEl = document.createElement('div');
             errorEl.style.cssText = 'min-height:16px;color:red;font-size:0.8rem;margin-bottom:8px;';
             var btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+            btnRow.style.cssText = 'display:grid;grid-auto-flow:column;justify-content:end;gap:8px;';
             var cancelBtn = document.createElement('button');
             cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = 'font-family:inherit;font-size:0.8rem;border:2px solid black;background:white;padding:4px 12px;cursor:pointer;box-shadow:2px 2px 0 black;';
@@ -2598,7 +2914,8 @@
         function doPostComment(input, text) {
             if (isPostingComment) return;
             isPostingComment = true;
-            setTimeout(function() { isPostingComment = false; }, 3000); // failsafe unlock
+            // 3s fired while a slow moderation POST was still in flight.
+            setTimeout(function() { isPostingComment = false; }, 30000); // stuck-request escape hatch
 
             var btnSend = document.getElementById('btn-send');
             if (btnSend) {
@@ -2606,20 +2923,32 @@
                 btnSend.style.opacity = '0.5';
             }
 
-            // Clear immediately to prevent UI-bound double submissions
-            input.value = '';
-
+            // Keep the draft until the worker confirms: clearing here lost up to
+            // 1000 characters on any rate-limit / moderation / offline error.
             var postingTopicId = currentTopicId;
             var tokenSource = socialAuth.currentUser || currentUser;
-            tokenSource.getIdToken(true).then(function (token) {
-                    return fetch(MODERATION_WORKER_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + token
-                        },
-                        body: JSON.stringify({ type: 'topic_comment', topicId: postingTopicId, body: text })
-                    }).then(function (resp) { return resp.json(); });
+            // Cached token first; force a refresh only if the worker rejects it.
+            tokenSource.getIdToken().then(function (token) {
+                    function postWith(t) {
+                        return fetch(MODERATION_WORKER_URL, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + t
+                            },
+                            body: JSON.stringify({ type: 'topic_comment', topicId: postingTopicId, body: text, lang: detectPostLang(text) })
+                        });
+                    }
+                    return postWith(token).then(function (resp) {
+                        if (resp.status === 401 || resp.status === 403) {
+                            return tokenSource.getIdToken(true).then(postWith);
+                        }
+                        return resp;
+                    }).then(function (resp) {
+                        return window.rekindleWorkerClient
+                            ? window.rekindleWorkerClient.readJson(resp)
+                            : resp.json();
+                    });
                 }).then(function (result) {
                     isPostingComment = false;
                     if (btnSend) {
@@ -2630,9 +2959,13 @@
                         showAlertModal(result.error);
                         return;
                     }
+                    loadPostLanguageSoon();
+                    // Only clear if the user has not started typing something new.
+                    if (input.value.trim() === text.trim()) input.value = '';
                     var newCount = result.commentCount;
                     if (newCount != null) {
-                        if (!userTopicStates[postingTopicId] || postingTopicId === '__proto__' || postingTopicId === 'constructor' || postingTopicId === 'prototype') userTopicStates[postingTopicId] = {};
+                        if (postingTopicId === '__proto__' || postingTopicId === 'constructor' || postingTopicId === 'prototype') return;
+                        if (!userTopicStates[postingTopicId]) userTopicStates[postingTopicId] = {};
                         userTopicStates[postingTopicId].lastReadCount = newCount;
                         if (currentUser) {
                             db.ref('users_private/' + currentUser.uid + '/topic_states/' + postingTopicId + '/lastReadCount').set(newCount);
@@ -2644,7 +2977,10 @@
                         btnSend.disabled = false;
                         btnSend.style.opacity = '1';
                     }
-                    if (err && err.code === 'PERMISSION_DENIED') {
+                    var outage = window.rekindleWorkerClient && window.rekindleWorkerClient.errorMessage(err);
+                    if (outage) {
+                        showAlertModal(outage);
+                    } else if (err && err.code === 'PERMISSION_DENIED') {
                         showAlertModal("Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.");
                     } else if (err && err.message && err.message.toLowerCase().indexOf('moderation') !== -1) {
                         showAlertModal(err.message);
@@ -2990,9 +3326,11 @@
                             socialDb.collection('topics').doc(editingTopicId).update({
                                 title: title,
                                 subheading: subheading,
-                                icon: selectedIconSvg
+                                icon: selectedIconSvg,
+                                lang: detectPostLang(title + ' ' + subheading)
                             }).then(function () {
                                 closeCreateModal();
+                                loadPostLanguageSoon();
                             }).catch(function(err) {
                                 if (err && err.code === 'PERMISSION_DENIED') {
                                     showAlertModal("Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.");
@@ -3011,9 +3349,11 @@
                             socialDb.collection('topics').doc(editingTopicId).update({
                                 title: title,
                                 subheading: subheading,
-                                icon: selectedIconSvg
+                                icon: selectedIconSvg,
+                                lang: detectPostLang(title + ' ' + subheading)
                             }).then(function () {
                                 closeCreateModal();
+                                loadPostLanguageSoon();
                             }).catch(function(err) {
                                 if (err && err.code === 'PERMISSION_DENIED') {
                                     showAlertModal("Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.");
@@ -3070,9 +3410,14 @@
                             title: title,
                             subheading: subheading,
                             icon: selectedIconSvg,
-                            poll: pollData
+                            poll: pollData,
+                            lang: detectPostLang([title, subheading, pollData && pollData.question, pollData && pollData.options ? pollData.options.join(' ') : ''].join(' '))
                         })
-                    }).then(function (resp) { return resp.json(); });
+                    }).then(function (resp) {
+                        return window.rekindleWorkerClient
+                            ? window.rekindleWorkerClient.readJson(resp)
+                            : resp.json();
+                    });
                 }).then(function (result) {
                     if (submitBtn) {
                         submitBtn.disabled = false;
@@ -3084,12 +3429,16 @@
                     }
                     closeCreateModal();
                     selectTopic(result.id);
+                    loadPostLanguageSoon();
                 }).catch(function(err) {
                     if (submitBtn) {
                         submitBtn.disabled = false;
                         submitBtn.innerText = window.t ? window.t('topics.btn.new', 'Create') : 'Create';
                     }
-                    if (err && err.code === 'PERMISSION_DENIED') {
+                    var outage = window.rekindleWorkerClient && window.rekindleWorkerClient.errorMessage(err);
+                    if (outage) {
+                        showAlertModal(outage);
+                    } else if (err && err.code === 'PERMISSION_DENIED') {
                         showAlertModal("Unable to post. This may be due to a missing age-verification or account restriction. Please sign out and back in, or contact support.");
                     } else if (err && err.message && err.message.toLowerCase().indexOf('moderation') !== -1) {
                         showAlertModal(err.message);
@@ -3104,6 +3453,22 @@
         function escapeHtml(text) {
             if (!text) return "";
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // Escape a value that will sit inside a single-quoted JS string in an
+        // HTML attribute. Backslashes/quotes/newlines are JS-escaped and the
+        // HTML metacharacters are entity-encoded so the attribute survives.
+        function escapeJsString(text) {
+            if (text === null || text === undefined) return "";
+            return String(text)
+                .replace(/\\/g, "\\\\")
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
         }
 
         function resolveAuthorName(uid, element, avatarId) {
@@ -3317,10 +3682,6 @@
                 if (commentsUnsubscribe) {
                     commentsUnsubscribe();
                     commentsUnsubscribe = null;
-                }
-                if (pollVotesUnsubscribe) {
-                    pollVotesUnsubscribe();
-                    pollVotesUnsubscribe = null;
                 }
                 if (topicsListenerRef) {
                     topicsListenerRef(); // Firestore unsubscribe function

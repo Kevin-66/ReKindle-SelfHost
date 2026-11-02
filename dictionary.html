@@ -7,8 +7,9 @@
     <meta charset="UTF-8">
 
     <title>Dictionary</title>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <script src="js/custom-select.js?v=2"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -168,8 +169,9 @@
             box-shadow: none;
         }
     </style>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="theme.js?v=18"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="theme.js?v=35"></script>
+    <script src="js/safe-html.js?v=1"></script>
     <style>
         #content-area {
             flex-grow: 1;
@@ -403,10 +405,12 @@
         </div>
 
         <div id="content-area">
-            <div style="text-align:center; margin-top:50px;">
-                <h1 style="font-family: 'Helvetica Neue'; font-size: 2rem;" data-i18n="dictionary.title">Dictionary</h1>
-                <p data-i18n="dictionary.msg.initial">Type a word above to begin.</p>
-            </div>
+            <script>
+                document.getElementById('content-area').innerHTML = window.rekindleEmptyState(
+                    window.t('dictionary.msg.initial', 'Type a word above to begin.'),
+                    { icon: 'search' }
+                );
+            </script>
         </div>
     </div>
 
@@ -414,6 +418,11 @@
         function escapeHtml(text) {
             if (text == null) return "";
             return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+        // Safe argument for an inline handler: JSON handles escapes, escapeHtml
+        // keeps the double-quoted HTML attribute intact.
+        function jsArg(value) {
+            return escapeHtml(JSON.stringify(String(value == null ? '' : value)));
         }
         function showModal(msg, isConfirm = false, callback = null) {
             const overlay = document.getElementById('modal-overlay');
@@ -493,10 +502,10 @@
                 const data = await res.json();
                 renderWordOfDayResult(data);
             } catch (e) {
-                content.innerHTML = `<div style="text-align:center; margin-top:50px;">
-                    <h1 style="font-family:'Helvetica Neue';font-size:2rem;" data-i18n="dictionary.title">Dictionary</h1>
-                    <p data-i18n="dictionary.msg.initial">Type a word above to begin.</p>
-                </div>`;
+                content.innerHTML = window.rekindleEmptyState(
+                    window.t('dictionary.msg.initial', 'Type a word above to begin.'),
+                    { icon: 'search' }
+                );
             }
         }
 
@@ -508,37 +517,36 @@
             let audioHtml = "";
             const phonetic = entry.phonetics.find(p => p.audio && p.audio.length > 0);
             if (phonetic) {
-                audioHtml = `<button class="audio-btn" onclick="playAudio('${phonetic.audio}')">🔊</button>`;
+                audioHtml = `<button class="audio-btn" onclick="playAudio(${jsArg(phonetic.audio)})">♪</button>`;
             }
             const textPhonetic = entry.phonetic || (entry.phonetics.find(p => p.text) ? entry.phonetics.find(p => p.text).text : "");
 
             let html = `
-                <div class="wotd-banner">${label}</div>
+                <div class="wotd-banner">${escapeHtml(label)}</div>
                 <div class="word-header">
-                    <div class="word-title">${entry.word} ${audioHtml}</div>
-                    <div class="phonetic">${textPhonetic}</div>
+                    <div class="word-title">${escapeHtml(entry.word)} ${audioHtml}</div>
+                    <div class="phonetic">${escapeHtml(textPhonetic)}</div>
                 </div>
             `;
 
             entry.meanings.forEach(meaning => {
-                html += `<div class="part-of-speech">${meaning.partOfSpeech}</div>`;
+                html += `<div class="part-of-speech">${escapeHtml(meaning.partOfSpeech)}</div>`;
                 html += `<ol class="definitions">`;
                 meaning.definitions.forEach(def => {
-                    html += `<li>${def.definition}`;
-                    if (def.example) html += `<span class="example">"${def.example}"</span>`;
+                    html += `<li>${escapeHtml(def.definition)}`;
+                    if (def.example) html += `<span class="example">"${escapeHtml(def.example)}"</span>`;
                     html += `</li>`;
                 });
                 html += `</ol>`;
                 if (meaning.synonyms && meaning.synonyms.length > 0) {
-                    const synsLabel = window.t ? window.t('dictionary.label.synonyms') : "Synonyms:";
-                    const syns = meaning.synonyms.slice(0, 5).map(s => `<span class="syn-tag" onclick="searchWord('${s}')">${s}</span>`).join(", ");
+                    const synsLabel = window.t ? window.t('dictionary.label.synonyms', "Synonyms:") : "Synonyms:";
+                    const syns = meaning.synonyms.slice(0, 5).map(s => `<span class="syn-tag" onclick="searchWord(${jsArg(s)})">${escapeHtml(s)}</span>`).join(", ");
                     html += `<div class="synonyms"><strong>${synsLabel}</strong> ${syns}</div>`;
                 }
             });
 
-            html += `<br><br><div style="font-size:0.7rem;color:#999;border-top:1px solid #ccc;padding-top:5px;">${window.t ? window.t('dictionary.label.source_api') : "Source: Wiktionary (via DictionaryAPI)"}</div>`;
-            var sanitizedHtml = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-            content.innerHTML = sanitizedHtml;
+            html += `<br><br><div style="font-size:0.7rem;color:#999;border-top:1px solid #ccc;padding-top:5px;">${window.t ? window.t('dictionary.label.source_api', "Source: Wiktionary (via DictionaryAPI)") : "Source: Wiktionary (via DictionaryAPI)"}</div>`;
+            window.rekindleSetSafeHtml(content, html);
             content.scrollTop = 0;
         }
 
@@ -561,7 +569,7 @@
             if (wordOverride) document.getElementById('search-input').value = wordOverride;
 
             const content = document.getElementById('content-area');
-            content.innerHTML = `<div class='error-msg'>${window.t ? window.t('dictionary.msg.searching') : "Searching..."}</div>`;
+            content.innerHTML = `<div class='error-msg'>${window.t ? window.t('dictionary.msg.searching', "Searching...") : "Searching..."}</div>`;
 
             const lang = document.getElementById('lang-select').value;
 
@@ -580,7 +588,7 @@
                 const res = await fetch(API_URL + encodeURIComponent(query));
 
                 if (!res.ok) {
-                    throw new Error(window.t ? window.t('dictionary.error.title') : "Word not found");
+                    throw new Error(window.t ? window.t('dictionary.error.title', "No Definition Found") : "Word not found");
                 }
 
                 const data = await res.json();
@@ -604,12 +612,12 @@
                 const pageId = Object.keys(pages)[0];
 
                 if (pageId === "-1") {
-                    throw new Error(window.t ? window.t('dictionary.error.title') : "Word not found");
+                    throw new Error(window.t ? window.t('dictionary.error.title', "No Definition Found") : "Word not found");
                 }
 
                 const extract = pages[pageId].extract;
                 if (!extract) {
-                    throw new Error(window.t ? window.t('dictionary.error.title') : "No definition found");
+                    throw new Error(window.t ? window.t('dictionary.error.title', "No Definition Found") : "No definition found");
                 }
 
                 // Extract Ancient Greek section
@@ -620,7 +628,7 @@
                     // but if 'logos' page exists (for English) but has no Ancient Greek, we fail here.
                     // We could potentially try to search for the Greek script version if the user typed Latin, but that's complex.
                     // For now, simple fail.
-                    throw new Error(window.t ? window.t('dictionary.error.title') : "No Ancient Greek definition found on this page");
+                    throw new Error(window.t ? window.t('dictionary.error.title', "No Definition Found") : "No Ancient Greek definition found on this page");
                 }
 
                 renderWiktionaryResult(query, greekContent);
@@ -675,12 +683,12 @@
                 const pageId = Object.keys(pages)[0];
 
                 if (pageId === "-1") {
-                    throw new Error(window.t ? window.t('dictionary.error.title') : "Word not found");
+                    throw new Error(window.t ? window.t('dictionary.error.title', "No Definition Found") : "Word not found");
                 }
 
                 const extract = pages[pageId].extract;
                 if (!extract) {
-                    throw new Error(window.t ? window.t('dictionary.error.title') : "No definition found");
+                    throw new Error(window.t ? window.t('dictionary.error.title', "No Definition Found") : "No definition found");
                 }
 
                 renderWiktionaryResult(query, extract);
@@ -692,9 +700,9 @@
 
         function renderError(query) {
             const content = document.getElementById('content-area');
-            const title = window.t ? window.t('dictionary.error.title') : "No Definition Found";
-            const body = (window.t ? window.t('dictionary.error.body') : "Sorry, we couldn't find definitions for \"${query}\".").replace('${query}', escapeHtml(query));
-            const hint = window.t ? window.t('dictionary.error.hint') : "Please check your spelling.";
+            const title = window.t ? window.t('dictionary.error.title', "No Definition Found") : "No Definition Found";
+            const body = (window.t ? window.t('dictionary.error.body', "Sorry, we couldn't find definitions for \"${query}\".") : "Sorry, we couldn't find definitions for \"${query}\".").replace('${query}', escapeHtml(query));
+            const hint = window.t ? window.t('dictionary.error.hint', "Please check your spelling.") : "Please check your spelling.";
 
             content.innerHTML = `
                 <div class="error-msg">
@@ -712,15 +720,17 @@
             // We wrapper it to style it
             let html = `
                 <div class="word-header">
-                    <div class="word-title">${word}</div>
+                    <div class="word-title">${escapeHtml(word)}</div>
                 </div>
                 <div class="wiki-content">
                     ${htmlContent}
                 </div>
-                 <br><br><div style="font-size:0.7rem; color:#999; border-top:1px solid #ccc; padding-top:5px;">${window.t ? window.t('dictionary.label.source_wiki') : "Source: Wiktionary"}</div>
+                 <br><br><div style="font-size:0.7rem; color:#999; border-top:1px solid #ccc; padding-top:5px;">${window.t ? window.t('dictionary.label.source_wiki', "Source: Wiktionary") : "Source: Wiktionary"}</div>
             `;
 
-            content.innerHTML = html;
+            // htmlContent is raw MediaWiki HTML: sanitise it through DOMParser
+            // instead of running it through innerHTML.
+            window.rekindleSetSafeHtml(content, html);
             content.scrollTop = 0;
         }
 
@@ -736,27 +746,27 @@
             // Find first valid audio
             const phonetic = entry.phonetics.find(p => p.audio && p.audio.length > 0);
             if (phonetic) {
-                audioHtml = `<button class="audio-btn" onclick="playAudio('${phonetic.audio}')">🔊</button>`;
+                audioHtml = `<button class="audio-btn" onclick="playAudio(${jsArg(phonetic.audio)})">♪</button>`;
             }
 
             const textPhonetic = entry.phonetic || (entry.phonetics.find(p => p.text) ? entry.phonetics.find(p => p.text).text : "");
 
             let html = `
                 <div class="word-header">
-                    <div class="word-title">${entry.word} ${audioHtml}</div>
-                    <div class="phonetic">${textPhonetic}</div>
+                    <div class="word-title">${escapeHtml(entry.word)} ${audioHtml}</div>
+                    <div class="phonetic">${escapeHtml(textPhonetic)}</div>
                 </div>
             `;
 
             // 2. Meanings
             entry.meanings.forEach(meaning => {
-                html += `<div class="part-of-speech">${meaning.partOfSpeech}</div>`;
+                html += `<div class="part-of-speech">${escapeHtml(meaning.partOfSpeech)}</div>`;
 
                 html += `<ol class="definitions">`;
                 meaning.definitions.forEach(def => {
-                    html += `<li>${def.definition}`;
+                    html += `<li>${escapeHtml(def.definition)}`;
                     if (def.example) {
-                        html += `<span class="example">"${def.example}"</span>`;
+                        html += `<span class="example">"${escapeHtml(def.example)}"</span>`;
                     }
                     html += `</li>`;
                 });
@@ -764,23 +774,23 @@
 
                 // Synonyms/Antonyms
                 if (meaning.synonyms && meaning.synonyms.length > 0) {
-                    const synsLabel = window.t ? window.t('dictionary.label.synonyms') : "Synonyms:";
-                    const syns = meaning.synonyms.slice(0, 5).map(s => `<span class="syn-tag" onclick="searchWord('${s}')">${s}</span>`).join(", ");
+                    const synsLabel = window.t ? window.t('dictionary.label.synonyms', "Synonyms:") : "Synonyms:";
+                    const syns = meaning.synonyms.slice(0, 5).map(s => `<span class="syn-tag" onclick="searchWord(${jsArg(s)})">${escapeHtml(s)}</span>`).join(", ");
                     html += `<div class="synonyms"><strong>${synsLabel}</strong> ${syns}</div>`;
                 }
             });
 
             // License/Source footer (optional, keeps it clean to omit or minimal)
-            html += `<br><br><div style="font-size:0.7rem; color:#999; border-top:1px solid #ccc; padding-top:5px;">${window.t ? window.t('dictionary.label.source_api') : "Source: Wiktionary (via DictionaryAPI)"}</div>`;
+            html += `<br><br><div style="font-size:0.7rem; color:#999; border-top:1px solid #ccc; padding-top:5px;">${window.t ? window.t('dictionary.label.source_api', "Source: Wiktionary (via DictionaryAPI)") : "Source: Wiktionary (via DictionaryAPI)"}</div>`;
 
-            content.innerHTML = html;
+            window.rekindleSetSafeHtml(content, html);
             content.scrollTop = 0;
         }
 
         function playAudio(url) {
             const audio = new Audio(url);
             audio.play().catch(e => {
-                const msg = window.t ? window.t('dictionary.modal.audio_error') : "Could not play audio.";
+                const msg = window.t ? window.t('dictionary.modal.audio_error', "Could not play audio.") : "Could not play audio.";
                 showModal(msg);
             });
         }
@@ -789,7 +799,7 @@
 
 
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
     <!-- STANDARD MODAL POPUP -->
     <div id="modal-overlay">
         <div class="modal-box">

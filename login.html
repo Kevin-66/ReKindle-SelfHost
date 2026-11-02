@@ -5,22 +5,22 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <script src="js/anti-tamper.js"></script>
+    <script src="js/anti-tamper.js?v=1"></script>
     <title data-i18n="login.title">Login / Register</title>
     <link rel="manifest" href="manifest.json">
 
     <!-- Firebase Compat (no RTDB on this page to avoid Safari extension / polling errors) -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js" defer></script>
 
-    <script src="time.js" defer></script>
-    <script src="icons.js?v=2" defer></script>
-    <script src="theme.js?v=18" defer></script>
-    <script src="bad_words.js?v=4" defer></script>
-    <script src="js/i18n.js" defer></script>
-    <script src="js/ip-ban.js" defer></script>
+    <script src="time.js?v=5" defer></script>
+    <script src="theme.js?v=35" defer></script>
+    <script src="js/i18n.js?v=4" defer></script>
+    <script src="js/ip-ban.js?v=1" defer></script>
 
     <style>
         /* Global animation kill switch for E-ink */
@@ -55,7 +55,7 @@
             border: 2px solid black;
             box-shadow: var(--shadow);
             width: 95%;
-            max-width: 600px;
+            max-width: 460px;
             max-height: 90vh;
             display: flex;
             flex-direction: column;
@@ -117,19 +117,27 @@
         }
 
         .window-content {
-            padding: 15px;
+            padding: 20px;
             overflow-y: auto;
             flex-grow: 1;
+            box-sizing: border-box;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto;
+            box-sizing: border-box;
         }
 
         .state-row {
             display: flex;
             justify-content: space-between;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
+            color: #555;
             margin-bottom: 12px;
-            border: 1px solid #ccc;
-            padding: 6px 8px;
-            background: #f8f8f8;
+            border-bottom: 1px solid #ccc;
+            padding: 0 0 8px;
         }
 
         label {
@@ -152,17 +160,20 @@
         }
 
         .button-row {
-            display: flex;
-            flex-wrap: wrap;
-            margin-top: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 14px;
         }
 
         .button-row > * + * {
-            margin-left: 10px;
+            margin-left: 0;
         }
 
         button {
-            padding: 10px 18px;
+            width: 100%;
+            min-height: 48px;
+            padding: 8px 12px;
             font-size: 16px;
             border: 2px solid #000;
             background: #fff;
@@ -170,7 +181,8 @@
             box-shadow: 2px 2px 0 black;
             font-family: inherit;
             font-weight: bold;
-            margin-bottom: 8px;
+            margin-bottom: 0;
+            box-sizing: border-box;
         }
 
         button:active {
@@ -180,21 +192,52 @@
             color: white;
         }
 
+        button.primary-btn {
+            background: #000;
+            color: #fff;
+        }
+
+        button.primary-btn:active {
+            background: #fff;
+            color: #000;
+        }
+
         button.secondary {
-            background: #ddd;
+            background: #fff;
+        }
+
+        .hint {
+            font-size: 0.78rem;
+            line-height: 1.4;
+            color: #555;
+            margin: 14px 0;
+        }
+
+        details.diag {
+            border-top: 1px solid #ccc;
+            margin-top: 14px;
+            padding-top: 10px;
+            font-size: 0.8rem;
+        }
+
+        details.diag summary {
+            cursor: pointer;
+            font-weight: bold;
+            min-height: 48px;
+            line-height: 48px;
         }
 
         #log {
             background: #f0f0f0;
             border: 1px solid #ccc;
             padding: 5px;
-            margin-top: 15px;
+            margin-top: 10px;
             white-space: pre-wrap;
-            min-height: 160px;
-            max-height: 220px;
+            min-height: 120px;
+            max-height: 200px;
             overflow-y: auto;
             font-family: "Courier New", monospace;
-            font-size: 0.85rem;
+            font-size: 0.72rem;
         }
 
         .log-line {
@@ -279,35 +322,42 @@
         </div>
 
         <div class="window-content">
-            <div class="state-row">
-                <span id="auth-state" data-i18n="login.state.loading">Auth: Loading...</span>
-                <span id="network-state" data-i18n="login.net.checking">Net: Checking...</span>
+            <div class="login-card">
+                <div class="state-row">
+                    <span id="auth-state" data-i18n="login.state.loading">Auth: Loading...</span>
+                    <span id="network-state" data-i18n="login.net.checking">Net: Checking...</span>
+                </div>
+
+                <label for="username" data-i18n="login.label.username">Username / Email:</label>
+                <input type="text" id="username" autocapitalize="none" autocorrect="off" autocomplete="off"
+                    data-i18n-placeholder="login.placeholder.username" placeholder="Username">
+
+                <label for="password" data-i18n="login.label.password">Password:</label>
+                <input type="password" id="password" autocomplete="off">
+
+                <div class="button-row">
+                    <button class="primary-btn" onclick="doLogin()" data-i18n="login.btn.login">Login</button>
+                    <button onclick="doRegister()" data-i18n="login.btn.register">Register</button>
+                </div>
+
+                <div class="button-row">
+                    <button onclick="doLogout()" class="secondary" data-i18n="login.btn.logout">Logout</button>
+                    <button onclick="location.href='index'" class="secondary" data-i18n="login.btn.home">Home</button>
+                </div>
+
+                <p class="hint" data-i18n="login.hint">
+                    Enter your username and password. Usernames are automatically suffixed with @rekindle.ink.
+                </p>
+
+                <details class="diag">
+                    <summary data-i18n="login.diag.summary">Troubleshooting</summary>
+                    <div class="button-row">
+                        <button onclick="runDiagnostics()" class="secondary" data-i18n="login.btn.diagnostics">Run Diagnostics</button>
+                        <button onclick="clearLog()" class="secondary" data-i18n="login.btn.clear_log">Clear Log</button>
+                    </div>
+                    <div id="log"></div>
+                </details>
             </div>
-
-            <label for="username" data-i18n="login.label.username">Username / Email:</label>
-            <input type="text" id="username" autocapitalize="none" autocorrect="off" autocomplete="off"
-                data-i18n-placeholder="login.placeholder.username" placeholder="Username">
-
-            <label for="password" data-i18n="login.label.password">Password:</label>
-            <input type="password" id="password" autocomplete="off">
-
-            <div class="button-row">
-                <button onclick="doLogin()" data-i18n="login.btn.login">Login</button>
-                <button onclick="doRegister()" data-i18n="login.btn.register">Register</button>
-                <button onclick="doLogout()" class="secondary" data-i18n="login.btn.logout">Logout</button>
-            </div>
-
-            <div class="button-row">
-                <button onclick="runDiagnostics()" class="secondary" data-i18n="login.btn.diagnostics">Run Diagnostics</button>
-                <button onclick="clearLog()" class="secondary" data-i18n="login.btn.clear_log">Clear Log</button>
-                <button onclick="location.href='index'" class="secondary" data-i18n="login.btn.home">Home</button>
-            </div>
-
-            <p class="hint" data-i18n="login.hint">
-                Enter your username and password. Usernames are automatically suffixed with @rekindle.ink.
-            </p>
-
-            <div id="log"></div>
         </div>
     </div>
 
@@ -327,6 +377,9 @@
         var logElem = document.getElementById('log');
         var auth;
         var isFirebaseAvailable = false;
+        var pendingReturn = getSafeReturnUrl();
+        var returnHandled = false;
+        var timezoneRestored = false;
 
         function log(msg, type) {
             var div = document.createElement('div');
@@ -350,6 +403,64 @@
         function clearLog() {
             logElem.innerHTML = '';
             log("Log cleared.");
+        }
+
+        // Only allow same-origin relative paths (e.g. /reader?lang=de).
+        function getSafeReturnUrl() {
+            try {
+                var params = new URLSearchParams(window.location.search);
+                var ret = params.get('return');
+                if (!ret) return '';
+                var u = new URL(ret, window.location.origin);
+                // Pin to this origin: rejects //evil.com, javascript:, data: and
+                // backslash tricks that a startsWith('/') check would let through.
+                if (u.origin !== window.location.origin) return '';
+                if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+                if (u.pathname === '/login' || u.pathname === '/login.html') return '';
+                return u.pathname + u.search + u.hash;
+            } catch (e) {
+                return '';
+            }
+        }
+
+        // Pull the account's saved settings/general.manualLocation into
+        // localStorage before returning to the app that opened the timezone
+        // prompt. Also runs on a normal login so apps opened later are covered.
+        function restoreTimezone(user, done) {
+            var finished = false;
+            function finish() {
+                if (finished) return;
+                finished = true;
+                if (done) done();
+            }
+            setTimeout(finish, 2500);
+            try {
+                if (typeof firebase === 'undefined' || !firebase.firestore) { finish(); return; }
+                firebase.firestore().collection('users').doc(user.uid)
+                    .collection('settings').doc('general').get()
+                    .then(function (doc) {
+                        if (doc.exists) {
+                            var data = doc.data();
+                            if (data.manualLocation) {
+                                localStorage.setItem('rekindle_location_manual', JSON.stringify(data.manualLocation));
+                                if (typeof data.manualLocation.utc_offset === 'number') {
+                                    localStorage.setItem('rekindle_timezone_offset', data.manualLocation.utc_offset);
+                                }
+                            }
+                            if (typeof data.timezoneOffset === 'number') {
+                                localStorage.setItem('rekindle_timezone_offset', data.timezoneOffset);
+                            }
+                        }
+                        finish();
+                    })
+                    .catch(function (e) {
+                        console.warn('Timezone restore failed', e);
+                        finish();
+                    });
+            } catch (e) {
+                console.warn('Timezone restore unavailable', e);
+                finish();
+            }
         }
 
         window.onerror = function (msg, url, line) {
@@ -408,7 +519,17 @@
                         }).catch(function (e) {
                             log("Token details failed: " + e.message, "warn");
                         });
+                        if (!timezoneRestored) {
+                            timezoneRestored = true;
+                            restoreTimezone(user, function () {
+                                if (pendingReturn && !returnHandled) {
+                                    returnHandled = true;
+                                    window.location.href = pendingReturn;
+                                }
+                            });
+                        }
                     } else {
+                        timezoneRestored = false;
                         document.getElementById('auth-state').innerText = window.t ? window.t('login.state.signed_out', 'Auth: Signed Out') : 'Auth: Signed Out';
                         log("User signed out.", "info");
                     }
@@ -504,6 +625,10 @@
             }
 
             log("Attempting sign in for: " + email + "...", "info");
+            // A service-worker controllerchange reload would abort this request
+            // and drop the user back into Guest Mode; theme.js skips the reload
+            // while this flag is set.
+            window.__rkAuthBusy = true;
             try {
                 await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
                 var userCredential = await auth.signInWithEmailAndPassword(email, password);
@@ -524,12 +649,14 @@
                     msg = window.t ? window.t('login.error.network', 'Network request failed. Check system clock and connection.') : 'Network request failed. Check system clock and connection.';
                 }
                 showAlertModal(msg);
+            } finally {
+                window.__rkAuthBusy = false;
             }
         }
         window.doLogin = doLogin;
 
         function isForbiddenUsername(u) {
-            var forbidden = ["root", "system", "admin", "administrator", "mod", "moderator", "support", "ukiyo", "rekindle", "wantban"];
+            var forbidden = ["root", "system", "admin", "administrator", "mod", "moderator", "support", "ukiyo", "rekindle", "wantban", "kindlehub", "khub", "unreader", "inkchat"];
             var lowerU = u.toLowerCase();
             return forbidden.some(function (word) { return lowerU.indexOf(word) !== -1; });
         }
@@ -537,6 +664,22 @@
         function isBadWord(u) {
             if (!window.filterBadWords) return false;
             return window.filterBadWords(u) !== u;
+        }
+
+        // bad_words.js (~18 KB compressed) is only needed when someone
+        // registers, so it loads on first use instead of on every visit.
+        var badWordsPromise = null;
+        function ensureBadWords() {
+            if (window.filterBadWords) return Promise.resolve();
+            if (badWordsPromise) return badWordsPromise;
+            badWordsPromise = new Promise(function (resolve) {
+                var s = document.createElement('script');
+                s.src = 'bad_words.js?v=4';
+                s.onload = resolve;
+                s.onerror = resolve;
+                document.head.appendChild(s);
+            });
+            return badWordsPromise;
         }
 
         async function doRegister() {
@@ -566,6 +709,7 @@
                 showAlertModal(window.t ? window.t('login.error.username_forbidden', 'Forbidden username.') : 'Forbidden username.');
                 return;
             }
+            await ensureBadWords();
             if (isBadWord(u)) {
                 showAlertModal(window.t ? window.t('login.error.username_bad_word', 'Username contains inappropriate language.') : 'Username contains inappropriate language.');
                 return;

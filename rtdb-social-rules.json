@@ -30,7 +30,9 @@
                 ".read": "auth != null && (auth.token.ageVerified == true || auth.token.email === 'ukiyo@rekindle.ink')",
                 ".write": "auth.token.email === 'ukiyo@rekindle.ink'",
                 ".indexOn": [
-                    "timestamp"
+                    "timestamp",
+                    "uid",
+                    "user"
                 ],
                 "$messageId": {
                     ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/) || (auth != null && !newData.exists() && auth.token.moderator === true && data.child('uid').val() !== auth.uid) || (auth != null && data.exists() && newData.exists() && newData.child('text').val() === data.child('text').val() && newData.child('timestamp').val() === data.child('timestamp').val() && newData.child('uid').val() === data.child('uid').val())",
@@ -49,17 +51,78 @@
             "art_index": {
                 ".read": "auth != null && (auth.token.ageVerified == true || auth.token.email === 'ukiyo@rekindle.ink')",
                 ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
-                ".indexOn": ["timestamp"],
+                ".indexOn": ["timestamp", "uid"],
                 "$messageId": {
                     ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/) || (auth != null && auth.token.ageVerified == true && root.child('kindlechat/messages/' + $messageId + '/uid').val() === auth.uid && !newData.exists())",
                     ".validate": "newData.hasChildren(['uid', 'type', 'timestamp', 'thumbnail']) && (newData.child('type').val() === 'pixel_art' || newData.child('type').val() === 'flipbook') && newData.child('thumbnail').isString() && newData.child('text').isString()"
                 }
+            },
+            "config": {
+                ".read": "auth != null",
+                ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)"
+            },
+            "dm_threads": {
+                ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                "$threadId": {
+                    ".read": "auth != null && (auth.token.ageVerified == true || auth.token.email === 'ukiyo@rekindle.ink') && root.child('kindlechat/dm_threads/' + $threadId + '/participants/' + auth.uid).val() === true",
+                    ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                    ".validate": "newData.hasChildren(['participants', 'requestedBy', 'status']) && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'accepted' || newData.child('status').val() === 'declined' || newData.child('status').val() === 'blocked')"
+                }
+            },
+            "dm_messages": {
+                ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                "$threadId": {
+                    ".read": "auth != null && (auth.token.ageVerified == true || auth.token.email === 'ukiyo@rekindle.ink') && root.child('kindlechat/dm_threads/' + $threadId + '/participants/' + auth.uid).val() === true",
+                    ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                    ".indexOn": ["timestamp"],
+                    "$messageId": {
+                        ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                        ".validate": "newData.hasChildren(['uid', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 1000 && newData.child('uid').isString() && newData.child('timestamp').isNumber()"
+                    }
+                }
+            },
+            "dm_user_threads": {
+                "$uid": {
+                    ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'ukiyo@rekindle.ink')",
+                    ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                    ".indexOn": ["lastMessageAt", "status"],
+                    "$threadId": {
+                        "lastReadAt": {
+                            ".write": "auth != null && auth.uid === $uid && root.child('kindlechat/dm_threads/' + $threadId + '/participants/' + $uid).val() === true",
+                            ".validate": "newData.isNumber()"
+                        }
+                    }
+                }
+            },
+            "dm_prefs": {
+                "$uid": {
+                    ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'ukiyo@rekindle.ink')",
+                    ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                    "allowRequests": {
+                        ".write": "auth != null && auth.uid === $uid",
+                        ".validate": "newData.isBoolean()"
+                    }
+                }
+            },
+            "dm_blocks": {
+                "$uid": {
+                    ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'ukiyo@rekindle.ink')",
+                    ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+                    "$blockedUid": {
+                        ".validate": "newData.isBoolean() && newData.val() === true"
+                    }
+                }
             }
         },
-        "reports": {
-            ".read": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.moderator === true",
+        "automod_log": {
+            ".read": "auth.token.email === 'ukiyo@rekindle.ink'",
             ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
-            ".indexOn": ["contentId", "contentType", "status", "createdAt"]
+            ".indexOn": ["timestamp", "uid", "contentType"]
+        },
+        "reports": {
+            ".read": "auth.token.email === 'ukiyo@rekindle.ink'",
+            ".write": "auth.token.email === 'ukiyo@rekindle.ink' || auth.token.email.matches(/^.*@rekindle-socials\\.iam\\.gserviceaccount\\.com$/)",
+            ".indexOn": ["contentId", "contentType", "status", "createdAt", "reporterId", "reportedUserId"]
         },
         "users_public": {
             ".read": "auth != null && (auth.token.ageVerified == true || auth.token.email === 'ukiyo@rekindle.ink')",

@@ -176,6 +176,7 @@
 
         /* TOOLBAR */
         .toolbar {
+            position: relative;
             display: flex;
             align-items: center;
             padding: 8px;
@@ -186,6 +187,27 @@
 
         .toolbar>*+* {
             margin-left: 8px;
+        }
+        /* One height for every toolbar control. The custom-select trigger is
+           content-box with its own padding, so without this the folder picker
+           sat ~7px taller than the buttons beside it. */
+        .toolbar .toolbar-btn,
+        .toolbar .custom-select-trigger {
+            height: 32px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px;
+            line-height: 1;
+            font-size: 0.85rem;
+        }
+        .toolbar .custom-select-trigger {
+            padding-right: 30px;
+            justify-content: flex-start;
+        }
+        .toolbar .custom-select-container {
+            height: 32px;
         }
 
         .toolbar-btn {
@@ -391,13 +413,22 @@
             left: 0;
             width: 100%;
             height: calc(100% - 35px);
-            background: rgba(255, 255, 255, 0.95);
+            background: #fff;
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 100;
             text-align: center;
+        }
+
+        /* theme.js forces a 55% white wash on every [id$="-overlay"] in dark mode
+           so scrims dim instead of brighten. Its rule carries
+           :not(#gallery-flipbook-overlay), which outranks a plain #auth-overlay
+           selector, so the id is repeated to win the !important tie - this
+           element is a dialog, not a scrim, and must stay opaque. */
+        :root[data-theme="dark"] #auth-overlay#auth-overlay {
+            background-color: #fff !important;
         }
 
         .sys-btn {
@@ -586,17 +617,20 @@
             background: #f0f0f0;
         }
     </style>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="pro-gate.js"></script>
-    <script src="pro-gate.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
+    <script src="time.js?v=5"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/safe-html.js?v=1"></script>
+    <script src="pro-gate.js?v=7"></script>
+    
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/custom-select.js?v=2"></script>
     <style>
         .login-input {
             width: 100%;
@@ -613,6 +647,113 @@
             width: 100%;
             max-width: 300px;
         }
+
+        /* Matches css/custom-select.css (.custom-options) so the two dropdowns
+           in the toolbar read as the same control. */
+        .accounts-anchor {
+            position: relative;
+            display: inline-flex;
+        }
+        .accounts-anchor.open #accounts-btn {
+            background: #eee;
+        }
+        .accounts-anchor #accounts-btn {
+            position: relative;
+            padding-right: 26px;
+            max-width: 210px;
+        }
+        #accounts-btn-label {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        /* Same down-triangle as the folder picker's .custom-arrow. */
+        .accounts-arrow {
+            position: absolute;
+            right: 9px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.6rem;
+            line-height: 1;
+            pointer-events: none;
+        }
+        .accounts-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            min-width: 240px;
+            max-width: 320px;
+            max-height: 60vh;
+            overflow-y: auto;
+            background: #fff;
+            border: 2px solid black;
+            border-top: none;
+            box-shadow: 4px 4px 0 black;
+            z-index: 9999;
+            padding: 0;
+            text-align: left;
+        }
+        .menu-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: #fff;
+            border: none;
+            border-bottom: 1px solid #eee;
+            padding: 8px 10px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #000;
+            cursor: pointer;
+        }
+        .menu-item:last-child { border-bottom: none; }
+        .menu-item:hover { background: #f0f0f0; }
+        .menu-item:active { background: #000; color: #fff; }
+        .menu-item.active { background: #eee; }
+        .menu-item .menu-sub { display: block; font-weight: normal; font-size: 0.7rem; color: #555; }
+        .menu-sep { border-top: 1px solid #ccc; margin: 4px 0; }
+        .account-tag {
+            display: inline-block;
+            border: 1px solid #666;
+            font-size: 0.6rem;
+            padding: 0 3px;
+            margin-right: 5px;
+            vertical-align: middle;
+            max-width: 72px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .link-btn {
+            background: none;
+            border: none;
+            padding: 6px 0;
+            font-family: inherit;
+            font-size: 0.8rem;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        /* Account list */
+        .account-row { border: 2px solid black; background: #fff; padding: 8px 10px; margin-bottom: 8px; }
+        .account-row.active { background: #e9e9e9; }
+        .account-name { font-weight: bold; font-size: 0.9rem; word-break: break-all; }
+        .account-active { font-weight: normal; font-size: 0.75rem; }
+        .account-meta { font-size: 0.75rem; color: #555; margin-top: 2px; word-break: break-all; }
+        .account-actions { display: flex; margin-top: 8px; }
+        .account-actions button { font-size: 0.8rem; padding: 6px 12px; }
+        .account-actions button + button { margin-left: 8px; }
+
+        /* Conversation grouping */
+        .thread-item { border-bottom: 1px solid #ccc; }
+        .thread-item .thread-head { border-bottom: none; }
+        .thread-count { display: inline-block; min-width: 18px; text-align: center; border: 1px solid black;
+            background: #fff; font-size: 0.7rem; font-weight: bold; padding: 1px 4px; margin-right: 6px; }
+        .thread-children { background: #f2f2f2; border-left: 4px solid #999; }
+        .thread-children .email-item { border-bottom: 1px solid #dcdcdc; }
+        .thread-child { padding-left: 16px; }
     </style>
 </head>
 
@@ -638,6 +779,17 @@
         <div class="toolbar">
             <button class="toolbar-btn primary" onclick="openComposeModal()" data-i18n="mail.btn.compose">✎
                 Compose</button>
+            <div id="accounts-anchor" class="accounts-anchor" style="display:none;">
+                <button class="toolbar-btn" id="accounts-btn" onclick="toggleAccountsMenu(event)"><span
+                        id="accounts-btn-label">Accounts</span><span class="accounts-arrow">&#9660;</span></button>
+                <div id="accounts-menu" class="accounts-menu" style="display:none;"
+                    onclick="event.stopPropagation()">
+                    <div id="accounts-menu-list"></div>
+                    <div class="menu-sep"></div>
+                    <button class="menu-item" id="unified-menu-item" onclick="toggleUnified()">All inboxes</button>
+                    <button class="menu-item" onclick="closeAccountsMenu(); openSettings();">Manage accounts...</button>
+                </div>
+            </div>
             <select class="folder-select" id="folder-select" onchange="changeFolder()">
                 <option value="INBOX" data-i18n="mail.folder.inbox">Inbox</option>
                 <option value="SENT" data-i18n="mail.folder.sent">Sent</option>
@@ -656,7 +808,7 @@
             <div class="email-list-pane">
                 <div class="search-box">
                     <input type="text" id="search-input" placeholder="Search emails..."
-                        data-i18n-placeholder="mail.ph.search" onkeyup="filterEmails()">
+                        data-i18n-placeholder="mail.ph.search" onkeyup="filterEmails()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchEmailsServer();}" enterkeyhint="search" title="Press Enter to search this folder">
                 </div>
                 <div id="list-container"></div>
             </div>
@@ -682,6 +834,29 @@
         <div id="auth-overlay">
             <h2 style="margin-bottom:10px;" data-i18n="mail.auth.title">Email Client</h2>
 
+            <!-- STEP 0: signed-in mailboxes + mailbox settings -->
+            <div id="accounts-step"
+                style="display:none; width:100%; max-width:340px; max-height:100%; overflow-y:auto; flex-direction:column; text-align:left; padding:10px; box-sizing:border-box;">
+                <p style="margin:0 0 12px 0; font-size:0.85rem;">Mailboxes signed in on this device:</p>
+                <div id="account-list" style="margin-bottom:14px;"></div>
+
+                <div style="border:2px solid black; background:#f9f9f9; padding:10px; margin-bottom:14px;">
+                    <label style="display:flex; align-items:center; font-size:0.9rem;">
+                        <input type="checkbox" id="threading-toggle" onchange="toggleThreading()"
+                            style="width:18px; height:18px; margin-right:10px;">
+                        Group conversations
+                    </label>
+                    <p style="margin:6px 0 0 28px; font-size:0.75rem; line-height:1.3; color:#444;">
+                        Messages sharing a subject are shown as one thread. Turn this off to list every message
+                        separately.
+                    </p>
+                </div>
+
+                <button class="provider-btn" onclick="showProviderList()" style="margin-bottom:10px;">Add another
+                    account</button>
+                <button class="sys-btn" onclick="closeSettings()" style="background:#ccc;">Done</button>
+            </div>
+
             <!-- STEP 1: Provider List -->
             <div id="provider-step" style="width:100%; max-width:320px; display:flex; flex-direction:column;">
                 <p style="margin-bottom:20px;" data-i18n="mail.auth.desc">Select your email provider.</p>
@@ -695,6 +870,8 @@
                     style="margin-bottom:10px;">iCloud</button>
                 <button class="provider-btn" onclick="selectProvider('custom')" style="margin-bottom:10px;">Custom
                     (IMAP)</button>
+                <button id="provider-back-btn" class="sys-btn" onclick="showAccountsStep()"
+                    style="display:none; margin-top:10px; background:#eee;">&lt; Accounts</button>
                 <button class="sys-btn" onclick="closeSettings()"
                     style="margin-top:10px; background:#ccc;">Cancel</button>
             </div>
@@ -731,6 +908,59 @@
                         style="flex:2;">Connect</button>
                 </div>
             </div>
+
+            <!-- STEP 2b: Unsupported provider notice (Microsoft) -->
+            <div id="provider-notice-step"
+                style="display:none; width:100%; max-width:340px; flex-direction:column; text-align:left;">
+                <h3 id="provider-notice-title" style="margin:0 0 10px 0; text-align:center;"></h3>
+                <div id="provider-notice-body"
+                    style="font-size:0.9rem; line-height:1.45; background:#f9f9f9; border:1px solid #ccc; padding:12px;">
+                </div>
+                <button class="sys-btn" onclick="showProviderList()"
+                    style="background:#eee; margin-top:15px; width:100%;">&lt; Back</button>
+            </div>
+
+            <!-- STEP 2c: Outlook / Hotmail (OAuth2 device-code sign-in) -->
+            <div id="outlook-step"
+                style="display:none; width:100%; max-width:340px; flex-direction:column; text-align:left;">
+                <p id="outlook-intro"
+                    style="font-size:0.85rem; line-height:1.4; margin:0 0 12px 0; background:#f9f9f9; border:1px solid #ccc; padding:10px;">
+                    Microsoft accounts need a sign-in code instead of a password.
+                </p>
+
+                <div id="outlook-form">
+                    <input type="email" id="outlook-email" class="login-input" placeholder="you@hotmail.com"
+                        autocomplete="off">
+                    <div style="display:flex; margin-top:10px;">
+                        <button class="sys-btn" onclick="showProviderList()"
+                            style="background:#eee; flex:1; margin-right:10px;">&lt; Back</button>
+                        <button id="btn-outlook-connect" class="sys-btn" onclick="startOutlookConnect()"
+                            style="flex:2;">Connect</button>
+                    </div>
+                </div>
+
+                <div id="outlook-code-panel" style="display:none;">
+                    <p style="font-size:0.9rem; margin:0 0 8px 0;">On a phone or computer, open:</p>
+                    <div id="outlook-verify-uri"
+                        style="border:2px solid black; padding:8px; font-family:'Courier New',monospace; background:#fff; word-break:break-all;">
+                        microsoft.com/devicelogin</div>
+                    <p style="font-size:0.9rem; margin:12px 0 8px 0;">and enter this code:</p>
+                    <div id="outlook-user-code"
+                        style="border:2px solid black; padding:10px; font-family:'Courier New',monospace; font-size:1.7rem; font-weight:bold; text-align:center; letter-spacing:3px; background:#fff;">
+                        --------</div>
+                    <p id="outlook-status" style="font-size:0.85rem; margin:12px 0 0 0;">Waiting for sign-in...</p>
+                    <p style="margin:8px 0 0 0;">
+                        <button class="link-btn" onclick="showOutlookHelp()">Problems signing in?</button>
+                    </p>
+                    <div style="display:flex; margin-top:12px;">
+                        <button class="sys-btn" onclick="openOutlookLoginOnDevice()"
+                            style="background:#eee; flex:1; margin-right:10px; font-size:0.8rem;">Try on this
+                            Kindle</button>
+                        <button class="sys-btn" onclick="cancelOutlookConnect()"
+                            style="background:#ccc; flex:1; font-size:0.8rem;">Cancel</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -753,6 +983,14 @@
                 <textarea id="compose-body" placeholder="Write your message..."
                     data-i18n-placeholder="mail.compose.ph.message" style="height: 150px;"></textarea>
             </div>
+            <div class="form-group">
+                <label data-i18n="mail.compose.label.attach">Attachments</label>
+                <input type="file" id="compose-attach-input" multiple style="display:none" onchange="handleComposeAttachments(this)">
+                <button class="toolbar-btn" type="button" onclick="document.getElementById('compose-attach-input').click()" data-i18n="mail.compose.attach">Attach files</button>
+                <div id="compose-attachments" style="margin-top:6px;font-size:0.8rem;"></div>
+                <p style="font-size:0.7rem;color:#666;margin:6px 0 0;" data-i18n="mail.compose.attach_hint">Up to 3 files, 4 MB total.</p>
+            </div>
+            <button class="toolbar-btn" id="compose-restore-btn" style="display:none;width:100%;margin-bottom:8px;" onclick="restoreComposeDraft()">Restore draft</button>
             <div class="modal-btns">
                 <button class="toolbar-btn" onclick="closeComposeModal()" data-i18n="btn.cancel">Cancel</button>
                 <button class="toolbar-btn primary" onclick="sendEmail()" data-i18n="mail.btn.send">Send</button>
@@ -772,6 +1010,22 @@
         </div>
     </div>
 
+    <!-- RENAME ACCOUNT MODAL -->
+    <div class="modal-overlay" id="rename-modal">
+        <div class="modal-box">
+            <h3 style="margin-top:0;">Rename account</h3>
+            <p id="rename-hint" style="font-size:0.8rem; margin:0 0 12px 0; color:#444;">
+                Shown in the account list.
+            </p>
+            <input type="text" id="rename-input" class="login-input" maxlength="40"
+                placeholder="e.g. Work, Personal, Studio" onkeydown="if (event.key === 'Enter') saveRename()">
+            <div class="modal-btns" style="justify-content:center;">
+                <button class="toolbar-btn" onclick="closeRenameModal()">Cancel</button>
+                <button class="toolbar-btn primary" onclick="saveRename()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- PRO REQUIRED MODAL -->
     <div id="pro-required-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box" style="text-align:center;">
@@ -782,14 +1036,427 @@
     </div>
 
     <script>
-        // IMAP/SMTP Config
+        // IMAP/SMTP config for the *active* account. Both are derived from the
+        // signed-in account list, so the rest of the app keeps using them.
         let imapConfig = null;
         let smtpConfig = null;
+
+        // ── Accounts ─────────────────────────────────────────────────────────
+        // Several mailboxes can be signed in at once, including several from the
+        // same provider. Passwords are stored per account, encrypted with the
+        // ReKindle uid (same scheme as before); Outlook accounts only store the
+        // server-side account id, because the refresh token never reaches this
+        // browser.
+        const ACCOUNTS_KEY = 'rekindle_mail_accounts';
+        const ACTIVE_ACCOUNT_KEY = 'rekindle_mail_active';
+        const THREADING_KEY = 'rekindle_mail_threading';
+
+        let accounts = [];
+        let activeAccountId = null;
+        let threadingEnabled = true;   // grouped conversations are the default
+        let threads = [];
+
+        // "All inboxes": one merged list over every account's INBOX. Device-local
+        // preference, not synced, because it is about this screen.
+        const UNIFIED_KEY = 'rekindle_mail_unified';
+        let unifiedMode = false;
+        let unifiedCursors = {};
+
+        function newAccountId(prefix) {
+            return (prefix || 'acct') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        }
+
+        function getActiveAccount() {
+            return accounts.find(a => a.id === activeAccountId) || null;
+        }
+
+        function serializeAccount(account) {
+            return {
+                id: account.id,
+                provider: account.provider || 'custom',
+                email: account.email,
+                label: account.label || '',
+                oauth: account.oauth || null,
+                accountId: account.accountId || null,
+                imap: account.imap || null,
+                smtp: account.smtp || null,
+                passEnc: account.passEnc || null
+            };
+        }
+
+        function saveAccountsLocal() {
+            try {
+                localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts.map(serializeAccount)));
+                if (activeAccountId) localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
+                else localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+                localStorage.setItem(THREADING_KEY, threadingEnabled ? 'on' : 'off');
+            } catch (e) {
+                console.warn('Could not save mail accounts locally', e);
+            }
+        }
+
+        function loadAccountsLocal() {
+            try {
+                const raw = localStorage.getItem(ACCOUNTS_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        accounts = parsed.filter(a => a && a.id && a.email).map(a => ({
+                            id: a.id,
+                            provider: a.provider || 'custom',
+                            email: a.email,
+                            label: a.label || '',
+                            oauth: a.oauth || null,
+                            accountId: a.accountId || null,
+                            imap: a.imap || null,
+                            smtp: a.smtp || null,
+                            passEnc: a.passEnc || null
+                        }));
+                    }
+                }
+                activeAccountId = localStorage.getItem(ACTIVE_ACCOUNT_KEY) || null;
+                threadingEnabled = localStorage.getItem(THREADING_KEY) !== 'off';
+                unifiedMode = localStorage.getItem(UNIFIED_KEY) === '1';
+            } catch (e) {
+                console.warn('Could not read saved mail accounts', e);
+            }
+        }
+
+        function updateAccountsButton() {
+            const btn = document.getElementById('accounts-btn');
+            const anchor = document.getElementById('accounts-anchor');
+            if (!btn || !anchor) return;
+            // Only shown once there is something to switch between; the title-bar
+            // Settings button opens the same sheet for single-account users.
+            anchor.style.display = accounts.length > 1 ? 'inline-flex' : 'none';
+            // The label is a child span: setting innerText on the button would
+            // wipe the arrow (the same trap custom-select.js documents).
+            const label = document.getElementById('accounts-btn-label');
+            const activeAccount = getActiveAccount();
+            const text = unifiedMode
+                ? 'All inboxes'
+                : (activeAccount
+                    ? 'Account: ' + (activeAccount.label || activeAccount.email)
+                    : 'Account');
+            if (label) label.innerText = text;
+            else btn.innerText = text;
+            const active = getActiveAccount();
+            btn.title = active ? active.email : '';
+            renderAccountsMenu();
+        }
+
+        function renderAccountsMenu() {
+            const host = document.getElementById('accounts-menu-list');
+            if (!host) return;
+            host.innerHTML = '';
+
+            accounts.forEach(account => {
+                const item = document.createElement('button');
+                item.className = 'menu-item' + (!unifiedMode && account.id === activeAccountId ? ' active' : '');
+                const name = document.createElement('span');
+                name.innerText = (account.label || account.email) +
+                    (!unifiedMode && account.id === activeAccountId ? '  (current)' : '');
+                item.appendChild(name);
+                if (account.label) {
+                    const sub = document.createElement('span');
+                    sub.className = 'menu-sub';
+                    sub.innerText = account.email;
+                    item.appendChild(sub);
+                }
+                item.onclick = () => selectAccount(account.id);
+                host.appendChild(item);
+            });
+
+            const unifiedItem = document.getElementById('unified-menu-item');
+            if (unifiedItem) {
+                unifiedItem.className = 'menu-item' + (unifiedMode ? ' active' : '');
+                unifiedItem.innerText = unifiedMode ? 'All inboxes  (current)' : 'All inboxes';
+                unifiedItem.disabled = accounts.length < 2;
+            }
+        }
+
+        function toggleAccountsMenu(ev) {
+            if (ev) ev.stopPropagation();
+            const menu = document.getElementById('accounts-menu');
+            const anchor = document.getElementById('accounts-anchor');
+            if (!menu) return;
+            const open = menu.style.display !== 'none';
+            if (open) {
+                closeAccountsMenu();
+                return;
+            }
+            renderAccountsMenu();
+            menu.style.display = 'block';
+            if (anchor) anchor.classList.add('open');
+        }
+
+        function closeAccountsMenu() {
+            const menu = document.getElementById('accounts-menu');
+            const anchor = document.getElementById('accounts-anchor');
+            if (menu) menu.style.display = 'none';
+            if (anchor) anchor.classList.remove('open');
+        }
+
+        function selectAccount(id) {
+            closeAccountsMenu();
+            if (!unifiedMode && id === activeAccountId) return;
+            unifiedMode = false;
+            try { localStorage.setItem(UNIFIED_KEY, '0'); } catch (e) { }
+            updateAccountsButton();
+            activateAccount(id, { silentFail: true });
+        }
+
+        function toggleUnified() {
+            closeAccountsMenu();
+            if (accounts.length < 2) return;
+            unifiedMode = !unifiedMode;
+            try { localStorage.setItem(UNIFIED_KEY, unifiedMode ? '1' : '0'); } catch (e) { }
+            updateAccountsButton();
+            if (unifiedMode) {
+                activateUnified();
+            } else {
+                activateAccount(activeAccountId, { silentFail: true });
+            }
+        }
+
+        async function activateUnified() {
+            unifiedMode = true;
+            unifiedCursors = {};
+            resetMailboxView();
+            currentFolder = 'INBOX';
+            document.getElementById('status-bar').innerText = 'Loading all inboxes...';
+            try {
+                await loadEmails(true);
+            } catch (e) {
+                console.error('Could not load the combined inbox', e);
+            }
+        }
+
+        function applyThreadingSetting() {
+            const toggle = document.getElementById('threading-toggle');
+            if (toggle) toggle.checked = threadingEnabled;
+        }
+
+        function addOrUpdateAccount(account) {
+            const idx = accounts.findIndex(a =>
+                a.id === account.id ||
+                (String(a.email).toLowerCase() === String(account.email).toLowerCase()
+                    && (a.oauth || '') === (account.oauth || '')));
+            if (idx >= 0) {
+                accounts[idx] = Object.assign({}, accounts[idx], account, { id: accounts[idx].id });
+            } else {
+                accounts.push(account);
+            }
+            const stored = idx >= 0 ? accounts[idx] : account;
+            saveAccountsLocal();
+            updateAccountsButton();
+            // Callers persist once the active account is settled; persisting here
+            // raced with that write and could restore the previous activeId.
+            return stored;
+        }
+
+        // Returns true when the mailbox actually opened. Email accounts go stale
+        // (revoked app passwords, expired links), and one bad entry must not make
+        // the whole app look broken.
+        async function activateAccount(id, options) {
+            const opts = options || {};
+            const account = accounts.find(a => a.id === id) || null;
+            if (!account || !functions) {
+                showAccountsStep();
+                return false;
+            }
+
+            // Tentative: only becomes the saved choice if the mailbox opens, so a
+            // dead account cannot pin itself as "last used" and be retried forever.
+            const previousActive = activeAccountId;
+            activeAccountId = account.id;
+            userEmail = account.email;
+
+            if (account.oauth === 'microsoft') {
+                const cfg = { oauth: 'microsoft', accountId: account.accountId || account.id };
+                imapConfig = cfg;
+                smtpConfig = cfg;
+                account._imap = cfg;
+                account._smtp = cfg;
+            } else {
+                let pass = account._pass || null;
+                if (!pass && account.passEnc) {
+                    const authUser = firebase.auth().currentUser;
+                    if (authUser) pass = await decryptPassword(account.passEnc, authUser.uid);
+                    if (pass) account._pass = pass;   // memory only
+                }
+                if (!pass) {
+                    if (!opts.quiet) {
+                        showModal('Could not unlock the saved password for ' + account.email + '. Re-add the account.');
+                        showAccountsStep();
+                    }
+                    return false;
+                }
+                imapConfig = {
+                    host: account.imap.host,
+                    port: account.imap.port,
+                    secure: Number(account.imap.port) === 993,
+                    auth: { user: account.email, pass: pass }
+                };
+                smtpConfig = {
+                    host: account.smtp.host,
+                    port: account.smtp.port,
+                    secure: Number(account.smtp.port) === 465,
+                    auth: { user: account.email, pass: pass }
+                };
+                account._imap = imapConfig;
+                account._smtp = smtpConfig;
+            }
+
+            updateAccountsButton();
+            if (opts.skipLoad) {
+                saveAccountsLocal();
+                return true;
+            }
+
+            resetMailboxView();
+            try {
+                await loadFolders();
+                await loadEmails();
+                saveAccountsLocal();
+                return true;
+            } catch (e) {
+                console.error('Could not open mailbox', e);
+                if (previousActive && previousActive !== account.id
+                    && accounts.some(a => a.id === previousActive)) {
+                    activeAccountId = previousActive;
+                }
+                updateAccountsButton();
+                if (!opts.quiet) {
+                    showModal('Could not open ' + account.email + '. ' +
+                        ((e && e.message) || 'Check the account settings.') +
+                        ' Use Accounts to switch to another mailbox, or re-add this one.');
+                    if (opts.silentFail) showAccountsStep();
+                }
+                return false;
+            }
+        }
+
+        // Connection details for any account, decrypted once and cached on the
+        // entry (`_pass` is memory-only and stripped by serializeAccount()).
+        async function connectionForAccount(account) {
+            if (!account) return null;
+            if (account._imap && account._smtp) return { imap: account._imap, smtp: account._smtp };
+
+            if (account.oauth === 'microsoft') {
+                const cfg = { oauth: 'microsoft', accountId: account.accountId || account.id };
+                account._imap = cfg;
+                account._smtp = cfg;
+                return { imap: cfg, smtp: cfg };
+            }
+
+            let pass = account._pass || null;
+            if (!pass && account.passEnc) {
+                const authUser = firebase.auth().currentUser;
+                if (authUser) pass = await decryptPassword(account.passEnc, authUser.uid);
+                if (pass) account._pass = pass;
+            }
+            if (!pass || !account.imap || !account.smtp) return null;
+
+            account._imap = {
+                host: account.imap.host,
+                port: account.imap.port,
+                secure: Number(account.imap.port) === 993,
+                auth: { user: account.email, pass: pass }
+            };
+            account._smtp = {
+                host: account.smtp.host,
+                port: account.smtp.port,
+                secure: Number(account.smtp.port) === 465,
+                auth: { user: account.email, pass: pass }
+            };
+            return { imap: account._imap, smtp: account._smtp };
+        }
+
+        // Folder list for an account that is not the active one.
+        async function foldersFor(account) {
+            if (!account) return [];
+            if (account._folders) return account._folders;
+            const conn = await connectionForAccount(account);
+            if (!conn) return [];
+            const res = await functions.httpsCallable('getFolders')({ imap: conn.imap });
+            account._folders = (res.data && res.data.folders) || [];
+            return account._folders;
+        }
+
+        // Which connection/folder a message belongs to. Messages carrying
+        // `_accountId` came from the merged inbox and are not the active account.
+        async function contextForMessage(email) {
+            const accountId = (email && email._accountId) || activeAccountId;
+            const account = accounts.find(a => a.id === accountId);
+            if (!account) return null;
+            const conn = await connectionForAccount(account);
+            if (!conn) return null;
+            return {
+                account: account,
+                imap: conn.imap,
+                folder: (email && email._folder) || currentFolder,
+                folders: email && email._accountId ? await foldersFor(account) : allFolders
+            };
+        }
+
+        async function removeAccount(id) {
+            const account = accounts.find(a => a.id === id);
+            if (!account) return;
+
+            if (account.oauth === 'microsoft' && functions) {
+                try {
+                    await functions.httpsCallable('mailMicrosoftDisconnect')({
+                        accountId: account.accountId || account.id
+                    });
+                } catch (e) {
+                    console.warn('Could not revoke the Outlook token', e);
+                }
+            }
+
+            accounts = accounts.filter(a => a.id !== id);
+            if (activeAccountId === id) activeAccountId = accounts[0] ? accounts[0].id : null;
+            if (unifiedMode && accounts.length < 2) {
+                unifiedMode = false;
+                try { localStorage.setItem(UNIFIED_KEY, '0'); } catch (e) { }
+            }
+            saveAccountsLocal();
+            persistAccountsToFirebase();
+            updateAccountsButton();
+            renderAccountList();
+
+            if (activeAccountId) {
+                await activateAccount(activeAccountId, { silentFail: true });
+            } else {
+                resetMailboxView();
+                showAccountsStep();
+            }
+        }
+
+        function resetMailboxView() {
+            emails = [];
+            threads = [];
+            currentCursor = null;
+            currentEmail = null;
+            allFolders = [];
+            currentFolder = 'INBOX';
+            const list = document.getElementById('list-container');
+            if (list) list.innerHTML = '';
+            const details = document.getElementById('details-pane');
+            if (details) {
+                details.innerHTML = '<div style="text-align:center; margin-top:50px; font-style:italic; color:#666;">Select an email to read.</div>';
+            }
+            const folderSelect = document.getElementById('folder-select');
+            if (folderSelect) folderSelect.innerHTML = '';
+            const status = document.getElementById('status-bar');
+            if (status) status.innerText = '';
+        }
 
         let emails = [];
         let allFolders = [];
         let currentFolder = 'INBOX';
         let currentEmail = null;
+        let currentFullEmail = null;
         let userEmail = '';
         let functions;
 
@@ -805,6 +1472,10 @@
                 overlay.style.display = 'flex';
             }
         }
+
+        document.addEventListener('click', function () {
+            closeAccountsMenu();
+        });
 
         window.onload = function () {
             if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
@@ -930,9 +1601,14 @@
             },
             outlook: {
                 name: 'Outlook / Hotmail',
+                // Microsoft retired password/app-password IMAP and SMTP for
+                // Outlook.com on 2024-09-16; OAuth2 (XOAUTH2) is required. This
+                // provider never shows the password form - it runs the
+                // device-code flow in showOutlookStep().
+                oauth: 'microsoft',
                 imapHost: 'outlook.office365.com', imapPort: 993,
                 smtpHost: 'smtp.office365.com', smtpPort: 587,
-                helpHtml: 'Use your Microsoft account password. If 2FA is enabled, you must generate an <b>App Password</b>.<br><a href="https://account.live.com/proofs/AppPassword" target="_blank">Generate App Password here</a>.'
+                helpHtml: ''
             },
             yahoo: {
                 name: 'Yahoo Mail',
@@ -956,60 +1632,271 @@
 
         async function initGmailMode() {
             functions = firebase.functions();
+            const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
 
-            const savedUser = localStorage.getItem('rekindle_imap_user');
-            const encryptedPass = localStorage.getItem('rekindle_imap_pass');
-            const savedUid = localStorage.getItem('rekindle_imap_uid');
+            loadAccountsLocal();
+            if (!accounts.length) await migrateLegacyLocalAccount();
+            if (uid) await loadSettingsFromFirebase(uid);
+            applyThreadingSetting();
 
-            if (savedUser && encryptedPass && savedUid) {
-                // Decrypt password from localStorage
-                const savedPass = await decryptPassword(encryptedPass, savedUid);
-                if (!savedPass) {
-                    console.error("Failed to decrypt password from localStorage");
-                    openSettings();
-                    return;
+            if (!accounts.length) {
+                showAccountsStep();
+                return;
+            }
+            if (!activeAccountId || !accounts.some(a => a.id === activeAccountId)) {
+                activeAccountId = accounts[0].id;
+            }
+            updateAccountsButton();
+
+            if (unifiedMode && accounts.length > 1) {
+                await activateUnified();
+                return;
+            }
+
+            const preferred = activeAccountId;
+            const order = [preferred].concat(accounts.map(a => a.id).filter(id => id !== preferred));
+            let opened = null;
+            for (let i = 0; i < order.length; i++) {
+                const ok = await activateAccount(order[i], {
+                    silentFail: true,
+                    quiet: i < order.length - 1   // only the last failure explains itself
+                });
+                if (ok) {
+                    opened = order[i];
+                    break;
                 }
+            }
 
-                // Populate hidden fields just in case
-                document.getElementById('imap-user').value = savedUser;
-                document.getElementById('imap-pass').value = savedPass;
-                document.getElementById('imap-host').value = localStorage.getItem('rekindle_imap_host') || 'imap.gmail.com';
-                document.getElementById('imap-port').value = localStorage.getItem('rekindle_imap_port') || '993';
-                document.getElementById('smtp-host').value = localStorage.getItem('rekindle_smtp_host') || 'smtp.gmail.com';
-                document.getElementById('smtp-port').value = localStorage.getItem('rekindle_smtp_port') || '465';
-
-                login();
-            } else {
-                openSettings(); // Shows provider list by default
+            if (!opened) {
+                showAccountsStep();
+                return;
+            }
+            if (opened !== preferred) {
+                const failed = accounts.find(a => a.id === preferred);
+                const now = accounts.find(a => a.id === opened);
+                showModal('Could not open ' + (failed ? failed.email : 'the last account') +
+                    '. Switched to ' + (now ? now.email : 'another account') + '.');
             }
         }
 
-        function openSettings() {
-            // Restore from localStorage (if any)
+        // Pre-account-list installs stored one mailbox under rekindle_imap_*.
+        async function migrateLegacyLocalAccount() {
             const savedUser = localStorage.getItem('rekindle_imap_user');
-            if (savedUser) {
-                document.getElementById('imap-user').value = savedUser;
-                // Don't auto-fill pass for security/UX flow, user can re-enter or we could, but let's stick to flow
+            if (!savedUser) return;
+
+            if (localStorage.getItem('rekindle_imap_oauth') === 'microsoft') {
+                // The single-account token sits at mail_oauth/{uid}; the server
+                // moves it to mail_oauth/{uid}/default on first use.
+                accounts = [{
+                    id: newAccountId('ms'),
+                    provider: 'microsoft',
+                    email: savedUser,
+                    oauth: 'microsoft',
+                    accountId: 'default'
+                }];
+            } else {
+                accounts = [{
+                    id: newAccountId('acct'),
+                    provider: 'custom',
+                    email: savedUser,
+                    imap: {
+                        host: localStorage.getItem('rekindle_imap_host') || 'imap.gmail.com',
+                        port: parseInt(localStorage.getItem('rekindle_imap_port'), 10) || 993
+                    },
+                    smtp: {
+                        host: localStorage.getItem('rekindle_smtp_host') || 'smtp.gmail.com',
+                        port: parseInt(localStorage.getItem('rekindle_smtp_port'), 10) || 465
+                    },
+                    passEnc: localStorage.getItem('rekindle_imap_pass') || null
+                }];
+            }
+            activeAccountId = accounts[0].id;
+            saveAccountsLocal();
+            ['rekindle_imap_user', 'rekindle_imap_pass', 'rekindle_imap_uid', 'rekindle_imap_host',
+                'rekindle_imap_port', 'rekindle_smtp_host', 'rekindle_smtp_port', 'rekindle_imap_oauth']
+                .forEach(k => localStorage.removeItem(k));
+        }
+
+        function openSettings() {
+            showAccountsStep();
+        }
+
+        function showAccountsStep() {
+            stopOutlookPolling();
+            renderAccountList();
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('accounts-step').style.display = 'flex';
+            document.getElementById('provider-step').style.display = 'none';
+            document.getElementById('login-step').style.display = 'none';
+            document.getElementById('provider-notice-step').style.display = 'none';
+            document.getElementById('outlook-step').style.display = 'none';
+        }
+
+        let renamingAccountId = null;
+
+        function openRenameModal(id) {
+            const account = accounts.find(a => a.id === id);
+            if (!account) return;
+            renamingAccountId = id;
+            document.getElementById('rename-input').value = account.label || '';
+            document.getElementById('rename-hint').innerText =
+                'A name for ' + account.email + '. Leave it empty to show the address.';
+            document.getElementById('rename-modal').style.display = 'flex';
+            const input = document.getElementById('rename-input');
+            if (input.focus) input.focus();
+        }
+
+        function closeRenameModal() {
+            renamingAccountId = null;
+            document.getElementById('rename-modal').style.display = 'none';
+        }
+
+        function saveRename() {
+            const account = accounts.find(a => a.id === renamingAccountId);
+            if (!account) {
+                closeRenameModal();
+                return;
+            }
+            // Names are display-only: collapse whitespace, cap the length, and an
+            // empty value falls back to the address.
+            account.label = String(document.getElementById('rename-input').value || '')
+                .replace(/\s+/g, ' ').trim().slice(0, 40);
+            saveAccountsLocal();
+            persistAccountsToFirebase();
+            updateAccountsButton();
+            renderAccountList();
+            closeRenameModal();
+        }
+
+        function renderAccountList() {
+            const host = document.getElementById('account-list');
+            if (!host) return;
+            host.innerHTML = '';
+
+            if (!accounts.length) {
+                const empty = document.createElement('p');
+                empty.style.cssText = 'font-size:0.85rem; margin:0 0 10px 0;';
+                empty.innerText = 'No mailboxes yet. Add one below.';
+                host.appendChild(empty);
             }
 
-            showProviderList();
-            document.getElementById('auth-overlay').style.display = 'flex';
+            accounts.forEach(account => {
+                const row = document.createElement('div');
+                row.className = 'account-row' + (account.id === activeAccountId ? ' active' : '');
+
+                const name = document.createElement('div');
+                name.className = 'account-name';
+                name.innerText = account.label || account.email;
+                if (account.id === activeAccountId) {
+                    const mark = document.createElement('span');
+                    mark.className = 'account-active';
+                    mark.innerText = ' (current)';
+                    name.appendChild(mark);
+                }
+                row.appendChild(name);
+
+                const meta = document.createElement('div');
+                meta.className = 'account-meta';
+                meta.innerText = (account.oauth === 'microsoft'
+                    ? 'Outlook / Hotmail'
+                    : ((account.imap && account.imap.host) || 'IMAP')) +
+                    (account.label ? ' - ' + account.email : '');
+                row.appendChild(meta);
+
+                const actions = document.createElement('div');
+                actions.className = 'account-actions';
+
+                const rename = document.createElement('button');
+                rename.className = 'sys-btn';
+                rename.innerText = 'Rename';
+                rename.onclick = () => openRenameModal(account.id);
+                actions.appendChild(rename);
+
+                if (account.id !== activeAccountId) {
+                    const use = document.createElement('button');
+                    use.className = 'sys-btn';
+                    use.innerText = 'Use';
+                    use.onclick = () => {
+                        document.getElementById('auth-overlay').style.display = 'none';
+                        activateAccount(account.id, { silentFail: true });
+                    };
+                    actions.appendChild(use);
+                }
+
+                const remove = document.createElement('button');
+                remove.className = 'sys-btn';
+                remove.innerText = account.oauth === 'microsoft' ? 'Sign out' : 'Remove';
+                remove.onclick = () => removeAccount(account.id);
+                actions.appendChild(remove);
+                row.appendChild(actions);
+
+                host.appendChild(row);
+            });
+
+            applyThreadingSetting();
+        }
+
+        function toggleThreading() {
+            const toggle = document.getElementById('threading-toggle');
+            threadingEnabled = !!(toggle && toggle.checked);
+            saveAccountsLocal();
+            persistAccountsToFirebase();
+            if (getActiveAccount()) renderEmailList();
         }
 
         function closeSettings() {
             document.getElementById('auth-overlay').style.display = 'none';
         }
 
+        // Shown when someone pastes a Microsoft server into Custom (IMAP). Those
+        // hosts only accept OAuth2, so the password form can never succeed.
+        const OUTLOOK_NOTICE_HTML =
+            '<b>Use the Outlook / Hotmail button instead.</b><br><br>' +
+            'Microsoft stopped accepting passwords and app passwords for Outlook.com IMAP and SMTP in September 2024. ' +
+            'ReKindle connects these accounts with a Microsoft sign-in code: choose <b>Outlook / Hotmail</b> in the provider list, ' +
+            'then enter the code it shows at microsoft.com/devicelogin on a phone or computer.<br><br>' +
+            'A work or school Microsoft 365 mailbox can use the same flow.';
+
         function showProviderList() {
+            stopOutlookPolling();
+            document.getElementById('accounts-step').style.display = 'none';
             document.getElementById('provider-step').style.display = 'flex';
             document.getElementById('login-step').style.display = 'none';
+            document.getElementById('provider-notice-step').style.display = 'none';
+            document.getElementById('outlook-step').style.display = 'none';
+
+            const back = document.getElementById('provider-back-btn');
+            if (back) back.style.display = accounts.length ? 'block' : 'none';
+        }
+
+        function showOutlookNotice() {
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('accounts-step').style.display = 'none';
+            document.getElementById('provider-step').style.display = 'none';
+            document.getElementById('login-step').style.display = 'none';
+            document.getElementById('provider-notice-step').style.display = 'flex';
+            document.getElementById('provider-notice-title').innerText = 'Outlook needs Microsoft sign-in';
+            document.getElementById('provider-notice-body').innerHTML = OUTLOOK_NOTICE_HTML;
+        }
+
+        // Microsoft hosts that only accept OAuth2 now. Catches Custom (IMAP)
+        // users who paste the Office 365 servers manually.
+        function isMicrosoftMailHost(host) {
+            const h = String(host || '').toLowerCase();
+            return /(^|\.)(outlook\.office365\.com|smtp\.office365\.com|outlook\.com|hotmail\.com|live\.com)$/.test(h);
         }
 
         function selectProvider(key) {
             const config = PROVIDERS[key];
             if (!config) return;
 
+            if (config.oauth === 'microsoft') {
+                showOutlookStep();
+                return;
+            }
+
             document.getElementById('provider-step').style.display = 'none';
+            document.getElementById('outlook-step').style.display = 'none';
             document.getElementById('login-step').style.display = 'flex';
 
             document.getElementById('provider-help-text').innerHTML = config.helpHtml;
@@ -1027,6 +1914,241 @@
             }
         }
 
+
+        // ── Outlook / Hotmail: OAuth2 device-code sign-in ────────────────────
+        // Microsoft's sign-in page is a JavaScript app with no form fallback, so
+        // the Kindle cannot complete it (and ROPC is unavailable for personal
+        // accounts). Instead the backend starts a device-code flow and we show
+        // the short code; the user enters it on a phone or computer. The refresh
+        // token never reaches this browser: it stays at mail_oauth/{uid}.
+        let outlookFlow = null;
+        let outlookVerifyUri = 'https://microsoft.com/devicelogin';
+
+        function showOutlookStep() {
+            stopOutlookPolling();
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('accounts-step').style.display = 'none';
+            document.getElementById('provider-step').style.display = 'none';
+            document.getElementById('login-step').style.display = 'none';
+            document.getElementById('provider-notice-step').style.display = 'none';
+            document.getElementById('outlook-step').style.display = 'flex';
+            document.getElementById('outlook-form').style.display = 'block';
+            document.getElementById('outlook-code-panel').style.display = 'none';
+            document.getElementById('outlook-intro').innerText =
+                'Microsoft accounts need a sign-in code instead of a password. Enter the address that receives ' +
+                'the mail - it can differ from the address you sign in with.';
+
+            const emailField = document.getElementById('outlook-email');
+            const active = getActiveAccount();
+            if (!emailField.value && active && active.oauth === 'microsoft') {
+                emailField.value = active.email;
+            }
+            const btn = document.getElementById('btn-outlook-connect');
+            btn.disabled = false;
+            btn.innerText = 'Connect';
+        }
+
+        function outlookErrorText(e) {
+            const code = String((e && e.code) || '');
+            if (code.indexOf('failed-precondition') > -1) {
+                return 'Outlook sign-in is not set up on the server yet.';
+            }
+            if (code.indexOf('permission-denied') > -1) {
+                return 'ReKindle+ is required for Mail.';
+            }
+            if (code.indexOf('resource-exhausted') > -1) {
+                return 'Too many attempts. Wait a minute and try again.';
+            }
+            return (e && e.message) ? e.message : 'Could not start Outlook sign-in.';
+        }
+
+        async function startOutlookConnect() {
+            const email = document.getElementById('outlook-email').value.trim();
+            const btn = document.getElementById('btn-outlook-connect');
+            btn.disabled = true;
+            btn.innerText = 'Starting...';
+
+            try {
+                const start = functions.httpsCallable('mailMicrosoftStart');
+                const res = await start({ email: email });
+                const data = res.data || {};
+                if (!data.userCode) throw new Error('Microsoft did not return a code.');
+
+                document.getElementById('outlook-form').style.display = 'none';
+                document.getElementById('outlook-code-panel').style.display = 'block';
+                document.getElementById('outlook-user-code').innerText = data.userCode;
+
+                // Microsoft picks the short link per account type
+                // (microsoft.com/devicelogin, login.microsoft.com/device,
+                // microsoft.com/link) - show exactly the one it issued.
+                const verifyUri = String(data.verificationUri || 'https://microsoft.com/devicelogin');
+                outlookVerifyUri = verifyUri;
+                document.getElementById('outlook-verify-uri').innerText =
+                    verifyUri.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+                document.getElementById('outlook-status').innerText = 'Waiting for sign-in... 0:00';
+                document.getElementById('outlook-intro').innerText =
+                    'Keep this window open and finish the sign-in on your phone or computer.';
+
+                beginOutlookPolling(Math.max(5, data.interval || 5) * 1000);
+            } catch (e) {
+                console.error('Outlook start failed', e);
+                showModal(outlookErrorText(e));
+                btn.disabled = false;
+                btn.innerText = 'Connect';
+            }
+        }
+
+        function beginOutlookPolling(delayMs) {
+            stopOutlookPolling();
+            outlookFlow = { cancelled: false, timer: null, started: Date.now(), failures: 0 };
+            let delay = delayMs;
+
+            // A silent wait looks frozen on e-ink, so count the seconds up.
+            const statusTick = () => {
+                if (!outlookFlow || outlookFlow.cancelled) return;
+                const elapsed = Math.floor((Date.now() - outlookFlow.started) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                const shown = mins + ':' + (secs < 10 ? '0' + secs : secs);
+                const el = document.getElementById('outlook-status');
+                if (el) el.innerText = 'Waiting for sign-in... ' + shown;
+                outlookFlow.statusTimer = setTimeout(statusTick, 5000);
+            };
+            outlookFlow.statusTimer = setTimeout(statusTick, 1000);
+
+            const tick = async () => {
+                if (!outlookFlow || outlookFlow.cancelled) return;
+                try {
+                    const poll = functions.httpsCallable('mailMicrosoftPoll');
+                    const res = await poll({});
+                    const data = res.data || {};
+
+                    if (data.status === 'ok') {
+                        stopOutlookPolling();
+                        await onOutlookConnected(data);
+                        return;
+                    }
+                    if (data.status === 'expired') {
+                        outlookConnectFailed('That code expired. Press Connect for a new one.');
+                        return;
+                    }
+                    if (data.status === 'denied') {
+                        outlookConnectFailed('Sign-in was cancelled on the other device.');
+                        return;
+                    }
+                    if (data.status === 'consent') {
+                        outlookConnectFailed('Your organisation needs to approve this app before it can connect.');
+                        return;
+                    }
+                    if (data.status === 'error') {
+                        outlookConnectFailed('Microsoft did not complete the sign-in. Try again.');
+                        return;
+                    }
+                    if (data.status === 'slow_down') {
+                        delay = Math.min(delay + 5000, 30000);
+                    }
+                    outlookFlow.failures = 0;
+                } catch (e) {
+                    // Transient callable/network failure: keep the flow alive and
+                    // retry next tick. Give up after ten in a row rather than
+                    // spinning forever, and stop at once on a revoked link.
+                    console.warn('Outlook poll failed, retrying', e);
+                    if (String((e && e.code) || '').indexOf('permission-denied') > -1) {
+                        outlookConnectFailed(outlookErrorText(e));
+                        return;
+                    }
+                    if (outlookFlow) outlookFlow.failures = (outlookFlow.failures || 0) + 1;
+                    if (outlookFlow && outlookFlow.failures >= 10) {
+                        outlookConnectFailed('Lost contact with ReKindle. Check the connection and press Connect again.');
+                        return;
+                    }
+                }
+                if (outlookFlow && !outlookFlow.cancelled) {
+                    outlookFlow.timer = setTimeout(tick, delay);
+                }
+            };
+
+            outlookFlow.timer = setTimeout(tick, delay);
+        }
+
+        function stopOutlookPolling() {
+            if (outlookFlow && outlookFlow.timer) clearTimeout(outlookFlow.timer);
+            if (outlookFlow && outlookFlow.statusTimer) clearTimeout(outlookFlow.statusTimer);
+            if (outlookFlow) outlookFlow.cancelled = true;
+            outlookFlow = null;
+        }
+
+        function outlookConnectFailed(message) {
+            stopOutlookPolling();
+            const status = document.getElementById('outlook-status');
+            if (status) status.innerText = message;
+            // The status line lives inside the code panel, which is hidden here -
+            // put the reason where the returning form can actually be read.
+            const intro = document.getElementById('outlook-intro');
+            if (intro) intro.innerText = message;
+            document.getElementById('outlook-code-panel').style.display = 'none';
+            document.getElementById('outlook-form').style.display = 'block';
+            const btn = document.getElementById('btn-outlook-connect');
+            btn.disabled = false;
+            btn.innerText = 'Connect';
+        }
+
+        function cancelOutlookConnect() {
+            stopOutlookPolling();
+            showProviderList();
+        }
+
+        // Shown while the device code is live: the common dead ends, in the order
+        // people hit them. The Kindle cannot read Microsoft's error page for them.
+        function showOutlookHelp() {
+            showModal('Microsoft may show an error instead of letting you in. ' +
+                'If it mentions redirect_uri, the app registration is missing one: Entra > App registrations > ' +
+                'Authentication > Add a platform > Mobile and desktop applications, tick ' +
+                'https://login.microsoftonline.com/common/oauth2/nativeclient, then Configure. ' +
+                'If the page will not load at all, finish the sign-in on a phone or computer. ' +
+                'If you sign in but no mail appears, turn on IMAP in Outlook.com under Settings > Mail > ' +
+                'Forwarding and IMAP. Press Connect again after fixing either one.');
+        }
+
+        function openOutlookLoginOnDevice() {
+            // Usually fails on the Kindle (Microsoft needs JavaScript this browser
+            // does not run), but when it does render the flow can finish here.
+            window.open(outlookVerifyUri || 'https://microsoft.com/devicelogin', '_blank');
+        }
+
+        async function onOutlookConnected(data) {
+            const payload = data || {};
+            const address = String(payload.email || document.getElementById('outlook-email').value || '').trim();
+            const accountId = String(payload.accountId || '');
+            if (!address || !accountId) {
+                showModal('Microsoft did not return an account id. Try connecting again.');
+                showAccountsStep();
+                return;
+            }
+
+            const stored = addOrUpdateAccount({
+                id: newAccountId('ms'),
+                provider: 'microsoft',
+                email: address,
+                oauth: 'microsoft',
+                accountId: accountId
+            });
+            activeAccountId = stored.id;
+            saveAccountsLocal();
+            persistAccountsToFirebase();
+            updateAccountsButton();
+
+            document.getElementById('auth-overlay').style.display = 'none';
+
+            // activateAccount() is what points imapConfig/smtpConfig at the new
+            // account. Calling loadFolders() directly here left the *previous*
+            // mailbox's config in place, so a freshly connected Outlook account
+            // quietly showed another mailbox's folders and messages.
+            const opened = await activateAccount(stored.id, { silentFail: true });
+            if (!opened) showAccountsStep();
+        }
+
         async function login() {
             const user = document.getElementById('imap-user').value.trim();
             const pass = document.getElementById('imap-pass').value.replace(/\s/g, ''); // Strip spaces (Google App Passwords)
@@ -1034,6 +2156,11 @@
             const imapPort = parseInt(document.getElementById('imap-port').value);
             const smtpHost = document.getElementById('smtp-host').value;
             const smtpPort = parseInt(document.getElementById('smtp-port').value);
+
+            if (isMicrosoftMailHost(imapHost) || isMicrosoftMailHost(smtpHost)) {
+                showOutlookNotice();
+                return;
+            }
 
             if (!user || !pass) {
                 showModal("Please enter email and password");
@@ -1064,27 +2191,25 @@
                 await loadFolders();
                 await loadEmails();
 
-                // Save credentials if successful (encrypted)
+                // Store the mailbox. The password is encrypted with the uid and
+                // kept per account, so several accounts can coexist.
                 const authUser = firebase.auth().currentUser;
-                if (authUser) {
-                    const encryptedPass = await encryptPassword(pass, authUser.uid);
-                    if (encryptedPass) {
-                        localStorage.setItem('rekindle_imap_user', user);
-                        localStorage.setItem('rekindle_imap_pass', encryptedPass);
-                        localStorage.setItem('rekindle_imap_uid', authUser.uid);
-                    } else {
-                        console.error("Failed to encrypt password for localStorage");
-                    }
-                }
-                localStorage.setItem('rekindle_imap_host', imapHost);
-                localStorage.setItem('rekindle_imap_port', imapPort);
-                localStorage.setItem('rekindle_smtp_host', smtpHost);
-                localStorage.setItem('rekindle_smtp_port', smtpPort);
+                const passEnc = authUser ? await encryptPassword(pass, authUser.uid) : null;
+                const stored = addOrUpdateAccount({
+                    id: newAccountId('acct'),
+                    provider: (imapHost || '').toLowerCase().indexOf('gmail.com') > -1 ? 'gmail' : 'custom',
+                    email: user,
+                    imap: { host: imapHost, port: imapPort },
+                    smtp: { host: smtpHost, port: smtpPort },
+                    passEnc: passEnc,
+                    _pass: pass
+                });
+                activeAccountId = stored.id;
+                saveAccountsLocal();
+                persistAccountsToFirebase();
+                updateAccountsButton();
 
                 document.getElementById('auth-overlay').style.display = 'none';
-
-                // Save to Firebase (Pro Data)
-                saveSettingsToFirebase(user, pass, imapHost, imapPort, smtpHost, smtpPort);
             } catch (e) {
                 console.error("Login failed", e);
                 showModal("Connection failed: " + e.message);
@@ -1097,13 +2222,6 @@
                     document.getElementById('btn-login').disabled = false;
                 }
             }
-        }
-
-        function logout() {
-            localStorage.removeItem('rekindle_imap_user');
-            localStorage.removeItem('rekindle_imap_pass');
-            localStorage.removeItem('rekindle_imap_uid');
-            location.reload();
         }
 
         async function loadFolders() {
@@ -1165,6 +2283,38 @@
         let currentCursor = null;
         let isLoadingMore = false;
 
+        // One INBOX page per account, tagged with the account it came from so
+        // opening/archiving acts on the right mailbox.
+        async function fetchUnifiedEmails(reset) {
+            const pages = await Promise.all(accounts.map(async account => {
+                try {
+                    // Paging: an account with no cursor left contributes nothing
+                    // (passing null would re-read its first page).
+                    if (!reset && !unifiedCursors[account.id]) return [];
+                    const conn = await connectionForAccount(account);
+                    if (!conn) return [];
+                    const res = await functions.httpsCallable('fetchEmails')({
+                        imap: conn.imap,
+                        path: 'INBOX',
+                        cursor: reset ? null : (unifiedCursors[account.id] || null),
+                        limit: 20
+                    });
+                    if (!res.data || !res.data.success) return [];
+                    unifiedCursors[account.id] = res.data.nextCursor || null;
+                    return (res.data.messages || []).map(message => {
+                        message._accountId = account.id;
+                        message._folder = 'INBOX';
+                        return message;
+                    });
+                } catch (e) {
+                    console.warn('Could not read the inbox for ' + account.email, e);
+                    unifiedCursors[account.id] = null;
+                    return [];
+                }
+            }));
+            return [].concat.apply([], pages);
+        }
+
         async function loadEmails(reset = true) {
             if (reset) {
                 currentCursor = null; // Reset cursor
@@ -1175,6 +2325,27 @@
                 isLoadingMore = true;
                 const btn = document.getElementById('btn-load-more');
                 if (btn) btn.innerText = "Loading...";
+            }
+
+            if (unifiedMode) {
+                try {
+                    const merged = await fetchUnifiedEmails(reset);
+                    emails = reset ? merged : emails.concat(merged);
+                    emails.sort((a, b) => emailDate(b) - emailDate(a));
+                    isLoadingMore = false;
+                    currentCursor = Object.keys(unifiedCursors).some(id => unifiedCursors[id]) ? 'unified' : null;
+                    renderEmailList();
+                    document.getElementById('status-bar').innerText =
+                        'All inboxes: ' + emails.length + ' emails from ' + accounts.length + ' accounts.';
+                } catch (e) {
+                    console.error('Unified load error', e);
+                    document.getElementById('status-bar').innerText = 'Error loading the combined inbox.';
+                    if (reset) {
+                        document.getElementById('list-container').innerHTML =
+                            '<div style="padding:20px; text-align:center; color:red;">Error: ' + escapeHtml(e.message) + '</div>';
+                    }
+                }
+                return;
             }
 
             const fetchEmailsFn = functions.httpsCallable('fetchEmails');
@@ -1188,22 +2359,32 @@
                 });
 
                 if (result.data.success) {
+                    const newMessages = result.data.messages || [];
+                    // Append path relies on DOM order matching `emails` order.
+                    newMessages.sort((a, b) => emailDate(b) - emailDate(a));
+                    const previousLast = emails.length ? emails[emails.length - 1] : null;
+
                     if (reset) {
-                        emails = result.data.messages;
+                        emails = newMessages;
                     } else {
-                        emails = emails.concat(result.data.messages);
+                        emails = emails.concat(newMessages);
                         isLoadingMore = false;
                     }
 
                     // Sort emails by date (newest first)
                     emails.sort((a, b) => {
-                        const dateA = new Date(a.envelope.date || a.internalDate);
-                        const dateB = new Date(b.envelope.date || b.internalDate);
-                        return dateB - dateA; // Descending order
+                        return emailDate(b) - emailDate(a); // Descending order
                     });
 
+                    const appendedPage = !reset && previousLast && newMessages.length &&
+                        emailDate(newMessages[0]) <= emailDate(previousLast);
+
                     currentCursor = result.data.nextCursor;
-                    renderEmailList();
+                    if (appendedPage) {
+                        appendEmailRows(newMessages);
+                    } else {
+                        renderEmailList();
+                    }
                     document.getElementById('status-bar').innerText = `Loaded ${emails.length} emails.`;
                 } else {
                     throw new Error(result.data.error);
@@ -1222,13 +2403,135 @@
             }
         }
 
-        function renderEmailList() {
-            const container = document.getElementById('list-container');
-            container.innerHTML = '';
+        function emailDate(email) {
+            return new Date(email.envelope.date || email.internalDate);
+        }
 
-            emails.forEach(email => {
-                const div = document.createElement('div');
+        // ── Conversation grouping ────────────────────────────────────────────
+        // Threads key on the normalised subject. References/In-Reply-To are not
+        // fetched for every message (the IMAP envelope omits References), so the
+        // subject is the only signal that works across providers; a message with
+        // no subject falls back to its own id so unrelated mails never merge.
+        const SUBJECT_PREFIX = /^\s*(?:(?:re|fwd?|fw|aw|sv|vs|antw|tr|enc)\s*[:：]\s*)+/i;
+
+        function normalizeSubject(subject) {
+            let value = String(subject || '');
+            for (let i = 0; i < 4; i++) {
+                const next = value.replace(SUBJECT_PREFIX, '');
+                if (next === value) break;
+                value = next;
+            }
+            return value.toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+
+        function threadKey(email) {
+            // The merged inbox carries messages from several mailboxes, and the
+            // same subject in two of them is not one conversation.
+            const scope = email._accountId ? email._accountId + '|' : '';
+            const subject = normalizeSubject(email.envelope && email.envelope.subject);
+            if (subject) return scope + 's:' + subject;
+            const messageId = (email.envelope && email.envelope.messageId) || '';
+            return scope + 'm:' + (messageId || email.uid);
+        }
+
+        function buildThreads(list) {
+            const map = new Map();
+            list.forEach(email => {
+                const key = threadKey(email);
+                let thread = map.get(key);
+                if (!thread) {
+                    thread = { key: key, messages: [] };
+                    map.set(key, thread);
+                }
+                thread.messages.push(email);
+            });
+
+            const result = Array.from(map.values());
+            result.forEach(thread => {
+                thread.messages.sort((a, b) => emailDate(a) - emailDate(b));
+                thread.latest = thread.messages[thread.messages.length - 1];
+                thread.count = thread.messages.length;
+                thread.unread = thread.messages.some(m => !m.flags.includes('\\Seen'));
+            });
+            result.sort((a, b) => emailDate(b.latest) - emailDate(a.latest));
+            return result;
+        }
+
+        function threadSearchText(thread) {
+            return thread.messages.map(message => {
+                const from = (message.envelope && message.envelope.from && message.envelope.from[0]) || {};
+                return [message.envelope && message.envelope.subject, from.name, from.address, message.snippet]
+                    .filter(Boolean).join(' ');
+            }).join(' ').toLowerCase();
+        }
+
+        function createThreadRow(thread) {
+            const wrap = document.createElement('div');
+            wrap.className = 'thread-item';
+            wrap.dataset.thread = thread.key;
+            wrap.dataset.search = threadSearchText(thread);
+
+            const head = createEmailRow(thread.latest);
+            head.classList.add('thread-head');
+            if (thread.unread) head.classList.add('unread');
+            else head.classList.remove('unread');
+
+            if (thread.count > 1) {
+                const badge = document.createElement('span');
+                badge.className = 'thread-count';
+                badge.innerText = String(thread.count);
+                const senderRow = head.querySelector('.email-sender');
+                if (senderRow) senderRow.insertBefore(badge, senderRow.firstChild);
+
+                // The badge carries the count; leave the snippet showing the
+                // newest message so a thread still previews like a single row.
+                const senderName = head.querySelector('.email-sender-name');
+                if (senderName) senderName.title = thread.count + ' messages in this conversation';
+
+                head.onclick = (ev) => {
+                    if (ev) ev.stopPropagation();
+                    toggleThread(wrap);
+                };
+            } else {
+                head.onclick = () => openEmail(thread.latest);
+            }
+            wrap.appendChild(head);
+
+            if (thread.count > 1) {
+                const children = document.createElement('div');
+                children.className = 'thread-children';
+                children.style.display = 'none';
+                // Newest first inside the thread, matching the list order.
+                thread.messages.slice().reverse().forEach(message => {
+                    const child = createEmailRow(message);
+                    child.classList.add('thread-child');
+                    if (message.uid === thread.latest.uid) child.classList.add('thread-latest');
+                    children.appendChild(child);
+                });
+                wrap.appendChild(children);
+            }
+
+            return wrap;
+        }
+
+        function toggleThread(wrap) {
+            const children = wrap.querySelector('.thread-children');
+            if (!children) return;
+            const isOpen = children.style.display !== 'none';
+            children.style.display = isOpen ? 'none' : 'block';
+        }
+
+        function createEmailRow(email) {
+            const div = document.createElement('div');
                 div.className = `email-item ${!email.flags.includes('\\Seen') ? 'unread' : ''}`;
+                div.dataset.uid = String(email.uid);
+                const rowFrom = (email.envelope && email.envelope.from && email.envelope.from[0]) || {};
+                div.dataset.search = [
+                    email.envelope && email.envelope.subject,
+                    rowFrom.name,
+                    rowFrom.address,
+                    email.snippet
+                ].filter(Boolean).join(' ').toLowerCase();
                 div.onclick = () => openEmail(email);
 
                 const date = new Date(email.envelope.date || email.internalDate);
@@ -1244,26 +2547,62 @@
                 // Snippet
                 const snippet = email.snippet ? `<div class="email-snippet">${escapeHtml(email.snippet)}</div>` : '';
 
+                let accountTag = '';
+                if (email._accountId) {
+                    const owner = accounts.find(a => a.id === email._accountId);
+                    if (owner) accountTag = `<span class="account-tag">${escapeHtml(owner.label || owner.email)}</span>`;
+                }
+
                 div.innerHTML = `
                     <div class="email-sender">
-                        <span class="email-sender-name">${escapeHtml(email.envelope.from[0].name || email.envelope.from[0].address)}</span>
+                        <span class="email-sender-name">${accountTag}${escapeHtml(email.envelope.from[0].name || email.envelope.from[0].address)}</span>
                         <span class="email-date">${dateStr}</span>
                     </div>
                     <div class="email-subject">${escapeHtml(email.envelope.subject || '(No Subject)')}</div>
                     ${snippet}
                 `;
-                container.appendChild(div);
-            });
+            return div;
+        }
 
-            // Load More Button
-            if (currentCursor) {
-                const btn = document.createElement('button');
-                btn.id = 'btn-load-more';
-                btn.className = 'load-more-btn';
-                btn.innerText = "Load More...";
-                btn.onclick = () => loadEmails(false);
-                container.appendChild(btn);
+        function updateLoadMoreButton(container) {
+            const existing = document.getElementById('btn-load-more');
+            if (existing) existing.remove();
+            if (!currentCursor) return;
+            const btn = document.createElement('button');
+            btn.id = 'btn-load-more';
+            btn.className = 'load-more-btn';
+            btn.innerText = "Load More...";
+            btn.onclick = () => loadEmails(false);
+            container.appendChild(btn);
+        }
+
+        // Append only the new page's rows, so paging no longer rebuilds every
+        // accumulated row (and keeps the scroll position).
+        function appendEmailRows(list) {
+            // A new page can merge into threads already on screen, so rebuilding
+            // is the only correct option once grouping is on. With it off the
+            // append fast path keeps paging cheap.
+            if (threadingEnabled) {
+                renderEmailList();
+                return;
             }
+            const container = document.getElementById('list-container');
+            list.forEach(email => container.appendChild(createEmailRow(email)));
+            updateLoadMoreButton(container);
+        }
+
+        function renderEmailList() {
+            const container = document.getElementById('list-container');
+            container.innerHTML = '';
+
+            if (threadingEnabled) {
+                threads = buildThreads(emails);
+                threads.forEach(thread => container.appendChild(createThreadRow(thread)));
+            } else {
+                threads = [];
+                emails.forEach(email => container.appendChild(createEmailRow(email)));
+            }
+            updateLoadMoreButton(container);
         }
 
         function escapeHtml(text) {
@@ -1271,20 +2610,93 @@
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
+        async function searchEmailsServer() {
+            const input = document.getElementById('search-input');
+            const query = input ? input.value.trim() : '';
+            if (!query) {
+                loadEmails(true);
+                return;
+            }
+            if (!unifiedMode && !imapConfig) {
+                showModal('This mailbox is not connected right now.');
+                return;
+            }
+            const status = document.getElementById('status-bar');
+            const list = document.getElementById('list-container');
+            if (status) status.innerText = 'Searching...';
+            if (list) list.innerHTML = '<div style="padding:20px; text-align:center;">Searching...</div>';
+            try {
+                const searchFn = functions.httpsCallable('searchEmails');
+                let merged = [];
+                if (unifiedMode) {
+                    for (const account of accounts) {
+                        const conn = await connectionForAccount(account);
+                        if (!conn) continue;
+                        try {
+                            const result = await searchFn({
+                                imap: conn.imap,
+                                path: 'INBOX',
+                                query: query,
+                                limit: 30
+                            });
+                            (result.data && result.data.messages ? result.data.messages : []).forEach(function (m) {
+                                m._accountId = account.id;
+                                m._folder = 'INBOX';
+                                merged.push(m);
+                            });
+                        } catch (e) {
+                            console.warn('Search failed for ' + account.email, e);
+                        }
+                    }
+                    merged.sort(function (a, b) { return emailDate(b) - emailDate(a); });
+                } else {
+                    const result = await searchFn({
+                        imap: imapConfig,
+                        path: currentFolder,
+                        query: query,
+                        limit: 30
+                    });
+                    if (!result.data || !result.data.success) throw new Error('Search failed');
+                    merged = result.data.messages || [];
+                }
+                emails = merged;
+                currentCursor = null;
+                isLoadingMore = false;
+                renderEmailList();
+                if (status) {
+                    status.innerText = 'Search results for "' + query + '"' +
+                        (unifiedMode ? ' in all inboxes' : ' in ' + (currentFolder || 'INBOX')) +
+                        ': ' + emails.length;
+                }
+            } catch (e) {
+                console.error('Mail search failed', e);
+                if (list) list.innerHTML = '<div style="padding:20px; text-align:center; color:red;">Search failed: ' +
+                    escapeHtml(e.message || 'unknown error') + '</div>';
+                if (status) status.innerText = 'Search failed.';
+            }
+        }
+
         function filterEmails() {
             const query = document.getElementById('search-input').value.toLowerCase();
             const container = document.getElementById('list-container');
-            const items = container.getElementsByClassName('email-item');
-
-            Array.from(items).forEach((item, index) => {
-                const email = emails[index];
-                const text = (email.envelope.subject + (email.envelope.from[0].name || '')).toLowerCase();
-                item.style.display = text.includes(query) ? '' : 'none';
+            // Filter on each row's own search corpus rather than on array indices:
+            // grouping means DOM order no longer matches `emails`.
+            const items = container.querySelectorAll(threadingEnabled ? '.thread-item' : '.email-item');
+            Array.from(items).forEach(item => {
+                const text = item.dataset.search || '';
+                item.style.display = text.indexOf(query) > -1 ? '' : 'none';
             });
         }
 
         async function openEmail(email) {
             currentEmail = email;
+
+            const ctx = await contextForMessage(email);
+            if (!ctx) {
+                showModal((email._accountId ? 'That account is' : 'This account is') +
+                    ' not available right now. Open Accounts to reconnect it.');
+                return;
+            }
 
             // Highlight selected
             const items = document.getElementsByClassName('email-item');
@@ -1294,11 +2706,14 @@
             // Mark as read locally and remotely
             if (!email.flags.includes('\\Seen')) {
                 email.flags.push('\\Seen');
-                renderEmailList(); // Update UI
+                // Only this row changed; re-rendering the whole list rebuilt
+                // every row and threw away the scroll position.
+                const row = document.querySelector('#list-container .email-item[data-uid="' + String(email.uid) + '"]');
+                if (row) row.classList.remove('unread');
                 // Call modifyFlags backend
                 functions.httpsCallable('modifyFlags')({
-                    imap: imapConfig,
-                    path: currentFolder,
+                    imap: ctx.imap,
+                    path: ctx.folder,
                     uid: email.uid,
                     addFlags: ['\\Seen']
                 }).catch(console.error);
@@ -1311,8 +2726,8 @@
 
             try {
                 const result = await fetchBodyFn({
-                    imap: imapConfig,
-                    path: currentFolder,
+                    imap: ctx.imap,
+                    path: ctx.folder,
                     uid: email.uid
                 });
 
@@ -1336,7 +2751,12 @@
                             </div>
                         </div>
                         <div id="email-body-host" class="email-body" style="border-top:1px solid #ccc; padding-top:10px;"></div>
+                        <div id="remote-images-bar" style="display:none;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #ccc;background:#f6f6f6;font-size:0.8rem;margin-top:8px;"><span>Remote images are blocked for privacy.</span><button class="toolbar-btn" onclick="loadRemoteEmailImages()" style="margin-left:10px;">Load images</button></div>
+                        <div id="email-attachments" style="display:none;padding:8px 0;border-top:1px solid #ccc;margin-top:8px;font-size:0.82rem;"></div>
                     `;
+
+                    currentFullEmail = fullEmail;
+                    renderEmailAttachments(fullEmail.attachments || []);
 
                     // Shadow DOM isolation for email body
                     const host = document.getElementById('email-body-host');
@@ -1424,7 +2844,37 @@
                                 </style>
                             `;
 
-                            shadow.innerHTML = style + (fullEmail.html || fullEmail.text.replace(/\n/g, '<br>'));
+                            shadow.innerHTML = style;
+
+                            const bodyEl = document.createElement('div');
+                            bodyEl.className = 'email-body-content';
+                            shadow.appendChild(bodyEl);
+
+                            // Email HTML is untrusted. Safe-html removes scripts,
+                            // event handlers, forms and dangerous URLs before the
+                            // nodes are appended (never innerHTML).
+                            const rawEmailHtml = fullEmail.html ||
+                                escapeHtml(fullEmail.text || '').replace(/\n/g, '<br>');
+                            if (window.rekindleSetSafeHtml) {
+                                window.rekindleSetSafeHtml(bodyEl, rawEmailHtml);
+                            } else {
+                                bodyEl.textContent = fullEmail.text || '';
+                            }
+
+                            // Block remote images until the user opts in. This
+                            // stops tracking pixels and keeps the Kindle from
+                            // downloading a whole newsletter just to read it.
+                            let remoteImageCount = 0;
+                            bodyEl.querySelectorAll('img[src]').forEach(function (img) {
+                                const src = img.getAttribute('src') || '';
+                                if (/^https?:/i.test(src)) {
+                                    img.setAttribute('data-remote-src', src);
+                                    img.setAttribute('src', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
+                                    remoteImageCount++;
+                                }
+                            });
+                            const remoteBar = document.getElementById('remote-images-bar');
+                            if (remoteBar) remoteBar.style.display = remoteImageCount ? 'flex' : 'none';
 
                             // Intercept links to open in Browser app
                             try {
@@ -1447,25 +2897,111 @@
                     }
 
                 } else {
-                    detailsPane.innerHTML = `< div style = "padding:20px; color:red;" > Error loading body: ${result.data.error}</div > `;
+                    detailsPane.innerHTML = '<div style="padding:20px;color:red;">Error loading body: ' +
+                        escapeHtml(String(result.data.error || 'Unknown error')) + '</div>';
                 }
 
             } catch (e) {
                 console.error("Body error", e);
-                detailsPane.innerHTML = `< div style = "padding:20px; color:red;" > Error: ${e.message}</div >`;
+                detailsPane.innerHTML = '<div style="padding:20px;color:red;">Error: ' +
+                    escapeHtml(String(e.message || 'Could not load the message.')) + '</div>';
             }
+        }
+
+        function formatAttachmentSize(bytes) {
+            const n = Number(bytes) || 0;
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function renderEmailAttachments(attachments) {
+            const box = document.getElementById('email-attachments');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!attachments || attachments.length === 0) {
+                box.style.display = 'none';
+                return;
+            }
+            box.style.display = 'block';
+            const label = document.createElement('b');
+            label.textContent = 'Attachments: ';
+            box.appendChild(label);
+            attachments.forEach(function (att) {
+                const btn = document.createElement('button');
+                btn.className = 'toolbar-btn';
+                btn.style.margin = '4px 6px 0 0';
+                btn.textContent = (att.filename || 'attachment') + ' (' + formatAttachmentSize(att.size) + ')';
+                btn.onclick = function () { downloadEmailAttachment(att.index); };
+                box.appendChild(btn);
+            });
+        }
+
+        async function downloadEmailAttachment(index) {
+            if (!currentEmail || !currentFullEmail) return;
+            const att = (currentFullEmail.attachments || [])[index];
+            if (!att) return;
+            const ctx = await contextForMessage(currentEmail);
+            if (!ctx) {
+                showModal('That account is not available right now.');
+                return;
+            }
+            const status = document.getElementById('status-bar');
+            if (status) status.innerText = 'Downloading ' + att.filename + '...';
+            try {
+                const result = await functions.httpsCallable('fetchEmailAttachment')({
+                    imap: ctx.imap,
+                    path: ctx.folder,
+                    uid: currentEmail.uid,
+                    index: index
+                });
+                if (!result.data || !result.data.success) throw new Error('Download failed');
+                const binary = atob(result.data.data);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const blob = new Blob([bytes], { type: result.data.contentType || 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = result.data.filename || att.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+                if (status) status.innerText = 'Downloaded ' + (result.data.filename || att.filename);
+            } catch (e) {
+                console.error('Attachment download failed', e);
+                if (status) status.innerText = 'Could not download the attachment.';
+            }
+        }
+
+        function loadRemoteEmailImages() {
+            const host = document.getElementById('email-body-host');
+            if (!host || !host.shadowRoot) return;
+            host.shadowRoot.querySelectorAll('img[data-remote-src]').forEach(function (img) {
+                const src = img.getAttribute('data-remote-src');
+                if (src) img.setAttribute('src', src);
+                img.removeAttribute('data-remote-src');
+            });
+            const bar = document.getElementById('remote-images-bar');
+            if (bar) bar.style.display = 'none';
         }
 
         async function toggleReadStatus() {
             if (!currentEmail) return;
+            const ctx = await contextForMessage(currentEmail);
+            if (!ctx) {
+                showModal('That account is not available right now.');
+                return;
+            }
             // Currently it is read (we mark it on open). Toggle to unread.
             currentEmail.flags = currentEmail.flags.filter(f => f !== '\\Seen');
             renderEmailList();
 
             try {
                 await functions.httpsCallable('modifyFlags')({
-                    imap: imapConfig,
-                    path: currentFolder,
+                    imap: ctx.imap,
+                    path: ctx.folder,
                     uid: currentEmail.uid,
                     removeFlags: ['\\Seen']
                 });
@@ -1478,8 +3014,14 @@
         async function archiveEmail() {
             if (!currentEmail) return;
 
+            const ctx = await contextForMessage(currentEmail);
+            if (!ctx) {
+                showModal('That account is not available right now.');
+                return;
+            }
+
             // Find Archive/All Mail folder
-            const archiveFolder = allFolders.find(f =>
+            const archiveFolder = ctx.folders.find(f =>
                 f.specialUse === '\\All' ||
                 f.specialUse === '\\Archive' ||
                 f.path.toLowerCase().includes('all mail') ||
@@ -1502,8 +3044,8 @@
 
             try {
                 await moveEmailFn({
-                    imap: imapConfig,
-                    path: currentFolder,
+                    imap: ctx.imap,
+                    path: ctx.folder,
                     uid: uid,
                     destination: archiveFolder.path
                 });
@@ -1518,8 +3060,14 @@
         async function deleteEmail() {
             if (!currentEmail) return;
 
+            const ctx = await contextForMessage(currentEmail);
+            if (!ctx) {
+                showModal('That account is not available right now.');
+                return;
+            }
+
             // Find Trash folder
-            const trashFolder = allFolders.find(f =>
+            const trashFolder = ctx.folders.find(f =>
                 f.specialUse === '\\Trash' ||
                 f.path.toLowerCase().includes('trash') ||
                 f.path.toLowerCase() === 'bin'
@@ -1541,8 +3089,8 @@
 
             try {
                 await moveEmailFn({
-                    imap: imapConfig,
-                    path: currentFolder,
+                    imap: ctx.imap,
+                    path: ctx.folder,
                     uid: uid,
                     destination: trashFolder.path
                 });
@@ -1555,15 +3103,156 @@
         }
 
         function changeFolder() {
+            if (unifiedMode) {
+                // Folders are per account; the merged view is Inbox-only.
+                const select = document.getElementById('folder-select');
+                if (select) select.value = 'INBOX';
+                showModal('All inboxes shows Inbox only. Pick an account from Accounts to browse its folders.');
+                return;
+            }
             currentFolder = document.getElementById('folder-select').value;
-            console.log("Changed folder to:", currentFolder); // DEBUG
+            const search = document.getElementById('search-input');
+            if (search) search.value = '';
             loadEmails();
         }
 
+        const COMPOSE_DRAFT_KEY = 'rekindle_mail_compose_draft';
+
+        function getComposeDraft() {
+            try {
+                const draft = JSON.parse(localStorage.getItem(COMPOSE_DRAFT_KEY) || 'null');
+                return draft && (draft.to || draft.subject || draft.body) ? draft : null;
+            } catch (e) { return null; }
+        }
+
+        function saveComposeDraft() {
+            const draft = {
+                to: document.getElementById('compose-to').value,
+                subject: document.getElementById('compose-subject').value,
+                body: document.getElementById('compose-body').value,
+                updated: Date.now()
+            };
+            try {
+                if (draft.to || draft.subject || draft.body) {
+                    localStorage.setItem(COMPOSE_DRAFT_KEY, JSON.stringify(draft));
+                } else {
+                    localStorage.removeItem(COMPOSE_DRAFT_KEY);
+                }
+            } catch (e) { }
+        }
+
+        function clearComposeDraft() {
+            try { localStorage.removeItem(COMPOSE_DRAFT_KEY); } catch (e) { }
+            const btn = document.getElementById('compose-restore-btn');
+            if (btn) btn.style.display = 'none';
+        }
+
+        function restoreComposeDraft() {
+            const draft = getComposeDraft();
+            if (!draft) return;
+            document.getElementById('compose-to').value = draft.to || '';
+            document.getElementById('compose-subject').value = draft.subject || '';
+            document.getElementById('compose-body').value = draft.body || '';
+            const btn = document.getElementById('compose-restore-btn');
+            if (btn) btn.style.display = 'none';
+        }
+
+        let composeAttachments = [];
+        const COMPOSE_MAX_FILES = 3;
+        const COMPOSE_MAX_BYTES = 4 * 1024 * 1024;
+
+        function composeAttachmentBytes() {
+            return composeAttachments.reduce(function (sum, a) { return sum + (a.size || 0); }, 0);
+        }
+
+        function renderComposeAttachments() {
+            const box = document.getElementById('compose-attachments');
+            if (!box) return;
+            box.innerHTML = '';
+            composeAttachments.forEach(function (att, index) {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;border:1px solid #ccc;padding:4px 6px;margin:0 0 4px;';
+                const name = document.createElement('span');
+                name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;';
+                name.textContent = att.filename + ' (' + formatAttachmentSize(att.size) + ')';
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'toolbar-btn';
+                remove.style.cssText = 'padding:2px 6px;font-size:0.7rem;margin-left:8px;';
+                remove.textContent = 'X';
+                remove.onclick = function () {
+                    composeAttachments.splice(index, 1);
+                    renderComposeAttachments();
+                };
+                row.appendChild(name);
+                row.appendChild(remove);
+                box.appendChild(row);
+            });
+        }
+
+        function clearComposeAttachments() {
+            composeAttachments = [];
+            renderComposeAttachments();
+        }
+
+        function handleComposeAttachments(input) {
+            const files = Array.from(input.files || []);
+            input.value = '';
+            if (!files.length) return;
+            if (!window.FileReader) {
+                showModal('Attachments are not supported by this browser.');
+                return;
+            }
+            const remaining = COMPOSE_MAX_FILES - composeAttachments.length;
+            if (remaining <= 0) {
+                showModal('You can attach up to ' + COMPOSE_MAX_FILES + ' files.');
+                return;
+            }
+            const selected = files.slice(0, remaining);
+            if (files.length > remaining) {
+                showModal('You can attach up to ' + COMPOSE_MAX_FILES + ' files.');
+            }
+            const projected = composeAttachmentBytes() + selected.reduce(function (sum, f) { return sum + (f.size || 0); }, 0);
+            if (projected > COMPOSE_MAX_BYTES) {
+                showModal('Attachments must total 4 MB or less.');
+                return;
+            }
+            selected.forEach(function (file) {
+                const reader = new FileReader();
+                reader.onload = function () {
+                    if (composeAttachments.length >= COMPOSE_MAX_FILES ||
+                        composeAttachmentBytes() + file.size > COMPOSE_MAX_BYTES) {
+                        return;
+                    }
+                    const result = String(reader.result || '');
+                    const comma = result.indexOf(',');
+                    if (comma < 0) return;
+                    composeAttachments.push({
+                        filename: file.name || 'attachment',
+                        contentType: file.type || 'application/octet-stream',
+                        data: result.slice(comma + 1),
+                        size: file.size || 0
+                    });
+                    renderComposeAttachments();
+                };
+                reader.onerror = function () {
+                    showModal('Could not read ' + file.name + '.');
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         function openComposeModal() {
+            clearComposeAttachments();
             document.getElementById('compose-to').value = '';
             document.getElementById('compose-subject').value = '';
             document.getElementById('compose-body').value = '';
+            ['compose-to', 'compose-subject', 'compose-body'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.oninput = saveComposeDraft;
+            });
+            const btn = document.getElementById('compose-restore-btn');
+            if (btn) btn.style.display = getComposeDraft() ? 'block' : 'none';
             document.getElementById('compose-modal').style.display = 'flex';
         }
 
@@ -1600,15 +3289,25 @@
             try {
                 const result = await sendEmailFn({
                     smtp: smtpConfig,
+                    imap: imapConfig,
                     message: {
                         to,
                         subject,
                         text: body,
-                        html: body.replace(/\n/g, '<br>')
+                        html: body.replace(/\n/g, '<br>'),
+                        attachments: composeAttachments.map(function (att) {
+                            return {
+                                filename: att.filename,
+                                contentType: att.contentType,
+                                data: att.data
+                            };
+                        })
                     }
                 });
 
                 if (result.data.success) {
+                    clearComposeDraft();
+                    clearComposeAttachments();
                     closeComposeModal();
                     showModal("Email sent!");
                 } else {
@@ -1691,72 +3390,101 @@
         }
 
         // --- CLOUD SYNC ---
+        // Reads the account list so a second device picks up the same mailboxes.
         async function loadSettingsFromFirebase(uid) {
             if (!uid) return;
             try {
-                const db = firebase.firestore();
-                const doc = await db.collection('users').doc(uid).collection('pro_data').doc('mail').get();
+                const doc = await firebase.firestore().collection('users').doc(uid)
+                    .collection('pro_data').doc('mail').get();
+                if (!doc.exists) return;
 
-                if (doc.exists) {
-                    const data = doc.data();
-                    if (data.imapUser && data.imapPass) {
-                        // Decrypt password before storing locally
-                        let password = data.imapPass;
-                        if (data.encrypted) {
-                            password = await decryptPassword(data.imapPass, uid);
-                            if (!password) {
-                                console.error("Failed to decrypt password from cloud");
-                                return;
-                            }
-                        }
+                const data = doc.data() || {};
+                if (Array.isArray(data.accounts)) {
+                    const localActive = activeAccountId;   // set by loadAccountsLocal()
+                    // Keep anything this device already has. A mailbox added moments
+                    // ago can reach localStorage before its Firestore write lands,
+                    // and replacing the list here made that account vanish from the
+                    // app while it was still the saved active one.
+                    const localAccounts = accounts.slice();
+                    accounts = data.accounts.filter(a => a && a.id && a.email).map(a => ({
+                        id: a.id,
+                        provider: a.provider || 'custom',
+                        email: a.email,
+                        label: a.label || '',
+                        oauth: a.oauth || null,
+                        accountId: a.accountId || null,
+                        imap: a.imap || null,
+                        smtp: a.smtp || null,
+                        passEnc: a.passEnc || null
+                    }));
+                    localAccounts.forEach(local => {
+                        const key = local.email.toLowerCase() + '|' + (local.oauth || '');
+                        const exists = accounts.some(remote =>
+                            remote.id === local.id ||
+                            (remote.email.toLowerCase() + '|' + (remote.oauth || '')) === key);
+                        if (!exists) accounts.push(local);
+                    });
 
-                        // Store encrypted password in localStorage (re-encrypt with same uid)
-                        const encryptedForLocal = await encryptPassword(password, uid);
-                        if (encryptedForLocal) {
-                            localStorage.setItem('rekindle_imap_user', data.imapUser);
-                            localStorage.setItem('rekindle_imap_pass', encryptedForLocal);
-                            localStorage.setItem('rekindle_imap_uid', uid);
-                            localStorage.setItem('rekindle_imap_host', data.imapHost);
-                            localStorage.setItem('rekindle_imap_port', data.imapPort);
-                            localStorage.setItem('rekindle_smtp_host', data.smtpHost);
-                            localStorage.setItem('rekindle_smtp_port', data.smtpPort);
-                            console.log("Mail settings synced from cloud (encrypted in localStorage).");
-                        } else {
-                            console.error("Failed to encrypt password for localStorage");
-                        }
-                    }
+                    // This device's last choice wins as long as it still exists; a
+                    // sync from another device only fills the gap.
+                    const preferred = [localActive, data.activeId]
+                        .find(id => id && accounts.some(a => a.id === id));
+                    activeAccountId = preferred || (accounts[0] && accounts[0].id) || null;
+                    if (typeof data.threading === 'boolean') threadingEnabled = data.threading;
+                    saveAccountsLocal();
+                    return;
                 }
+
+                // Single-mailbox documents predate the account list.
+                if (data.imapUser && data.imapPass && !data.oauth) {
+                    let passEnc = data.encrypted ? data.imapPass : null;
+                    if (!data.encrypted) {
+                        passEnc = await encryptPassword(data.imapPass, uid);
+                    }
+                    accounts = [{
+                        id: newAccountId('acct'),
+                        provider: 'custom',
+                        email: data.imapUser,
+                        imap: { host: data.imapHost || 'imap.gmail.com', port: Number(data.imapPort) || 993 },
+                        smtp: { host: data.smtpHost || 'smtp.gmail.com', port: Number(data.smtpPort) || 465 },
+                        passEnc: passEnc
+                    }];
+                    activeAccountId = accounts[0].id;
+                    saveAccountsLocal();
+                }
+                // Outlook docs from that era are dropped: their refresh token was
+                // keyed to the user, not to an account id, so the mailbox has to be
+                // reconnected once.
             } catch (e) {
                 console.error("Error loading mail settings from cloud:", e);
             }
         }
 
-        async function saveSettingsToFirebase(user, pass, imapHost, imapPort, smtpHost, smtpPort) {
+        async function persistAccountsToFirebase() {
             const authUser = firebase.auth().currentUser;
             if (!authUser) return;
 
             try {
-                // Encrypt password before saving
-                const encryptedPass = await encryptPassword(pass, authUser.uid);
-                if (!encryptedPass) {
-                    console.error("Failed to encrypt password, not saving to cloud");
-                    return;
-                }
-
-                const db = firebase.firestore();
-                await db.collection('users').doc(authUser.uid).collection('pro_data').doc('mail').set({
-                    imapUser: user,
-                    imapPass: encryptedPass,
-                    encrypted: true,
-                    imapHost: imapHost,
-                    imapPort: imapPort,
-                    smtpHost: smtpHost,
-                    smtpPort: smtpPort,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-                console.log("Mail settings saved to cloud (encrypted).");
+                const FieldValue = firebase.firestore.FieldValue;
+                await firebase.firestore().collection('users').doc(authUser.uid)
+                    .collection('pro_data').doc('mail').set({
+                        accounts: accounts.map(serializeAccount),
+                        activeId: activeAccountId,
+                        threading: threadingEnabled,
+                        // Fields from the single-mailbox schema. Deleting them means
+                        // a migrated password cannot linger beside the account list.
+                        imapUser: FieldValue.delete(),
+                        imapPass: FieldValue.delete(),
+                        encrypted: FieldValue.delete(),
+                        imapHost: FieldValue.delete(),
+                        imapPort: FieldValue.delete(),
+                        smtpHost: FieldValue.delete(),
+                        smtpPort: FieldValue.delete(),
+                        oauth: FieldValue.delete(),
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
             } catch (e) {
-                console.error("Error saving mail settings to cloud:", e);
+                console.error("Error saving mail accounts to cloud:", e);
             }
         }
     </script>
@@ -1779,7 +3507,6 @@
                 textEl.innerText = text;
                 overlay.style.display = 'flex';
             } else {
-                console.log("Modal fallback (elements missing):", text);
             }
         }
 

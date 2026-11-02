@@ -5,10 +5,12 @@
     <meta charset="UTF-8">
     <title>Live Yahtzee</title>
     <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="theme.js?v=35"></script>
 
     <style>
         /* SYSTEM 7 AESTHETICS */
@@ -148,6 +150,16 @@
             box-shadow: none;
             transform: translate(3px, 3px);
         }
+
+        /* Compact System 7 lobby menu */
+        .lobby-menu { flex: 1; justify-content: center; text-align: center; padding: 24px 18px; }
+        .lobby-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 0.04em; margin: 0 0 4px; }
+        .lobby-sub { font-size: 0.82rem; line-height: 1.35; color: #333; max-width: 260px; margin: 0 0 18px; }
+        .lobby-actions { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; max-width: 300px; }
+        .lobby-actions .sys-btn { width: 100%; min-height: 48px; margin: 0; }
+        .sys-btn.primary { background: black; color: white; }
+        .sys-btn.primary:active { background: white; color: black; }
+        .sys-btn.ghost { border-width: 1px; box-shadow: none; font-weight: normal; }
 
         .sys-btn:disabled {
             color: #999;
@@ -355,6 +367,7 @@
             margin: 5px 0;
         }
     </style>
+    <link rel="stylesheet" href="js/system-dialog.css?v=2">
 </head>
 <body>
     <div class="window">
@@ -365,11 +378,13 @@
             <div class="title-text" data-i18n="yahtzee.title">Yahtzee</div>
         </div>
 
-        <div class="window-content" id="screen-menu">
-            <h1 style="font-size: 2.5rem; margin: 10px 0;">YAHTZEE</h1>
-            <p data-i18n="liveyahtzee.lobby.subtitle">Real-time Multiplayer Dice Game</p>
-            <button class="sys-btn" onclick="hostGame()" data-i18n="liveyahtzee.btn.host">Host Game</button>
-            <button class="sys-btn" onclick="goHome()" data-i18n="common.back">Back</button>
+        <div class="window-content lobby-menu" id="screen-menu">
+            <h1 class="lobby-title">YAHTZEE</h1>
+            <p class="lobby-sub" data-i18n="liveyahtzee.lobby.subtitle">Real-time Multiplayer Dice Game</p>
+            <div class="lobby-actions">
+                <button class="sys-btn primary" onclick="hostGame()" data-i18n="liveyahtzee.btn.host">Host Game</button>
+                <button class="sys-btn ghost" onclick="goHome()" data-i18n="common.back">Back</button>
+            </div>
         </div>
 
         <div class="window-content" id="screen-loading" style="display:none; justify-content:center;">
@@ -378,7 +393,7 @@
 
         <div class="window-content" id="screen-lobby" style="display:none;">
             <h2 data-i18n="yahtzee.title">Lobby</h2>
-            <div style="font-size: 1.1rem; margin-bottom: 10px;" id="lobby-status" data-i18n="liveyahtzee.lobby.waiting">Waiting for players...</div>
+            <div style="font-size: 1.1rem; margin-bottom: 10px;" id="lobby-status">Waiting for players...</div>
             <div class="player-list" id="lobby-players"></div>
 
             <div id="host-controls" style="display:none; flex-direction: column; align-items: center;">
@@ -420,25 +435,29 @@
 
         <!-- Modals -->
         <div id="winner-modal" class="modal-overlay">
-            <div class="modal-box">
-                <h2 id="winner-text" data-i18n="yahtzee.msg.game_over">Game Over</h2>
-                <div id="final-scoreboard" style="text-align: left; margin: 15px 0;"></div>
+            <div class="modal-box rk-dialog">
+                <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="winner-text" data-i18n="yahtzee.msg.game_over">Game Over</span></div>
+                <div class="rk-dialog-body">
+                    <div id="final-scoreboard" style="text-align: left; margin: 15px 0;"></div>
                 <button class="sys-btn" onclick="leaveMatch()" data-i18n="common.back">Main Menu</button>
+                </div>
             </div>
         </div>
 
         <div id="custom-alert-modal" class="modal-overlay">
-            <div class="modal-box">
-                <h3 id="custom-alert-title" data-i18n="common.notice">Notice</h3>
-                <p id="custom-alert-msg" style="margin: 15px 0;"></p>
-                <button class="sys-btn" onclick="closeAlert()" data-i18n="common.ok">OK</button>
+            <div class="modal-box rk-dialog">
+                <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="custom-alert-title" data-i18n="common.notice">Notice</span></div>
+                <div class="rk-dialog-body">
+                    <p id="custom-alert-msg"></p>
+                    <button class="sys-btn" onclick="closeAlert()" data-i18n="common.ok">OK</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
+    
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
 
     <script>
         const firebaseConfig = {
@@ -558,7 +577,9 @@
             const initialGame = { status: 'lobby', host: currentUser.uid, players: {}, countdown: 0 };
             initialGame.players[currentUser.uid] = { name: currentUser.name, joinedAt: Date.now(), scores: {}, total: 0 };
             mmRef.onDisconnect().remove();
-            matchRef.onDisconnect().remove();
+            // Do NOT remove matchRef on disconnect: a brief host network hiccup
+            // would destroy the match and kick every remaining player.
+            // Host migration in listenToMatch() keeps the game alive.
             await matchRef.set(initialGame);
             listenToMatch();
             showScreen('lobby');
@@ -620,16 +641,22 @@
             const statusDiv = document.getElementById('lobby-status');
             if (gameState.countdown > 0) {
                 const secondsLeft = Math.max(0, Math.ceil((gameState.countdown - Date.now()) / 1000));
-                statusDiv.innerText = `Starting in ${secondsLeft}s...`;
+                statusDiv.innerText = window.tFormat
+                    ? window.tFormat('liveyahtzee.lobby.starting_in', { seconds: secondsLeft }, 'Starting in ${seconds}s...')
+                    : 'Starting in ' + secondsLeft + 's...';
                 if (!countdownTimer) {
                     countdownTimer = setInterval(() => {
                         const s = Math.max(0, Math.ceil((gameState.countdown - Date.now()) / 1000));
-                        document.getElementById('lobby-status').innerText = `Starting in ${s}s...`;
+                        document.getElementById('lobby-status').innerText = window.tFormat
+                            ? window.tFormat('liveyahtzee.lobby.starting_in', { seconds: s }, 'Starting in ${seconds}s...')
+                            : 'Starting in ' + s + 's...';
                         if (s <= 0 && isHost) { clearInterval(countdownTimer); countdownTimer = null; startGame(); }
                     }, 1000);
                 }
             } else {
-                statusDiv.innerText = `Waiting for players... (${players.length})`;
+                statusDiv.innerText = window.tFormat
+                    ? window.tFormat('liveyahtzee.lobby.waiting', { count: players.length }, 'Waiting for players... (${count})')
+                    : 'Waiting for players... (' + players.length + ')';
                 if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
                 if (isHost && players.length >= 2 && gameState.countdown === 0) matchRef.update({ countdown: Date.now() + 15000 });
             }
@@ -647,6 +674,23 @@
                 const data = snap.val();
                 if (!data) { showAlert("Game Closed", "The match has ended."); goHome(); return; }
                 gameState = data;
+
+                // Host migration (AGENTS §10): a host that leaves or drops must not
+                // kill the match. Promote the oldest remaining human, and let every
+                // client re-derive isHost from the node it just received.
+                if (gameState.players && gameState.host && !gameState.players[gameState.host]) {
+                    var _humans = Object.keys(gameState.players)
+                        .filter(function (uid) { return !gameState.players[uid].isBot; })
+                        .sort(function (a, b) { return (gameState.players[a].joinedAt || 0) - (gameState.players[b].joinedAt || 0); });
+                    if (_humans.length > 0 && currentUser && _humans[0] === currentUser.uid) {
+                        matchRef.update({ host: _humans[0] });
+                        rtdb.ref('matchmaking/yahtzee/' + matchId).update({
+                            hostUid: _humans[0],
+                            hostName: gameState.players[_humans[0]].name
+                        });
+                    }
+                }
+                isHost = !!(currentUser && gameState.host === currentUser.uid);
                 if (gameState.status === 'lobby') {
                     if (document.getElementById('screen-lobby').style.display === 'none') showScreen('lobby');
                     updateLobbyUI();
@@ -702,7 +746,7 @@
             const rows = CATS.map(cat => {
                 let pCols = "";
                 displayOrder.forEach(uid => {
-                    pCols += `<div class="score-cell center" id="score-${uid}-${cat}"></div>`;
+                    pCols += `<div class="score-cell center" id="score-${escapeHtml(uid)}-${cat}"></div>`;
                 });
                 return `
                 <div class="score-row" id="row-${cat}" onclick="scoreCategoryClick('${cat}')" style="grid-template-columns: 2.2fr repeat(${numPlayers}, 1fr);">
@@ -712,14 +756,14 @@
             `}).join('');
 
             let pBonusCols = "";
-            displayOrder.forEach(uid => pBonusCols += `<div class="score-cell center" id="score-${uid}-bonus">0/63</div>`);
+            displayOrder.forEach(uid => pBonusCols += `<div class="score-cell center" id="score-${escapeHtml(uid)}-bonus">0/63</div>`);
             const upperBonusRow = `<div class="score-row disabled" id="row-bonus" style="grid-template-columns: 2.2fr repeat(${numPlayers}, 1fr);">
                 <div class="score-cell" data-i18n="yahtzee.label.upper_bonus">${window.t ? window.t('yahtzee.label.upper_bonus', 'Bonus:') : 'Bonus:'}</div>
                 ${pBonusCols}
             </div>`;
 
             let pTotalCols = "";
-            displayOrder.forEach(uid => pTotalCols += `<div class="score-cell center" id="score-${uid}-total">0</div>`);
+            displayOrder.forEach(uid => pTotalCols += `<div class="score-cell center" id="score-${escapeHtml(uid)}-total">0</div>`);
             const totalRow = `<div class="score-row total" style="grid-template-columns: 2.2fr repeat(${numPlayers}, 1fr);">
                 <div class="score-cell" data-i18n="yahtzee.label.total">${window.t ? window.t('yahtzee.label.total', 'Total:') : 'Total:'}</div>
                 ${pTotalCols}
@@ -824,10 +868,10 @@
                 const name = uid === currentUser.uid ? (window.t ? window.t('yahtzee.label.you', 'You') : 'You') : escapeHtml(p.name);
                 return `<div class="opponent-score-row ${isActive ? 'active-turn' : ''}">
                     <div style="display:flex; align-items:center;">
-                        <canvas id="game-avatar-${uid}" width="24" height="24" style="border:1px solid black; width:24px; height:24px; image-rendering:pixelated;"></canvas>
+                        <canvas id="game-avatar-${escapeHtml(uid)}" width="24" height="24" style="border:1px solid black; width:24px; height:24px; image-rendering:pixelated;"></canvas>
                         <span style="margin-left:8px;">${isActive ? '▶ ' : ''}${name}</span>
                     </div>
-                    <span>${p.total}</span>
+                    <span>${Number(p.total) || 0}</span>
                 </div>`;
             }).join('');
 

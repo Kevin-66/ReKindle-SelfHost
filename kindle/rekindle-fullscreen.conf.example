@@ -1,0 +1,10 @@
+# Copy this file to /mnt/us/rekindle-fullscreen.conf to customise the
+# ReKindle launcher. Keep the quotes.
+
+# Page opened by the launcher. Keep the normal ReKindle layout.
+URL="https://rekindle.ink/"
+
+# Browser top-bar template. "none" hides it entirely; "hidden" is the
+# fallback if a firmware ignores "none". The Kindle status bar is separate
+# and stays visible either way.
+# CHROME_TEMPLATE="none"

@@ -7,11 +7,14 @@
     <meta charset="UTF-8">
     <title>Browser</title>
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js" defer></script>
-    <script src="theme.js?v=18" defer></script>
-    <script src="js/i18n.js" defer></script>
+    <script src="theme.js?v=35" defer></script>
+    <script src="js/i18n.js?v=4" defer></script>
+    <script src="js/ui-kit.js?v=2" defer></script>
     <style>
         /* [Standard CSS - unchanged except for modal] */
         :root {
@@ -639,7 +642,7 @@
 
     <script>
         const READER_WORKER_URL = "https://rekindle-reader.timjarnott.workers.dev";
-        let history = JSON.parse(localStorage.getItem('netlite_history')) || [];
+        let visitHistory = JSON.parse(localStorage.getItem('netlite_history')) || [];
         let tabs = []; let activeTabId = null; let tabCounter = 0;
         const MAX_TABS = 5; // Reduced for Kindle RAM
 
@@ -654,10 +657,22 @@
             const isLite = params.get('lite') === 'true';
             const returnTo = params.get('return');
             
+            function safeReturnTarget(raw) {
+                if (!raw) return 'index';
+                try {
+                    const u = new URL(raw, window.location.origin);
+                    // Pin to this origin: rejects //evil.com, javascript:, data: and
+                    // backslash tricks that a startsWith('/') check would let through.
+                    if (u.origin !== window.location.origin) return 'index';
+                    if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'index';
+                    return u.pathname + u.search + u.hash;
+                } catch (e) {
+                    return 'index';
+                }
+            }
+
             if (returnTo) {
-                // Validate returnTo to prevent open redirect
-                const isSafeReturn = returnTo.startsWith('/') || returnTo.startsWith(window.location.origin + '/');
-                const safeReturn = isSafeReturn ? returnTo : 'index';
+                const safeReturn = safeReturnTarget(returnTo);
                 document.querySelector('.close-box').onclick = () => window.location.href = safeReturn;
                 const liteBackBtn = document.getElementById('lite-back-btn');
                 if (liteBackBtn) {
@@ -848,19 +863,29 @@
             updateTabTitle(tab.id, "New Tab"); switchTab(tab.id);
         }
         function addToHistory(label, urlVal) {
-            history = history.filter(h => h.url !== urlVal); history.unshift({ label, url: urlVal });
-            if (history.length > 5) history.pop(); localStorage.setItem('netlite_history', JSON.stringify(history)); renderHistory();
+            visitHistory = visitHistory.filter(h => h.url !== urlVal); visitHistory.unshift({ label, url: urlVal });
+            if (visitHistory.length > 5) visitHistory.pop(); localStorage.setItem('netlite_history', JSON.stringify(visitHistory)); renderHistory();
         }
         function renderHistory() {
             const container = document.getElementById('history-container'); container.innerHTML = '';
-            if (history.length === 0) { container.innerHTML = '<div style="font-style:italic; text-align:center; color:#888; padding:10px;">No recent history</div>'; return; }
-            history.forEach(item => {
+            if (visitHistory.length === 0) {
+                container.innerHTML = window.rekindleEmptyState(
+                    window.t('browser.msg.no_history', 'No recent history'),
+                    {
+                        icon: 'clock',
+                        compact: true,
+                        hint: window.t('browser.hint.enter_url', 'Type a URL above and press Go.')
+                    }
+                );
+                return;
+            }
+            visitHistory.forEach(item => {
                 const div = document.createElement('div'); div.className = 'history-item';
                 div.onclick = () => { document.getElementById('search-input').value = item.url; handleGo(); };
                 div.innerHTML = `<span class="item-text">${item.label}</span><span>&rarr;</span>`; container.appendChild(div);
             });
         }
-        function clearHistory() { history = []; localStorage.removeItem('netlite_history'); renderHistory(); }
+        function clearHistory() { visitHistory = []; localStorage.removeItem('netlite_history'); renderHistory(); }
         function toggleFullScreen() { document.querySelector('.window').classList.toggle('fullscreen'); }
         function openInBrowser() {
             var tab = tabs.find(function(t) { return t.id === activeTabId; });

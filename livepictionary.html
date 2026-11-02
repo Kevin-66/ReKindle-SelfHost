@@ -4,12 +4,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <meta charset="UTF-8">
     <title data-i18n="app.livepictionary.name">Pictionary</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://rekindle-dd1fa-default-rtdb.firebaseio.com">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
     <script src="bad_words.js?v=4"></script>
     <style>
         :root {
@@ -120,6 +122,17 @@
         }
         .sys-btn:active, .sys-btn.active-btn { background: black; color: white; box-shadow: none; transform: translate(3px, 3px); }
         .sys-btn:disabled { color: #888; border-color: #888; box-shadow: 3px 3px 0 #aaa; cursor: default; }
+
+        /* Compact System 7 lobby menu */
+        .lobby-menu { justify-content: center; text-align: center; padding: 24px 18px; }
+        .lobby-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 0.04em; margin: 0 0 4px; }
+        .lobby-sub { font-size: 0.82rem; line-height: 1.35; color: #333; max-width: 280px; margin: 0 0 18px; }
+        .lobby-options { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; max-width: 320px; margin-bottom: 10px; }
+        .lobby-actions { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; max-width: 320px; }
+        .lobby-options .sys-btn, .lobby-actions .sys-btn { width: 100%; min-height: 48px; margin: 0; }
+        .sys-btn.primary { background: black; color: white; }
+        .sys-btn.primary:active { background: white; color: black; }
+        .sys-btn.ghost { border-width: 1px; box-shadow: none; font-weight: normal; }
 
         h1 { font-size: 2.2rem; margin: 10px 0; }
         h2 { margin: 8px 0; }
@@ -369,6 +382,7 @@
             color: black;
         }
     </style>
+    <link rel="stylesheet" href="js/system-dialog.css?v=2">
 </head>
 <body>
 <div class="window">
@@ -379,15 +393,17 @@
     </div>
 
     <!-- MENU -->
-    <div class="screen center-col pad active" id="screen-menu">
-        <h1 data-i18n="pictionary.title">PICTIONARY</h1>
-        <p style="text-align:center;" data-i18n="pictionary.subtitle">Draw &amp; guess. Real-time multiplayer.</p>
-        <div style="display:flex; flex-wrap:wrap; justify-content:center;">
-            <button class="sys-btn" onclick="cycleRounds()" id="menu-rounds-btn" style="width:200px;">Rounds: 3</button>
-            <button class="sys-btn" onclick="cycleDrawTime()" id="menu-time-btn" style="width:200px;">Draw Time: 80s</button>
+    <div class="screen center-col pad lobby-menu active" id="screen-menu">
+        <h1 class="lobby-title" data-i18n="pictionary.title">PICTIONARY</h1>
+        <p class="lobby-sub" data-i18n="pictionary.subtitle">Draw &amp; guess. Real-time multiplayer.</p>
+        <div class="lobby-options">
+            <button class="sys-btn" onclick="cycleRounds()" id="menu-rounds-btn">Rounds: 3</button>
+            <button class="sys-btn" onclick="cycleDrawTime()" id="menu-time-btn">Draw Time: 80s</button>
         </div>
-        <button class="sys-btn" onclick="hostGame()" style="width:200px;" data-i18n="pictionary.btn.host">Host Game</button>
-        <button class="sys-btn" onclick="goHome()" style="width:200px;" data-i18n="pictionary.btn.back">Back</button>
+        <div class="lobby-actions">
+            <button class="sys-btn primary" onclick="hostGame()" data-i18n="pictionary.btn.host">Host Game</button>
+            <button class="sys-btn ghost" onclick="goHome()" data-i18n="pictionary.btn.back">Back</button>
+        </div>
     </div>
 
     <div class="screen center-col pad" id="screen-loading">
@@ -487,10 +503,12 @@
     </div>
 
     <div class="modal-overlay" id="alert-modal">
-        <div class="modal-box">
-            <h3 id="alert-title" data-i18n="pictionary.alert.notice">Notice</h3>
-            <p id="alert-msg" style="margin:12px 0;"></p>
-            <button class="sys-btn" onclick="closeAlert()" data-i18n="pictionary.btn.ok">OK</button>
+        <div class="modal-box rk-dialog">
+            <div class="rk-dialog-bar"><div class="rk-dialog-stripes"></div><span class="rk-dialog-title" id="alert-title" data-i18n="pictionary.alert.notice">Notice</span></div>
+            <div class="rk-dialog-body">
+                <p id="alert-msg"></p>
+                <button class="sys-btn" onclick="closeAlert()" data-i18n="pictionary.btn.ok">OK</button>
+            </div>
         </div>
     </div>
 </div>
@@ -773,6 +791,14 @@ function listenToMatch() {
         }
         const prev = gameState;
         gameState = data;
+
+        // Host can change mid-match (leaveMatch promotes another player). Every
+        // client must re-derive isHost from the node it just received, otherwise
+        // the promoted host keeps isHost=false and never runs advanceTurn's
+        // timer, freezing the round-end screen forever.
+        isHost = !!(currentUser && data.host === currentUser.uid);
+        const hostControls = document.getElementById('host-controls');
+        if (hostControls) hostControls.style.display = isHost ? 'block' : 'none';
 
         // Lobby
         if (data.status === 'lobby') {
@@ -1155,7 +1181,10 @@ async function endRound() {
 }
 
 // ===== DRAWING =====
+let canvasRectCache = null;
+
 function resizeCanvas() {
+    canvasRectCache = null;
     const wrap = canvas.parentElement;
     const w = wrap.clientWidth;
     const h = wrap.clientHeight;
@@ -1175,7 +1204,7 @@ window.addEventListener('resize', function() {
     window.__pictResizeT = setTimeout(resizeCanvas, 120);
 });
 
-function getCanvasCoords(e) {
+function computeCanvasTransform() {
     const rect = canvas.getBoundingClientRect();
     let left = rect.left, top = rect.top, width = rect.width, height = rect.height;
     const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rekindle-scale')) || 1;
@@ -1187,8 +1216,13 @@ function getCanvasCoords(e) {
             left *= scale; top *= scale; width *= scale; height *= scale;
         }
     }
-    const x = (e.clientX - left) / width;
-    const y = (e.clientY - top) / height;
+    return { left, top, width, height };
+}
+
+function getCanvasCoords(e) {
+    const t = canvasRectCache || computeCanvasTransform();
+    const x = (e.clientX - t.left) / t.width;
+    const y = (e.clientY - t.top) / t.height;
     return { x: Math.round(x * 1000), y: Math.round(y * 1000) };
 }
 
@@ -1197,6 +1231,7 @@ canvas.addEventListener('pointerdown', function(e) {
     if (!e.isPrimary) return;
     e.preventDefault();
     canvas.setPointerCapture(e.pointerId);
+    canvasRectCache = computeCanvasTransform();
     isDrawing = true;
     currentStroke = {
         c: currentColor,

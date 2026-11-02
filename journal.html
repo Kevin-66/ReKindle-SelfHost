@@ -8,11 +8,13 @@
     <title>Journal</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="time.js"></script>
-    <script src="js/i18n.js"></script>
+    <script src="time.js?v=5"></script>
+    <script src="js/i18n.js?v=4"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -648,10 +650,28 @@
         .modal-buttons>*+* {
             margin-left: 10px;
         }
+
+        /* Month separator is a dark accent in light mode. The global dark-mode
+           filter inverts it to a glaring white bar, so dark mode feeds it the
+           inverted source colours and it stays a dark separator. */
+        .journal-month-header {
+            padding: 10px;
+            background: black;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        :root[data-theme="dark"] .journal-month-header {
+            background: #e5e5e5;
+            color: #000;
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+        }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="time.js"></script>
-    <script src="js/i18n.js"></script>
+    <script src="theme.js?v=35"></script>
+    
+    
 </head>
 
 <body>
@@ -883,10 +903,31 @@
                         cloudNotes.push(data);
                     });
 
+                    // A save is still pending: replacing the array here would
+                    // write the stale cloud copy over the user's newest text.
+                    if (saveTimer) return;
+
                     if (cloudNotes.length > 0 || snapshot.size === 0) {
-                        notes = cloudNotes;
+                        // Merge by `updated`: a note whose cached copy is newer than
+                        // the cloud copy (page killed before the debounced write
+                        // landed) must not be overwritten by the stale document.
+                        var localById = {};
+                        (notes || []).forEach(function (n) { if (n && n.id) localById[n.id] = n; });
+                        var toPush = [];
+                        var merged = cloudNotes.map(function (c) {
+                            var l = localById[c.id];
+                            if (l && (l.updated || 0) > (c.updated || 0)) {
+                                toPush.push(l);
+                                return l;
+                            }
+                            return c;
+                        });
+                        merged.sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+                        notes = merged;
                         updateCache();
                         renderList();
+                        // Re-persist the recovered newer notes so the cloud catches up.
+                        toPush.forEach(function (n) { if (currentUser) pushNoteToCloud(n); });
                     }
                 }, (error) => {
                     console.error("Error getting notes: ", error);
@@ -894,25 +935,68 @@
                 });
         }
 
-        function saveNoteData(note) {
+        // Every keystroke used to stringify the whole notes array (sketches are
+        // base64, so it can be megabytes) and write it to localStorage
+        // synchronously. Coalesce that, and flush on the way out so nothing is
+        // lost when the Kindle closes the page mid-sentence.
+        var cacheTimer = null;
+        var pendingNote = null;
+
+        function scheduleCacheWrite() {
+            clearTimeout(cacheTimer);
+            cacheTimer = setTimeout(function () {
+                cacheTimer = null;
+                updateCache();
+            }, 500);
+        }
+
+        function flushCacheWrite() {
+            if (cacheTimer) {
+                clearTimeout(cacheTimer);
+                cacheTimer = null;
+            }
             updateCache();
+        }
+
+        function pushNoteToCloud(note) {
+            document.getElementById('status-bar').innerText = window.t('notes.status.saving', "Saving...");
+            db.collection('users').doc(currentUser.uid).collection('journal').doc(note.id).set({
+                mood: note.mood,
+                feelings: note.feelings || [],
+                causes: note.causes || [],
+                content: note.content,
+                updated: note.updated
+            }).then(() => {
+                document.getElementById('status-bar').innerText = window.t('notes.status.saved', "Saved.");
+                setTimeout(() => { document.getElementById('status-bar').innerText = window.t('status.synced', "Synced: ") + currentUser.email; }, 2000);
+            }).catch((e) => {
+                document.getElementById('status-bar').innerText = window.t('notes.status.failed', "Save Failed.");
+                console.error(e);
+            });
+        }
+
+        function flushPendingSave() {
+            flushCacheWrite();
+            if (saveTimer) {
+                clearTimeout(saveTimer);
+                saveTimer = null;
+                if (currentUser && pendingNote) pushNoteToCloud(pendingNote);
+            }
+        }
+
+        window.addEventListener('pagehide', flushPendingSave);
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') flushPendingSave();
+        });
+
+        function saveNoteData(note) {
+            scheduleCacheWrite();
             if (currentUser) {
+                pendingNote = note;
                 clearTimeout(saveTimer);
                 saveTimer = setTimeout(() => {
-                    document.getElementById('status-bar').innerText = window.t('notes.status.saving', "Saving...");
-                    db.collection('users').doc(currentUser.uid).collection('journal').doc(note.id).set({
-                        mood: note.mood,
-                        feelings: note.feelings || [],
-                        causes: note.causes || [],
-                        content: note.content,
-                        updated: note.updated
-                    }).then(() => {
-                        document.getElementById('status-bar').innerText = window.t('notes.status.saved', "Saved.");
-                        setTimeout(() => { document.getElementById('status-bar').innerText = window.t('status.synced', "Synced: ") + currentUser.email; }, 2000);
-                    }).catch((e) => {
-                        document.getElementById('status-bar').innerText = window.t('notes.status.failed', "Save Failed.");
-                        console.error(e);
-                    });
+                    saveTimer = null;
+                    if (pendingNote) pushNoteToCloud(pendingNote);
                 }, 1000);
             }
         }
@@ -947,11 +1031,7 @@
 
             // Month Header (simpler for inline)
             const monthHeader = document.createElement('div');
-            monthHeader.style.padding = '10px';
-            monthHeader.style.background = 'black';
-            monthHeader.style.color = 'white';
-            monthHeader.style.fontWeight = 'bold';
-            monthHeader.style.textAlign = 'center';
+            monthHeader.className = 'journal-month-header';
             const mDate = new Date(year, month, 1);
             monthHeader.innerText = (function(d) {
                 var zd = (typeof rekindleGetZonedDate === 'function') ? rekindleGetZonedDate(d) : d;
@@ -965,8 +1045,9 @@
 
             // Days of week header
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            let gridHtml = '';
             days.forEach(d => {
-                gridDiv.innerHTML += `<div class="calendar-day-header">${d}</div>`;
+                gridHtml += `<div class="calendar-day-header">${d}</div>`;
             });
 
             // Calculate days in month and starting day
@@ -975,13 +1056,16 @@
 
             // Pad empty cells before 1st
             for (let i = 0; i < firstDayIdx; i++) {
-                gridDiv.innerHTML += `<div class="calendar-cell empty-cell"></div>`;
+                gridHtml += `<div class="calendar-cell empty-cell"></div>`;
             }
+
+            const notesById = {};
+            notes.forEach(n => { notesById[n.id] = n; });
 
             // Create cells for each day
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateId = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const note = notes.find(n => n.id === dateId);
+                const note = notesById[dateId];
                 const cellDateObj = new Date(year, month, day);
 
                 // Future check (strip time for fair comparison)
@@ -1019,15 +1103,17 @@
                     }
                     cellHtml += `</div>`;
                 }
-                gridDiv.innerHTML += cellHtml;
+                gridHtml += cellHtml;
             }
 
             // Pad empty cells after last day to complete max 6 rows
             const totalCells = firstDayIdx + daysInMonth;
             const remaining = Math.ceil(totalCells / 7) * 7 - totalCells;
             for (let i = 0; i < remaining; i++) {
-                gridDiv.innerHTML += `<div class="calendar-cell empty-cell"></div>`;
+                gridHtml += `<div class="calendar-cell empty-cell"></div>`;
             }
+
+            gridDiv.innerHTML = gridHtml;
 
             return monthContainer;
         }

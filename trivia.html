@@ -9,8 +9,12 @@
     <title>Trivia</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/score-submit.js?v=1" data-game="trivia"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <style>
         /* SYSTEM 7 / E-INK AESTHETICS */
@@ -559,10 +563,10 @@
             box-shadow: none;
         }
     </style>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/custom-select.js?v=2"></script>
 </head>
 
 <body>
@@ -1024,7 +1028,7 @@
                     const data = doc.data();
                     if (data.gameCount > 0) {
                         entries.push({
-                            username: data.username || (window.t ? window.t('suggestions.msg.anonymous') : 'Unknown'),
+                            username: data.username || (window.t ? window.t('suggestions.msg.anonymous', "Anonymous") : 'Unknown'),
                             avg: (data.totalPercent / data.gameCount) * 100,
                             games: data.gameCount
                         });
@@ -1063,7 +1067,7 @@
             if (!currentUser) return;
 
             const percent = score / currentQuestions.length;
-            const username = currentUser.email ? currentUser.email.split('@')[0] : (window.t ? window.t('suggestions.msg.anonymous') : 'Anonymous');
+            const username = currentUser.email ? currentUser.email.split('@')[0] : (window.t ? window.t('suggestions.msg.anonymous', "Anonymous") : 'Anonymous');
 
             try {
                 const docRef = db.collection('leaderboard_trivia').doc(currentUser.uid);
@@ -1072,18 +1076,15 @@
                 if (doc.exists) {
                     // Update existing record
                     const data = doc.data();
-                    await docRef.update({
+                    await window.RekindleScores.submit('leaderboard_trivia', {
                         totalPercent: data.totalPercent + percent,
-                        gameCount: data.gameCount + 1,
-                        lastUpdated: Date.now()
+                        gameCount: data.gameCount + 1
                     });
                 } else {
                     // Create new record
-                    await docRef.set({
-                        username: username,
+                    await window.RekindleScores.submit('leaderboard_trivia', {
                         totalPercent: percent,
-                        gameCount: 1,
-                        lastUpdated: Date.now()
+                        gameCount: 1
                     });
                 }
             } catch (e) {
@@ -1107,14 +1108,14 @@
         async function fetchCategories() {
             const loadingEl = document.getElementById('loading-categories');
             loadingEl.style.visibility = 'visible';
-            loadingEl.textContent = window.t ? window.t('trivia.msg.loading_cats') : "Loading categories...";
+            loadingEl.textContent = window.t ? window.t('trivia.msg.loading_cats', "Loading categories...") : "Loading categories...";
             try {
                 const res = await fetch(`${API_BASE}/api_category.php`);
                 const data = await res.json();
                 categories = data.trivia_categories.sort((a, b) => a.name.localeCompare(b.name));
 
                 // Populate select
-                categorySelect.innerHTML = `<option value="">${window.t ? window.t('trivia.ph.category') : 'Any Category'}</option>`;
+                categorySelect.innerHTML = `<option value="">${window.t ? window.t('trivia.ph.category', "Any Category") : 'Any Category'}</option>`;
                 categories.forEach(cat => {
                     const opt = document.createElement('option');
                     opt.value = cat.id;
@@ -1195,8 +1196,8 @@
             isAnswering = true;
 
             // HUD
-            document.getElementById('progress-text').textContent = (window.t ? window.t('trivia.hud.question').replace('{n}', currentQuestionIndex + 1).replace('{m}', currentQuestions.length) : `Q ${currentQuestionIndex + 1}/${currentQuestions.length}`);
-            document.getElementById('score-text').textContent = (window.t ? window.t('trivia.hud.score').replace('{n}', score) : `Score: ${score}`);
+            document.getElementById('progress-text').textContent = (window.t ? window.t('trivia.hud.question', "Q {n}/{m}").replace('{n}', currentQuestionIndex + 1).replace('{m}', currentQuestions.length) : `Q ${currentQuestionIndex + 1}/${currentQuestions.length}`);
+            document.getElementById('score-text').textContent = (window.t ? window.t('trivia.hud.score', "Score: {n}").replace('{n}', score) : `Score: ${score}`);
             document.getElementById('category-display').textContent = q.category;
 
             // Content
@@ -1248,7 +1249,7 @@
             nextContainer.style.display = 'block';
 
             // Update score immediately
-            document.getElementById('score-text').textContent = (window.t ? window.t('trivia.hud.score').replace('{n}', score) : `Score: ${score}`);
+            document.getElementById('score-text').textContent = (window.t ? window.t('trivia.hud.score', "Score: {n}").replace('{n}', score) : `Score: ${score}`);
 
             // Auto-scroll to bottom if needed on small screens
             // setTimeout(() => {
@@ -1270,11 +1271,11 @@
             document.getElementById('final-score').textContent = `${score}/${currentQuestions.length}`;
 
             const percent = score / currentQuestions.length;
-            let feedback = window.t ? window.t('trivia.feedback.play_again') : "Play Again?";
-            if (percent === 1) feedback = window.t ? window.t('trivia.feedback.perfect') : "Perfect Score!";
-            else if (percent >= 0.8) feedback = window.t ? window.t('trivia.feedback.excellent') : "Excellent!";
-            else if (percent >= 0.5) feedback = window.t ? window.t('trivia.feedback.good') : "Good Job!";
-            else feedback = window.t ? window.t('trivia.feedback.luck') : "Better luck next time!";
+            let feedback = window.t ? window.t('trivia.feedback.play_again', "Play Again?") : "Play Again?";
+            if (percent === 1) feedback = window.t ? window.t('trivia.feedback.perfect', "Perfect Score!") : "Perfect Score!";
+            else if (percent >= 0.8) feedback = window.t ? window.t('trivia.feedback.excellent', "Excellent!") : "Excellent!";
+            else if (percent >= 0.5) feedback = window.t ? window.t('trivia.feedback.good', "Good Job!") : "Good Job!";
+            else feedback = window.t ? window.t('trivia.feedback.luck', "Better luck next time!") : "Better luck next time!";
 
             document.getElementById('feedback-text').textContent = feedback;
 
@@ -1317,7 +1318,7 @@
     </script>
 
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
     <!-- STANDARD MODAL POPUP -->
     <div id="modal-overlay">
         <div class="modal-box">

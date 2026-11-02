@@ -6,10 +6,14 @@
     <meta charset="UTF-8">
     
     <title>Mario</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/score-submit.js?v=1" data-game="mario"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
+    <script src="js/i18n.js?v=4"></script>
     <style>
         /* SYSTEM 7 AESTHETICS */
         :root {
@@ -559,9 +563,9 @@
 
         <!-- Stats Bar -->
         <div class="stats-bar">
-            <div class="metric-badge" id="dist-count" data-i18n="mario.lbl.distance">Distance: 0%</div>
-            <div class="metric-badge" id="coin-count" data-i18n="mario.lbl.coins">0 coins</div>
-            <div class="metric-badge" id="timer-count" data-i18n="mario.lbl.time">Time: 00:00</div>
+            <div class="metric-badge" id="dist-count">Distance: 0%</div>
+            <div class="metric-badge" id="coin-count">0 coins</div>
+            <div class="metric-badge" id="timer-count">Time: 00:00</div>
         </div>
 
         <!-- Content -->
@@ -570,7 +574,7 @@
                 <div class="modal-overlay" id="modal-overlay"></div>
                 <div id="completion-modal">
                     <span class="modal-title" data-i18n="mario.modal.complete">LEVEL COMPLETE!</span>
-                    <span class="modal-stat" id="final-time" data-i18n="mario.modal.final_time">TIME: 00:00</span>
+                    <span class="modal-stat" id="final-time">TIME: 00:00</span>
                     <button class="modal-btn" onclick="restartGame()" data-i18n="mario.btn.restart">RESTART</button>
                 </div>
             </div>
@@ -634,7 +638,7 @@
     <script type="text/javascript" src="mario_assets/js/levels/11.js"></script>
     <script type="text/javascript" src="mario_assets/js/levels/11tunnel.js"></script>
     <script type="text/javascript" src="mario_assets/js/game.js"></script>
-    <script type="text/javascript" src="theme.js?v=18"></script>
+    <script type="text/javascript" src="theme.js?v=35"></script>
 
     <script>
         // --- FIREBASE CONFIG ---
@@ -707,9 +711,7 @@
                 }
 
                 if (hasUpdate) {
-                    data.username = username;
-                    data.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-                    await docRef.set(data, { merge: true });
+                    await window.RekindleScores.submit(collection, data);
                     console.log('Updated leaderboard_mario', data);
                 }
             } catch (e) {
@@ -740,7 +742,7 @@
         async function loadLeaderboard() {
             const list = document.getElementById('lb-content');
             if (list) {
-                const loadingTxt = window.t ? window.t('mario.leaderboard.loading') : 'Loading...';
+                const loadingTxt = window.t ? window.t('mario.leaderboard.loading', "Loading...") : 'Loading...';
                 list.innerHTML = loadingTxt;
             }
 
@@ -753,20 +755,20 @@
             if (currentTab === 'score') {
                 orderByField = 'score';
                 valueField = 'score';
-                unit = window.t ? window.t('mario.unit.pts') : ' pts';
+                unit = window.t ? window.t('mario.unit.pts', " pts") : ' pts';
             } else if (currentTab === 'distance') {
                 orderByField = 'dist';
                 valueField = 'dist';
-                unit = window.t ? window.t('mario.unit.percent') : '%';
+                unit = window.t ? window.t('mario.unit.percent', "%") : '%';
             } else if (currentTab === 'coins') {
                 orderByField = 'coins';
                 valueField = 'coins';
-                unit = window.t ? window.t('mario.unit.coins') : ' coins';
+                unit = window.t ? window.t('mario.unit.coins', " coins") : ' coins';
             } else if (currentTab === 'time') {
                 orderByField = 'time';
                 valueField = 'time';
                 order = 'asc';
-                unit = window.t ? window.t('mario.unit.seconds') : 's';
+                unit = window.t ? window.t('mario.unit.seconds', "s") : 's';
             }
 
             try {
@@ -779,7 +781,7 @@
                 if (!list) return;
 
                 if (querySnapshot.empty) {
-                    const emptyTxt = window.t ? window.t('mario.leaderboard.empty') : 'No scores yet!';
+                    const emptyTxt = window.t ? window.t('mario.leaderboard.empty', "No scores yet!") : 'No scores yet!';
                     list.innerHTML = `<div style="padding:10px;text-align:center">${emptyTxt}</div>`;
                     return;
                 }
@@ -810,7 +812,7 @@
             } catch (error) {
                 console.error("Error getting leaderboard:", error);
                 if (list) {
-                    const errorTxt = window.t ? window.t('mario.leaderboard.error') : 'Error loading scores. See console.';
+                    const errorTxt = window.t ? window.t('mario.leaderboard.error', "Error loading scores. See console.") : 'Error loading scores. See console.';
                     list.innerHTML = `<div style="padding:20px;text-align:center">${errorTxt}</div>`;
                 }
             }

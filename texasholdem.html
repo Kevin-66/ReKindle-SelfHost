@@ -317,9 +317,9 @@
             text-align: center;
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/gamerules.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/gamerules.js?v=3"></script>
 </head>
 
 <body>
@@ -336,7 +336,7 @@
             <div class="poker-table">
                 <!-- Community Cards & Pot -->
                 <div class="community-area">
-                    <div class="pot-display"><span data-i18n="texasholdem.label.pot">Pot: $</span><span id="pot-amount">0</span></div>
+                    <div class="pot-display" id="pot-display">Pot: $0</div>
                     <div class="cards-row" id="community-cards"></div>
                 </div>
 
@@ -374,7 +374,7 @@
                 <!-- User -->
                 <div class="player-seat seat-user" id="seat-0">
                     <div class="seat-name"><span data-i18n="texasholdem.label.user">You</span> <span id="dealer-btn" style="display:none; color:red;">(D)</span></div>
-                    <div class="seat-chips" id="user-chips" data-i18n="texasholdem.label.bank">Bank: $1000</div>
+                    <div class="seat-chips" id="user-chips">Bank: $1000</div>
                     <div class="cards-row" id="user-cards"></div>
                     <div class="seat-action" id="user-action-text"></div>
 
@@ -538,37 +538,37 @@
 
                 if (isFlush && isStraight) {
                     score = 8000000 + baseScore;
-                    name = ranks[0] === 12 ? (window.t ? window.t('texasholdem.hand.royal_flush') : 'Royal Flush') : (window.t ? window.t('texasholdem.hand.straight_flush') : 'Straight Flush');
+                    name = ranks[0] === 12 ? (window.t ? window.t('texasholdem.hand.royal_flush', "Royal Flush") : 'Royal Flush') : (window.t ? window.t('texasholdem.hand.straight_flush', "Straight Flush") : 'Straight Flush');
                 } else if (countValues[0] === 4) {
                     const quadRank = parseInt(Object.keys(counts).find(r => counts[r] === 4));
                     score = 7000000 + quadRank * 15000 + baseScore % 15;
-                    name = window.t ? window.t('texasholdem.hand.four_kind') : 'Four of a Kind';
+                    name = window.t ? window.t('texasholdem.hand.four_kind', "Four of a Kind") : 'Four of a Kind';
                 } else if (countValues[0] === 3 && countValues[1] === 2) {
                     const tripRank = parseInt(Object.keys(counts).find(r => counts[r] === 3));
                     const pairRank = parseInt(Object.keys(counts).find(r => counts[r] === 2));
                     score = 6000000 + tripRank * 15 + pairRank;
-                    name = window.t ? window.t('texasholdem.hand.full_house') : 'Full House';
+                    name = window.t ? window.t('texasholdem.hand.full_house', "Full House") : 'Full House';
                 } else if (isFlush) {
                     score = 5000000 + baseScore;
-                    name = window.t ? window.t('texasholdem.hand.flush') : 'Flush';
+                    name = window.t ? window.t('texasholdem.hand.flush', "Flush") : 'Flush';
                 } else if (isStraight) {
                     score = 4000000 + baseScore;
-                    name = window.t ? window.t('texasholdem.hand.straight') : 'Straight';
+                    name = window.t ? window.t('texasholdem.hand.straight', "Straight") : 'Straight';
                 } else if (countValues[0] === 3) {
                     const tripRank = parseInt(Object.keys(counts).find(r => counts[r] === 3));
                     score = 3000000 + tripRank * 15000 + baseScore % 225;
-                    name = window.t ? window.t('texasholdem.hand.three_kind') : 'Three of a Kind';
+                    name = window.t ? window.t('texasholdem.hand.three_kind', "Three of a Kind") : 'Three of a Kind';
                 } else if (countValues[0] === 2 && countValues[1] === 2) {
                     const pairs = Object.keys(counts).filter(r => counts[r] === 2).map(Number).sort((a, b) => b - a);
                     score = 2000000 + pairs[0] * 15000 + pairs[1] * 15 + baseScore % 15;
-                    name = window.t ? window.t('texasholdem.hand.two_pair') : 'Two Pair';
+                    name = window.t ? window.t('texasholdem.hand.two_pair', "Two Pair") : 'Two Pair';
                 } else if (countValues[0] === 2) {
                     const pairRank = parseInt(Object.keys(counts).find(r => counts[r] === 2));
                     score = 1000000 + pairRank * 15000 + baseScore % 3375;
-                    name = window.t ? window.t('texasholdem.hand.pair') : 'Pair';
+                    name = window.t ? window.t('texasholdem.hand.pair', "Pair") : 'Pair';
                 } else {
                     score = baseScore;
-                    name = window.t ? window.t('texasholdem.hand.high_card') : 'High Card';
+                    name = window.t ? window.t('texasholdem.hand.high_card', "High Card") : 'High Card';
                 }
 
                 return { score, name };
@@ -601,10 +601,10 @@
         class TexasHoldEm {
             constructor() {
                 this.players = [
-                    new Player(0, window.t ? window.t('texasholdem.label.you') : 'You', true),
-                    new Player(1, window.t ? window.t('texasholdem.label.bot1') : 'Bot 1'),
-                    new Player(2, window.t ? window.t('texasholdem.label.bot2') : 'Bot 2'),
-                    new Player(3, window.t ? window.t('texasholdem.label.bot3') : 'Bot 3')
+                    new Player(0, window.t ? window.t('texasholdem.label.you', "You") : 'You', true),
+                    new Player(1, window.t ? window.t('texasholdem.label.bot1', "Bot 1") : 'Bot 1'),
+                    new Player(2, window.t ? window.t('texasholdem.label.bot2', "Bot 2") : 'Bot 2'),
+                    new Player(3, window.t ? window.t('texasholdem.label.bot3', "Bot 3") : 'Bot 3')
                 ];
                 this.deck = null;
                 this.communityCards = [];
@@ -640,10 +640,10 @@
                 const bbIndex = (this.dealerIndex + 2) % NUM_PLAYERS;
 
                 this.pot += this.players[sbIndex].bet(SMALL_BLIND);
-                this.players[sbIndex].lastAction = window.t ? window.t('texasholdem.msg.sb') : 'SB';
+                this.players[sbIndex].lastAction = window.t ? window.t('texasholdem.msg.sb', "SB") : 'SB';
 
                 this.pot += this.players[bbIndex].bet(BIG_BLIND);
-                this.players[bbIndex].lastAction = window.t ? window.t('texasholdem.msg.bb') : 'BB';
+                this.players[bbIndex].lastAction = window.t ? window.t('texasholdem.msg.bb', "BB") : 'BB';
 
                 this.currentBet = BIG_BLIND;
 
@@ -748,7 +748,7 @@
                 } else {
                     checkBtn.style.display = 'none';
                     callBtn.style.display = 'inline-block';
-                    callBtn.innerText = (window.t ? window.t('texasholdem.btn.call_amount') : "Call ${amount}").replace('${amount}', Math.min(toCall, player.chips));
+                    callBtn.innerText = (window.t ? window.t('texasholdem.btn.call_amount', "Call ${amount}") : "Call ${amount}").replace('${amount}', Math.min(toCall, player.chips));
                     callBtn.removeAttribute('data-i18n');
                 }
 
@@ -778,17 +778,17 @@
                 switch (action) {
                     case 'fold':
                         player.folded = true;
-                        player.lastAction = window.t ? window.t('texasholdem.action.fold') : 'Fold';
+                        player.lastAction = window.t ? window.t('texasholdem.action.fold', "Fold") : 'Fold';
                         break;
 
                     case 'check':
-                        player.lastAction = window.t ? window.t('texasholdem.action.check') : 'Check';
+                        player.lastAction = window.t ? window.t('texasholdem.action.check', "Check") : 'Check';
                         break;
 
                     case 'call':
                         const callAmount = Math.min(toCall, player.chips);
                         this.pot += player.bet(callAmount);
-                        player.lastAction = (window.t ? window.t('texasholdem.action.call') : `Call $${callAmount}`).replace('${amount}', callAmount);
+                        player.lastAction = (window.t ? window.t('texasholdem.action.call', "Call") : `Call $${callAmount}`).replace('${amount}', callAmount);
                         break;
 
                     case 'raise':
@@ -796,7 +796,7 @@
                         const raiseAmount = raiseTotal - player.currentBet;
                         this.pot += player.bet(raiseAmount);
                         this.currentBet = raiseTotal;
-                        player.lastAction = (window.t ? window.t('texasholdem.action.raise') : `Raise to $${raiseTotal}`).replace('${amount}', raiseTotal);
+                        player.lastAction = (window.t ? window.t('texasholdem.action.raise', "Raise") : `Raise to $${raiseTotal}`).replace('${amount}', raiseTotal);
                         // Reset hasActed for other players
                         for (const p of this.players) {
                             if (p !== player && !p.folded && p.chips > 0) {
@@ -899,14 +899,14 @@
                 winner.chips += this.pot;
                 this.updateUI(true);
 
-                const msg = (window.t ? window.t('texasholdem.msg.win_with') : "{name} wins ${amount} with {hand}!")
+                const msg = (window.t ? window.t('texasholdem.msg.win_with', "{name} wins ${amount} with {hand}!") : "{name} wins ${amount} with {hand}!")
                     .replace('{name}', winner.name)
                     .replace('${amount}', this.pot)
                     .replace('{hand}', winningHand);
 
                 document.getElementById('game-message').innerText = msg;
                 document.getElementById('game-message').style.display = 'block';
-                document.getElementById('start-btn').innerText = window.t ? window.t('texasholdem.btn.new_round') : 'New Round';
+                document.getElementById('start-btn').innerText = window.t ? window.t('texasholdem.btn.new_round', "New Round") : 'New Round';
                 document.getElementById('start-btn').removeAttribute('data-i18n');
                 document.getElementById('start-btn').style.display = 'block';
             }
@@ -915,20 +915,25 @@
                 winner.chips += this.pot;
                 this.updateUI();
 
-                const msg = (window.t ? window.t('texasholdem.msg.win') : "{name} wins ${amount}!")
+                const msg = (window.t ? window.t('texasholdem.msg.win', "{name} wins ${amount}!") : "{name} wins ${amount}!")
                     .replace('{name}', winner.name)
                     .replace('${amount}', this.pot);
 
                 document.getElementById('game-message').innerText = msg;
                 document.getElementById('game-message').style.display = 'block';
-                document.getElementById('start-btn').innerText = window.t ? window.t('texasholdem.btn.new_round') : 'New Round';
+                document.getElementById('start-btn').innerText = window.t ? window.t('texasholdem.btn.new_round', "New Round") : 'New Round';
                 document.getElementById('start-btn').removeAttribute('data-i18n');
                 document.getElementById('start-btn').style.display = 'block';
             }
 
             updateUI(showdown = false) {
-                // Update pot
-                document.getElementById('pot-amount').innerText = this.pot;
+                // Update pot (single element: locale template contains ${amount})
+                var potEl = document.getElementById('pot-display');
+                if (potEl) {
+                    potEl.innerText = window.tFormat
+                        ? window.tFormat('texasholdem.label.pot', { amount: this.pot }, 'Pot: ${amount}')
+                        : 'Pot: $' + this.pot;
+                }
 
                 // Update community cards
                 const commContainer = document.getElementById('community-cards');
@@ -943,8 +948,11 @@
                     const seat = document.getElementById(`seat-${i}`);
 
                     // Update chips
-                    seat.querySelector('.seat-chips').innerText = (window.t ? window.t('texasholdem.label.bank').replace('${amount}', player.chips) : `$${player.chips}`);
-                    seat.querySelector('.seat-chips').removeAttribute('data-i18n');
+                    var chipsEl = seat.querySelector('.seat-chips');
+                    chipsEl.innerText = window.tFormat
+                        ? window.tFormat('texasholdem.label.bank', { amount: player.chips }, 'Bank: ${amount}')
+                        : '$' + player.chips;
+                    chipsEl.removeAttribute('data-i18n');
 
                     // Update action text
                     seat.querySelector('.seat-action').innerText = player.lastAction;

@@ -11,10 +11,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js" integrity="sha384-6M0rZuK8mRhdpnt5f7OV2x+2kGHdPMTeq8E4qSbS5S4Ohq+Mcq1ZmSWQV3FdawvW" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js" integrity="sha384-ZqmkDa/1AGF4SKdSmXgEG+3G+Gsb6yNqUSq2Mqp0jDf1GWk+UY5eNbEd7hgwiywI" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js" integrity="sha384-MTDrIlFOzEqpmOxY6UIA/1Zkh0a64UlmJ6R0UrZXqXCPx99siPGi8EmtQjIeCcTH" crossorigin="anonymous"></script>
-    <script src="time.js"></script>
-    <script src="icons.js?v=2"></script>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" integrity="sha384-+KqYOH8TSu3FKjN3ld86eZMYqq6lk+y2GjV1hyOW+1hT3Pk/aD8JFueZP1W3bPh1" crossorigin="anonymous"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" integrity="sha384-+KqYOH8TSu3FKjN3ld86eZMYqq6lk+y2GjV1hyOW+1hT3Pk/aD8JFueZP1W3bPh1" crossorigin="anonymous"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js" integrity="sha384-6A4YFdmYPT5gmyRp8KegTqUol1Ff3navFf6eyVLErDtdSrikTwa1MQpVhFtubVlq" crossorigin="anonymous"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js" integrity="sha384-+OubPIxtsLCp2uUuSsvWDuBB9oSIEDIYt2qQfYki+vDmSxc6GQsBbBPH6Z6x5wrq" crossorigin="anonymous"></script>
 
@@ -24,6 +24,8 @@
             --bg-color: #ffffff;
             --text-color: #000000;
             --border: 2px solid #000000;
+            --shadow: 4px 4px 0px #000000;
+            --stripe-pattern: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
         }
 
         body {
@@ -33,12 +35,6 @@
             image-rendering: pixelated;
             image-rendering: crisp-edges;
             -ms-interpolation-mode: nearest-neighbor;
-            background-repeat: repeat;
-            background-position: top left;
-
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
             background-repeat: repeat;
             background-position: top left;
 
@@ -103,6 +99,7 @@
             align-items: center;
             height: 100%;
             box-sizing: border-box;
+            border: none;
         }
 
         .title-stripes {
@@ -111,7 +108,7 @@
             bottom: 4px;
             left: 4px;
             right: 4px;
-            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+            background-image: var(--stripe-pattern);
             z-index: 0;
         }
 
@@ -132,6 +129,18 @@
             font-size: 0.9rem;
             line-height: 1;
             box-shadow: 2px 2px 0 black;
+            box-sizing: content-box;
+        }
+
+        /* Expand the 18px close box into a 44px touch target without
+           changing the standard System 7 visual. */
+        .close-box::after {
+            content: "";
+            position: absolute;
+            top: -13px;
+            left: -13px;
+            right: -13px;
+            bottom: -13px;
         }
 
         .close-box:active {
@@ -199,12 +208,17 @@
 
         .sys-btn {
             background: white;
+            color: black;
             border: 2px solid black;
+            border-radius: 0;
             padding: 4px 12px;
             font-weight: bold;
             cursor: pointer;
             box-shadow: 2px 2px 0 black;
+            font-family: inherit;
             font-size: 0.85rem;
+            -webkit-appearance: none;
+            appearance: none;
         }
 
         .sys-btn:active {
@@ -212,6 +226,15 @@
             color: white;
             transform: translate(1px, 1px);
             box-shadow: none;
+        }
+
+        .sys-btn[disabled] {
+            opacity: 0.4;
+            background: white;
+            color: black;
+            box-shadow: none;
+            transform: none;
+            cursor: default;
         }
 
         .nav-group {
@@ -282,16 +305,28 @@
             display: flex;
             border-bottom: 2px solid black;
             background: #eee;
+            flex-shrink: 0;
         }
 
         .lib-tab {
             flex: 1;
-            padding: 10px;
+            min-height: 48px;
+            padding: 10px 4px;
             text-align: center;
             border-right: 1px solid black;
             font-weight: bold;
             cursor: pointer;
             background: #eee;
+            font-size: 0.85rem;
+            font-family: sans-serif;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lib-tab:last-child {
+            border-right: none;
         }
 
         .lib-tab.active {
@@ -338,86 +373,27 @@
             color: #666;
         }
 
-        /* ONLINE SEARCH */
-        .search-bar {
-            display: flex;
-            margin-bottom: 15px;
-        }
-
-        .search-bar>*+* {
-            margin-left: 10px;
+        .section-title {
+            font-size: 0.8rem;
+            font-weight: bold;
+            border-bottom: 2px solid black;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: sans-serif;
         }
 
         input[type="text"] {
             flex-grow: 1;
             padding: 8px;
             border: 2px solid black;
+            border-radius: 0;
             font-family: inherit;
             font-size: 1rem;
-        }
-
-        .online-book {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .book-meta h3 {
-            margin: 0 0 5px 0;
-            font-size: 1rem;
-        }
-
-        .book-meta p {
-            margin: 0;
-            font-size: 0.8rem;
-            color: #666;
-        }
-
-        /* SUGGESTIONS */
-        .category-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            /* Two equal columns */
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        /* Removed .category-grid > * + * margins as grid gap handles it */
-
-        .cat-btn {
-            flex: 1;
-            min-width: 80px;
-            padding: 8px;
-            border: 1px solid black;
-            background: #fafafa;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.9rem;
-            text-align: center;
-        }
-
-        .cat-btn:active {
-            background: black;
-            color: white;
-        }
-
-        .section-title {
-            font-size: 1.1rem;
-            font-weight: bold;
-            border-bottom: 2px solid black;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-        }
-
-        .upload-area {
-            border-top: 2px solid black;
-            padding: 20px;
-            background: #eee;
-            text-align: center;
+            background: white;
+            color: black;
+            box-sizing: border-box;
         }
 
         input[type="file"] {
@@ -439,35 +415,26 @@
             flex-direction: column;
             text-align: center;
             padding: 20px;
+            box-sizing: border-box;
         }
 
         #loading-indicator>*+* {
             margin-top: 10px;
         }
 
-        .load-more-btn {
-            width: 100%;
-            padding: 10px;
-            margin-top: 10px;
-            background: #eee;
-            border: 2px solid black;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
         /* MODAL STYLES */
         .modal-overlay {
             display: none;
             position: fixed;
-            /* Changed to fixed for fullscreen */
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(0, 0, 0, 0.4);
             z-index: 10000;
             align-items: center;
             justify-content: center;
+            font-family: "Geneva", "Verdana", sans-serif;
         }
 
         .modal-box {
@@ -475,7 +442,8 @@
             border: 2px solid black;
             box-shadow: 8px 8px 0 black;
             padding: 20px;
-            width: 300px;
+            max-width: 300px;
+            width: 80%;
             text-align: center;
         }
 
@@ -489,7 +457,7 @@
             margin-left: 10px;
         }
 
-        /* STANDARD MODAL SYSTEM */
+        /* GENERIC MODAL SYSTEM */
         #generic-modal-overlay {
             display: none;
             position: fixed;
@@ -502,16 +470,6 @@
             align-items: center;
             justify-content: center;
             font-family: "Geneva", "Verdana", sans-serif;
-        }
-
-        .modal-box {
-            background: white;
-            border: 2px solid black;
-            padding: 20px;
-            box-shadow: 6px 6px 0 black;
-            max-width: 300px;
-            width: 80%;
-            text-align: center;
         }
 
         .modal-text {
@@ -546,9 +504,673 @@
             transform: translate(1px, 1px);
             box-shadow: none;
         }
+
+        /* ============================================================
+           GUTENBERG TAB (merged from gutenberg.html)
+           ============================================================ */
+        #view-gutenberg {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #view-gutenberg .gb-search-top {
+            flex-shrink: 0;
+            padding: 8px;
+            background: #eee;
+            border-bottom: 2px solid black;
+        }
+
+        #view-gutenberg .gb-search-row {
+            display: flex;
+            align-items: stretch;
+        }
+
+        #view-gutenberg #gb-q {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 44px;
+            padding: 0 8px;
+            border: 2px solid black;
+            border-radius: 0;
+            background: white;
+            color: black;
+            font-family: inherit;
+            font-size: 1rem;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        #view-gutenberg #gb-search-btn {
+            flex: 0 0 auto;
+            margin-left: 6px;
+            min-width: 78px;
+        }
+
+        #view-gutenberg .chips {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            overflow-y: hidden;
+            margin-top: 6px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #view-gutenberg .chip {
+            flex: 0 0 auto;
+            margin: 0 6px 0 0;
+            min-height: 44px;
+            padding: 0 10px;
+            font-size: 0.8rem;
+            box-shadow: 2px 2px 0 black;
+        }
+
+        #view-gutenberg .chip:last-child {
+            margin-right: 0;
+        }
+
+        #view-gutenberg .gb-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #gb-shelf {
+            display: none;
+            margin-bottom: 12px;
+        }
+
+        .gb-recent {
+            display: flex;
+            align-items: stretch;
+            margin-bottom: 8px;
+            border: 2px solid black;
+            background: #f5f5f5;
+            box-shadow: 2px 2px 0 black;
+        }
+
+        .gb-recent-open {
+            flex: 1 1 auto;
+            min-width: 0;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 4px 8px;
+            min-height: 48px;
+            font-family: inherit;
+            color: black;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .gb-recent-title {
+            display: block;
+            font-weight: bold;
+            font-size: 0.85rem;
+            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .gb-recent-meta {
+            display: block;
+            font-size: 0.72rem;
+            line-height: 1.3;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .gb-recent-x {
+            flex: 0 0 44px;
+            width: 44px;
+            min-height: 44px;
+            border: 0;
+            border-left: 2px solid black;
+            border-radius: 0;
+            background: white;
+            color: black;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .gb-recent-x:active {
+            background: black;
+            color: white;
+        }
+
+        .gb-search-status {
+            display: none;
+            font-size: 0.82rem;
+            line-height: 1.4;
+            margin: 0 0 10px 0;
+            padding: 6px 8px;
+            border: 2px solid black;
+            background: #f5f5f5;
+        }
+
+        .gb-search-status.gb-status-error {
+            font-weight: bold;
+            background: white;
+        }
+
+        .gb-book {
+            display: flex;
+            align-items: stretch;
+            border: 2px solid black;
+            background: white;
+            box-shadow: 2px 2px 0 black;
+            margin: 0 0 8px 0;
+        }
+
+        .gb-book-open {
+            flex: 1 1 auto;
+            min-width: 0;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 7px 9px;
+            min-height: 48px;
+            font-family: inherit;
+            color: black;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .gb-book-open:active {
+            background: #eee;
+        }
+
+        .gb-book-title {
+            display: block;
+            font-weight: bold;
+            font-size: 0.9rem;
+            line-height: 1.25;
+        }
+
+        .gb-book-meta {
+            display: block;
+            font-size: 0.76rem;
+            line-height: 1.35;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .gb-get {
+            flex: 0 0 62px;
+            min-height: 48px;
+            padding: 0 4px;
+            border: 0;
+            border-left: 2px solid black;
+            border-radius: 0;
+            box-shadow: none;
+            font-size: 0.78rem;
+        }
+
+        .gb-get:active {
+            background: black;
+            color: white;
+        }
+
+        .gb-get[disabled] {
+            opacity: 0.5;
+        }
+
+        #gb-more-wrap {
+            display: none;
+            margin-top: 4px;
+        }
+
+        #gb-more-btn {
+            width: 100%;
+            font-size: 0.82rem;
+            min-height: 44px;
+        }
+
+        /* ============================================================
+           GUTENBERG TEXT READER OVERLAY
+           ============================================================ */
+        #gb-reader {
+            position: absolute;
+            top: 35px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 35px);
+            background: white;
+            z-index: 30;
+            display: none;
+            flex-direction: column;
+        }
+
+        #gb-reader-head {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            background: #eee;
+            border-bottom: 2px solid black;
+            padding: 2px 4px 2px 8px;
+            min-height: 48px;
+        }
+
+        .gb-rh-text {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding-right: 4px;
+        }
+
+        #gb-r-title {
+            display: block;
+            font-family: "Geneva", "Verdana", sans-serif;
+            font-weight: bold;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #gb-r-author {
+            display: block;
+            font-family: "Geneva", "Verdana", sans-serif;
+            font-size: 0.72rem;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #gb-r-source {
+            display: block;
+            font-family: "Geneva", "Verdana", sans-serif;
+            font-size: 0.64rem;
+            line-height: 1.3;
+            color: #444444;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #gb-reader-head.collapsed #gb-r-author,
+        #gb-reader-head.collapsed #gb-r-source {
+            display: none;
+        }
+
+        #gb-head-toggle {
+            flex: 0 0 44px;
+            width: 44px;
+            min-height: 44px;
+            padding: 0;
+            font-family: "Courier New", monospace;
+            font-size: 1rem;
+        }
+
+        #gb-notice {
+            flex-shrink: 0;
+            display: none;
+            padding: 4px 8px;
+            background: #fffbe6;
+            border-bottom: 2px solid black;
+            font-family: "Geneva", "Verdana", sans-serif;
+            font-size: 0.72rem;
+            font-weight: bold;
+            line-height: 1.3;
+            text-align: center;
+        }
+
+        #gb-pane {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+            padding: 12px 14px;
+            background: white;
+            color: black;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 18px;
+            line-height: 1.55;
+            -webkit-overflow-scrolling: touch;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            scroll-behavior: auto;
+        }
+
+        #gb-pane p {
+            margin: 0 0 0.85em 0;
+        }
+
+        #gb-pane p.gb-h {
+            font-family: "Geneva", "Verdana", sans-serif;
+            font-weight: bold;
+            font-size: 1em;
+            text-align: center;
+            margin: 1.3em 0 0.9em 0;
+        }
+
+        #gb-pane p.gb-status {
+            font-family: "Geneva", "Verdana", sans-serif;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        #gb-pane p.gb-error {
+            font-weight: bold;
+        }
+
+        .gb-bottombar {
+            flex-shrink: 0;
+            border-top: 2px solid black;
+            background: #eee;
+            padding: 4px 6px;
+        }
+
+        .gb-brow {
+            display: flex;
+            align-items: center;
+        }
+
+        .gb-brow+.gb-brow {
+            margin-top: 4px;
+        }
+
+        .gb-brow>*+* {
+            margin-left: 6px;
+        }
+
+        #gb-page-ind {
+            flex: 1 1 auto;
+            min-width: 0;
+            text-align: center;
+            font-family: "Courier New", monospace;
+            font-size: 0.78rem;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        #gb-btn-prev,
+        #gb-btn-next {
+            flex: 0 0 60px;
+            padding: 0;
+            font-size: 0.82rem;
+            min-height: 44px;
+        }
+
+        #gb-btn-fontdown,
+        #gb-btn-fontup {
+            flex: 0 0 50px;
+            padding: 0;
+            font-family: "Courier New", monospace;
+            min-height: 44px;
+        }
+
+        #gb-btn-contents,
+        #gb-btn-back {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 0 4px;
+            font-size: 0.8rem;
+            min-height: 44px;
+        }
+
+        /* GUTENBERG CONTENTS MODAL */
+        #gb-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            font-family: "Geneva", "Verdana", sans-serif;
+        }
+
+        #gb-modal.open {
+            display: flex;
+        }
+
+        .gb-modal-box {
+            background: white;
+            border: 2px solid black;
+            box-shadow: 6px 6px 0 black;
+            width: 90%;
+            max-width: 420px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gb-modal-title {
+            flex-shrink: 0;
+            background: #eee;
+            border-bottom: 2px solid black;
+            padding: 8px 10px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #gb-toc-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 6px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .gb-toc-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: white;
+            color: black;
+            border: 2px solid black;
+            border-radius: 0;
+            box-shadow: 2px 2px 0 black;
+            margin: 0 0 6px 0;
+            padding: 4px 8px;
+            min-height: 44px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: bold;
+            line-height: 1.3;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .gb-toc-item:active {
+            background: black;
+            color: white;
+            box-shadow: none;
+            transform: translate(1px, 1px);
+        }
+
+        .gb-toc-empty {
+            padding: 10px 6px;
+            font-size: 0.82rem;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .gb-modal-foot {
+            flex-shrink: 0;
+            border-top: 2px solid black;
+            padding: 6px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .gb-modal-foot .sys-btn {
+            min-width: 90px;
+            min-height: 44px;
+        }
+
+        /* ============================================================
+           STANDARD EBOOKS TAB (merged from standardebooks.html)
+           ============================================================ */
+        #view-se {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #se-status {
+            flex-shrink: 0;
+            border-bottom: 2px solid black;
+            background: #eee;
+            padding: 5px 8px;
+            font-family: sans-serif;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+
+        #se-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .se-book {
+            display: flex;
+            align-items: center;
+            border: 2px solid black;
+            box-shadow: 2px 2px 0 #ccc;
+            background: white;
+            padding: 6px;
+            margin-bottom: 8px;
+        }
+
+        .se-cover {
+            flex: 0 0 52px;
+            width: 52px;
+            height: 78px;
+            object-fit: cover;
+            background: #eee;
+            border: 1px solid black;
+            display: block;
+        }
+
+        .se-info {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin-left: 8px;
+        }
+
+        .se-title {
+            font-weight: bold;
+            font-size: 0.85rem;
+            line-height: 1.25;
+            display: block;
+        }
+
+        .se-author {
+            font-size: 0.75rem;
+            font-style: italic;
+            color: #555;
+            margin-top: 2px;
+            display: block;
+        }
+
+        .se-get {
+            flex: 0 0 78px;
+            margin-left: 8px;
+            min-height: 44px;
+            font-size: 0.75rem;
+            padding: 0 4px;
+        }
+
+        .se-loading {
+            text-align: center;
+            padding: 30px 10px;
+            font-style: italic;
+            color: #666;
+            font-size: 0.85rem;
+        }
+
+        .se-error {
+            text-align: center;
+            padding: 30px 10px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        #se-toast {
+            position: absolute;
+            left: 50%;
+            bottom: 16px;
+            transform: translateX(-50%);
+            background: black;
+            color: white;
+            padding: 8px 14px;
+            border: 2px solid black;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 0.78rem;
+            display: none;
+            z-index: 60;
+            max-width: 90%;
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 360px) {
+            #view-gutenberg .chip {
+                font-size: 0.75rem;
+                padding: 0 8px;
+            }
+
+            #view-gutenberg #gb-search-btn {
+                min-width: 66px;
+                padding: 0 6px;
+                font-size: 0.82rem;
+            }
+
+            #gb-btn-prev,
+            #gb-btn-next {
+                flex: 0 0 52px;
+                font-size: 0.75rem;
+            }
+
+            #gb-btn-fontdown,
+            #gb-btn-fontup {
+                flex: 0 0 44px;
+            }
+
+            #gb-btn-contents,
+            #gb-btn-back {
+                font-size: 0.74rem;
+            }
+
+            .lib-tab {
+                font-size: 0.75rem;
+            }
+        }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/ui-kit.js?v=2"></script>
 </head>
 
 <body>
@@ -574,8 +1196,8 @@
             <span id="chapter-title"
                 style="font-size:0.9rem; font-weight:bold; overflow:hidden; white-space:nowrap; max-width:150px; text-align:center;"></span>
             <div class="nav-group">
-                <button class="sys-btn" onclick="book.rendition.prev()">&lt;</button>
-                <button class="sys-btn" onclick="book.rendition.next()">&gt;</button>
+                <button class="sys-btn" onclick="prevPage()">&lt;</button>
+                <button class="sys-btn" onclick="nextPage()">&gt;</button>
             </div>
         </div>
 
@@ -597,6 +1219,124 @@
                 data-i18n="common.close">Close</button>
         </div>
 
+        <!-- LIBRARY OVERLAY -->
+        <div id="library-overlay">
+            <div class="lib-tabs">
+                <div class="lib-tab active" id="tab-local" onclick="setLibTab('local')" data-i18n="reader.tab.local">My
+                    Books</div>
+                <div class="lib-tab" id="tab-gutenberg" onclick="setLibTab('gutenberg')"
+                    data-i18n="reader.tab.gutenberg">Gutenberg</div>
+                <div class="lib-tab" id="tab-se" onclick="setLibTab('se')"
+                    data-i18n="app.standardebooks.name">Standard Ebooks</div>
+            </div>
+
+            <!-- LOCAL LIBRARY (MERGED VIEW) -->
+            <div id="view-local" class="lib-view">
+                <div id="book-list">
+                    <div style="text-align:center; margin-top:50px;">Loading library...</div>
+                </div>
+            </div>
+
+            <!-- PROJECT GUTENBERG -->
+            <div id="view-gutenberg" class="lib-view" style="display:none;">
+                <div class="gb-search-top">
+                    <div class="gb-search-row">
+                        <input type="text" id="gb-q" autocomplete="off" autocorrect="off" autocapitalize="off"
+                            spellcheck="false" placeholder="Title, author, or subject"
+                            data-i18n-placeholder="gutenberg.ph.search">
+                        <button type="button" class="sys-btn" id="gb-search-btn"
+                            data-i18n="gutenberg.btn.search">Search</button>
+                    </div>
+                    <div class="chips" id="gb-chips">
+                        <button type="button" class="sys-btn chip" data-q="Fiction"
+                            data-i18n="reader.cat.fiction">Fiction</button>
+                        <button type="button" class="sys-btn chip" data-q="Science Fiction"
+                            data-i18n="gutenberg.chip.scifi">Science Fiction</button>
+                        <button type="button" class="sys-btn chip" data-q="Mystery"
+                            data-i18n="reader.cat.mystery">Mystery</button>
+                        <button type="button" class="sys-btn chip" data-q="Romance"
+                            data-i18n="reader.cat.romance">Romance</button>
+                        <button type="button" class="sys-btn chip" data-q="History"
+                            data-i18n="reader.cat.history">History</button>
+                        <button type="button" class="sys-btn chip" data-q="Philosophy"
+                            data-i18n="reader.cat.philosophy">Philosophy</button>
+                        <button type="button" class="sys-btn chip" data-q="Adventure"
+                            data-i18n="reader.cat.adventure">Adventure</button>
+                        <button type="button" class="sys-btn chip" data-q="Fantasy"
+                            data-i18n="reader.cat.fantasy">Fantasy</button>
+                        <button type="button" class="sys-btn chip" data-q="Poetry"
+                            data-i18n="gutenberg.chip.poetry">Poetry</button>
+                        <button type="button" class="sys-btn chip" data-q="Children"
+                            data-i18n="gutenberg.chip.children">Children</button>
+                    </div>
+                </div>
+
+                <div class="gb-scroll">
+                    <div id="gb-shelf">
+                        <div class="section-title" data-i18n="gutenberg.shelf.title">Continue reading</div>
+                        <div id="gb-shelf-list"></div>
+                    </div>
+
+                    <div id="gb-search-status" class="gb-search-status"></div>
+
+                    <div class="section-title" id="gb-results-title"
+                        data-i18n="reader.header.popular">Popular Now</div>
+                    <div id="gb-results"></div>
+
+                    <div id="gb-more-wrap">
+                        <button type="button" class="sys-btn" id="gb-more-btn"
+                            data-i18n="gutenberg.btn.loadmore">Load more</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STANDARD EBOOKS -->
+            <div id="view-se" class="lib-view" style="display:none;">
+                <div id="se-status" data-i18n="se.status.connecting">Connecting to Standard Ebooks...</div>
+                <div id="se-scroll">
+                    <div id="se-grid"></div>
+                </div>
+            </div>
+
+            <!-- TOAST (Standard Ebooks) -->
+            <div id="se-toast"></div>
+        </div>
+
+        <!-- GUTENBERG TEXT READER -->
+        <div id="gb-reader">
+            <div id="gb-reader-head">
+                <div class="gb-rh-text">
+                    <span id="gb-r-title"></span>
+                    <span id="gb-r-author"></span>
+                    <span id="gb-r-source" data-i18n="gutenberg.source">Public-domain text from Project
+                        Gutenberg</span>
+                </div>
+                <button type="button" class="sys-btn" id="gb-head-toggle">-</button>
+            </div>
+
+            <div id="gb-notice"></div>
+
+            <div id="gb-pane"></div>
+
+            <div class="gb-bottombar">
+                <div class="gb-brow">
+                    <button type="button" class="sys-btn" id="gb-btn-prev"
+                        data-i18n="gutenberg.btn.prev">Prev</button>
+                    <span id="gb-page-ind"></span>
+                    <button type="button" class="sys-btn" id="gb-btn-next"
+                        data-i18n="gutenberg.btn.next">Next</button>
+                </div>
+                <div class="gb-brow">
+                    <button type="button" class="sys-btn" id="gb-btn-fontdown">A-</button>
+                    <button type="button" class="sys-btn" id="gb-btn-fontup">A+</button>
+                    <button type="button" class="sys-btn" id="gb-btn-contents"
+                        data-i18n="gutenberg.btn.contents">Contents</button>
+                    <button type="button" class="sys-btn" id="gb-btn-back"
+                        data-i18n="gutenberg.btn.back">Back</button>
+                </div>
+            </div>
+        </div>
+
         <!-- DELETE CONFIRMATION MODAL -->
         <div id="delete-modal" class="modal-overlay">
             <div class="modal-box">
@@ -610,63 +1350,17 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- LIBRARY OVERLAY -->
-        <div id="library-overlay">
-            <div class="lib-tabs">
-                <div class="lib-tab active" id="tab-local" onclick="setLibTab('local')" data-i18n="reader.tab.local">My
-                    Books</div>
-                <div class="lib-tab" id="tab-online" onclick="setLibTab('online')" data-i18n="reader.tab.online">Online
-                    Store</div>
+    <!-- GUTENBERG CONTENTS MODAL -->
+    <div id="gb-modal">
+        <div class="gb-modal-box">
+            <div class="gb-modal-title" data-i18n="gutenberg.modal.contents">Contents</div>
+            <div id="gb-toc-list"></div>
+            <div class="gb-modal-foot">
+                <button type="button" class="sys-btn" id="gb-toc-close"
+                    data-i18n="gutenberg.btn.close">Close</button>
             </div>
-
-            <!-- LOCAL LIBRARY (MERGED VIEW) -->
-            <div id="view-local" class="lib-view">
-                <div id="book-list">
-                    <div style="text-align:center; margin-top:50px;">Loading library...</div>
-                </div>
-            </div>
-
-            <!-- ONLINE STORE -->
-            <div id="view-online" class="lib-view" style="display:none;">
-                <div class="search-bar">
-                    <input type="text" id="search-input" placeholder="Search title, author..."
-                        data-i18n-placeholder="reader.placeholder.search" onkeypress="handleSearch(event)">
-                    <button class="sys-btn" onclick="searchOnline()" data-i18n="common.search">Search</button>
-                </div>
-
-                <!-- Suggestions View -->
-                <div id="online-suggestions">
-                    <div class="section-title" data-i18n="reader.header.categories">Categories</div>
-                    <div class="category-grid">
-                        <div class="cat-btn" onclick="runCategory('Fiction')" data-i18n="reader.cat.fiction">Fiction
-                        </div>
-                        <div class="cat-btn" onclick="runCategory('Science Fiction')" data-i18n="reader.cat.scifi">
-                            Sci-Fi</div>
-                        <div class="cat-btn" onclick="runCategory('Mystery')" data-i18n="reader.cat.mystery">Mystery
-                        </div>
-                        <div class="cat-btn" onclick="runCategory('Romance')" data-i18n="reader.cat.romance">Romance
-                        </div>
-                        <div class="cat-btn" onclick="runCategory('History')" data-i18n="reader.cat.history">History
-                        </div>
-                        <div class="cat-btn" onclick="runCategory('Philosophy')" data-i18n="reader.cat.philosophy">
-                            Philosophy</div>
-                        <div class="cat-btn" onclick="runCategory('Adventure')" data-i18n="reader.cat.adventure">
-                            Adventure</div>
-                        <div class="cat-btn" onclick="runCategory('Fantasy')" data-i18n="reader.cat.fantasy">Fantasy
-                        </div>
-                    </div>
-
-                    <div class="section-title" data-i18n="reader.header.popular">Popular Now</div>
-                    <div id="popular-books">Loading...</div>
-                    <button id="btn-load-more-popular" class="load-more-btn" style="display:none;"
-                        onclick="loadMorePopular()">Load More</button>
-                </div>
-
-                <!-- Search Results View -->
-                <div id="online-results" style="display:none;"></div>
-            </div>
-
         </div>
     </div>
 
@@ -680,7 +1374,8 @@
             messagingSenderId: "748026882518",
             appId: "1:748026882518:web:6877dd4329318070c11c77"
         };
-        // --- CONFIGURATION ---
+
+        // --- GENERIC MODAL ---
         function showModal(msg, isConfirm = false, callback = null) {
             const overlay = document.getElementById('generic-modal-overlay');
             const messageEl = document.getElementById('modal-message');
@@ -700,7 +1395,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-
         // Note: Persistence disabled due to IndexedDB hangs on some browsers (Safari)
 
         // db.enablePersistence({ synchronizeTabs: true }) ...
@@ -716,8 +1410,7 @@
         let cloudBooks = []; // From Firestore
         let mergedLibrary = []; // Combined for display
 
-        let popularLoaded = false;
-        let nextPopularUrl = null;
+        let activeLibTab = 'local';
 
         let deleteTarget = null; // Store { localKey, docId } for deletion modal
         let skipBlankCheck = 0; // Prevent infinite loops in blank page skipper
@@ -746,16 +1439,40 @@
         };
 
         // Helper to HTML-escape text
-        function escapeHTML(text) {
-            const div = document.createElement('div');
-            div.appendChild(document.createTextNode(text));
-            return div.innerHTML;
+        function escapeHtml(text) {
+            if (text == null) return "";
+            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
-        // Helper to sanitize background image URLs from localStorage
-        // Helper to sanitize background image URLs from localStorage
+        function setAppTitle(text) {
+            const el = document.getElementById('app-title');
+            if (el) el.innerText = text;
+        }
 
+        // Route requests through the matching proxy. Gutenberg gets its own
+        // allowlisted, edge-cached Pages Function; Standard Ebooks has to go to
+        // Firebase (see below); everything else uses the generic proxy.
+        //
+        // standardebooks.org 403s every Cloudflare egress IP (AS132892, the
+        // Workers/Pages network), so /api/proxy returns "403 Forbidden" for the
+        // feed and every EPUB download. A Cloudflare-hosted proxy cannot be
+        // fixed by changing headers — the block is on the source IP. The
+        // `standardebooks` Cloud Function runs on Google Cloud, which the site
+        // allows, and exposes the same ?url= contract.
+        var SE_RELAY_BASE = 'https://us-central1-rekindle-dd1fa.cloudfunctions.net/standardebooks?url=';
 
+        function proxyBaseFor(url) {
+            try {
+                const host = new URL(url, window.location.href).hostname.toLowerCase();
+                if (host === 'gutenberg.org' || host === 'www.gutenberg.org') {
+                    return '/api/gutenberg?url=';
+                }
+                if (host === 'standardebooks.org' || host === 'www.standardebooks.org') {
+                    return SE_RELAY_BASE;
+                }
+            } catch (e) { /* fall through */ }
+            return '/api/proxy?url=';
+        }
 
         // --- HELPER: POLYFILL ARRAYBUFFER ---
         function blobToArrayBuffer(blob) {
@@ -804,7 +1521,6 @@
             if (ops > 0) {
                 try {
                     await batch.commit();
-                    console.log(`Synced ${ops} books to cloud.`);
                 } catch (e) {
                     console.error("Sync error", e);
                 }
@@ -871,7 +1587,10 @@
             });
 
             if (mergedLibrary.length === 0) {
-                list.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">${window.t('reader.msg.nobooks', 'No books.<br>Download from Online Store.')}</div>`;
+                list.innerHTML = window.rekindleEmptyState(
+                    window.t('reader.msg.nobooks', 'No books.<br>Download from Gutenberg or Standard Ebooks.'),
+                    { icon: 'book' }
+                );
                 return;
             }
 
@@ -880,15 +1599,15 @@
                 const div = document.createElement('div');
                 div.className = 'book-item';
 
-                const statusIcon = b.isDownloaded ? '' : '<span class="cloud-icon">☁</span>';
+                const statusIcon = b.isDownloaded ? '' : '<span class="cloud-icon">&#9729;</span>';
 
                 div.innerHTML = `
                     <div style="flex-grow:1;">
-                        <div style="font-weight:bold;">${b.title}</div>
-                        <div style="font-size:0.8rem; color:#666;">${b.author || 'Unknown'}</div>
+                        <div style="font-weight:bold;">${escapeHtml(b.title)}</div>
+                        <div style="font-size:0.8rem; color:#666;">${escapeHtml(b.author || 'Unknown')}</div>
                     </div>
                     ${statusIcon}
-                    <button class="sys-btn" style="padding:4px 8px; margin-left:10px;" onclick="deleteBook(event, '${b.localKey}', '${b.docId}')">×</button>
+                    <button class="sys-btn" style="padding:4px 8px; margin-left:10px;" onclick="deleteBook(event, '${b.localKey}', '${b.docId}')">&times;</button>
                 `;
 
                 div.onclick = () => openBook(b);
@@ -937,7 +1656,7 @@
             lastValidCfi = startCfi; // Init safe value
 
             document.getElementById('library-overlay').style.display = 'none';
-            document.getElementById('app-title').innerText = bookObj.title.substring(0, 15) + '...';
+            setAppTitle(bookObj.title.substring(0, 15) + '...');
 
             if (book) { book.destroy(); book = null; }
             document.getElementById('epub-render-area').innerHTML = '';
@@ -1000,7 +1719,7 @@
                     // Check 2: Invalid Position Loop (Position stuck on previous page)
                     // If CFI hasn't changed from last known valid, we might be stuck in an empty section
                     // We only check this if we *tried* to move forward (assuming typical forward read)
-                    // But we can't easily know direction here. 
+                    // But we can't easily know direction here.
                     // However, if we are on a page that is blank, we definitely want to move.
 
                     if (shouldSkip && skipBlankCheck < 50) {
@@ -1043,25 +1762,31 @@
         // --- DOWNLOAD & CLEAN LOGIC ---
 
         async function fetchAndSaveBook(url, title, author, addToCloud = true) {
+            // Re-downloading a store book should not store a second copy of
+            // the blob (the cloud document is deduped separately below).
+            try {
+                const existingIndex = await localforage.getItem('library_index') || [];
+                const existingEntry = existingIndex.find(b => b.url === url);
+                if (existingEntry && existingEntry.key) {
+                    const existingBlob = await localforage.getItem(existingEntry.key);
+                    if (existingBlob) return true;
+                }
+            } catch (e) { /* storage unavailable: fall through to a download */ }
+
             showLoading(`Downloading ${title}...`);
             await new Promise(r => setTimeout(r, 100));
 
             try {
                 let blob = null;
-                const proxies = [
-                    (u) => `/api/proxy?url=${encodeURIComponent(u)}`
-                ];
+                const proxy = proxyBaseFor(url);
 
-                for (const proxy of proxies) {
-                    try {
-                        const res = await fetch(proxy(url));
-                        if (res.ok) {
-                            blob = await res.blob();
-                            if (blob.size > 0) break; // Success
-                        }
-                    } catch (e) {
-                        console.warn("Proxy failed, trying next...", e);
+                try {
+                    const res = await fetch(proxy + encodeURIComponent(url));
+                    if (res.ok) {
+                        blob = await res.blob();
                     }
+                } catch (e) {
+                    console.warn("Proxy failed", e);
                 }
 
                 if (!blob || blob.size === 0) throw new Error("Empty file");
@@ -1085,8 +1810,11 @@
                 await localforage.setItem('library_index', index);
 
                 if (addToCloud && currentUser) {
-                    const existing = cloudBooks.find(b => b.url === url);
-                    if (!existing) {
+                    // Query by URL so a download before the cloud listener starts
+                    // cannot create a duplicate document.
+                    const snap = await db.collection('users').doc(currentUser.uid).collection('library')
+                        .where('url', '==', url).get();
+                    if (snap.empty) {
                         await db.collection('users').doc(currentUser.uid).collection('library').add({
                             title: title,
                             author: author || 'Unknown',
@@ -1105,14 +1833,6 @@
                 showLoadingError(e.message);
                 return false;
             }
-        }
-
-        function triggerStoreDownload(url, title, author) {
-            fetchAndSaveBook(url, title, author, true).then(success => {
-                if (success) {
-                    setLibTab('local');
-                }
-            });
         }
 
         // --- DELETION LOGIC ---
@@ -1148,22 +1868,31 @@
         }
 
         // --- UI HELPERS ---
-        function setLibTab(tab) {
-            document.querySelectorAll('.lib-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(`tab-${tab}`).classList.add('active');
-            document.getElementById('view-local').style.display = tab === 'local' ? 'flex' : 'none';
-            document.getElementById('view-online').style.display = tab === 'online' ? 'flex' : 'none';
+        const LIB_VIEWS = { local: 'view-local', gutenberg: 'view-gutenberg', se: 'view-se' };
 
-            if (tab === 'online' && !document.getElementById('search-input').value) {
-                showSuggestions();
+        function setLibTab(tab) {
+            if (!LIB_VIEWS[tab]) tab = 'local';
+            activeLibTab = tab;
+
+            document.querySelectorAll('.lib-tab').forEach(t => t.classList.remove('active'));
+            const activeTab = document.getElementById('tab-' + tab);
+            if (activeTab) activeTab.classList.add('active');
+
+            for (const key in LIB_VIEWS) {
+                if (!LIB_VIEWS.hasOwnProperty(key)) continue;
+                const view = document.getElementById(LIB_VIEWS[key]);
+                if (view) view.style.display = (key === tab) ? 'flex' : 'none';
             }
+
+            if (tab === 'gutenberg') GB.ensureBrowse();
+            if (tab === 'se') SE.ensureFeed();
         }
 
         function showLibrary() {
             document.getElementById('library-overlay').style.display = 'flex';
-            document.getElementById('app-title').innerText = "Reader"; // Reset Title
-            if (currentUser) setupCloudListener();
+            setAppTitle(window.t ? window.t('reader.title', 'Reader') : 'Reader');
             loadLocalLibrary();
+            setLibTab(activeLibTab);
         }
 
         function showLoading(msg) {
@@ -1181,7 +1910,6 @@
         function prevPage() { if (rendition) rendition.prev(); }
         function nextPage() { if (rendition) rendition.next(); }
 
-        // --- PROXY HELPERS ---
         const fetchWithTimeout = (url, ms) => {
             const controller = new AbortController();
             const promise = fetch(url, { signal: controller.signal });
@@ -1194,120 +1922,1607 @@
             return Promise.race([promise, timeout]);
         };
 
-        const fetchViaProxy = async (targetUrl) => {
-            const proxies = [
-                (url) => `/api/proxy?url=${encodeURIComponent(url)}`
-            ];
-
-            let lastError = null;
-            for (let proxyFn of proxies) {
-                try {
-                    const proxyUrl = proxyFn(targetUrl);
-                    const res = await fetchWithTimeout(proxyUrl, 10000);
-                    if (!res.ok) throw new Error(`Status ${res.status}`);
-                    return await res.json();
-                } catch (e) {
-                    console.warn("Proxy failed:", e);
-                    lastError = e;
-                }
-            }
-            throw lastError || new Error("All proxies failed");
-        };
-
-        // --- ONLINE STORE ---
-        function showSuggestions() {
-            document.getElementById('online-suggestions').style.display = 'block';
-            document.getElementById('online-results').style.display = 'none';
-            if (!popularLoaded) loadPopularBooks();
-        }
-
-        async function loadPopularBooks() {
-            const popDiv = document.getElementById('popular-books');
-            popDiv.innerHTML = '<div style="text-align:center;">Fetching top books...</div>';
-            try {
-                const data = await fetchViaProxy('https://gutendex.com/books?sort=popular');
-                popDiv.innerHTML = '';
-                nextPopularUrl = data.next;
-                data.results.forEach(book => {
-                    const item = createOnlineBookItem(book);
-                    if (item) popDiv.appendChild(item);
-                });
-                if (nextPopularUrl) document.getElementById('btn-load-more-popular').style.display = 'block';
-                popularLoaded = true;
-            } catch (e) { popDiv.innerHTML = 'Error loading.'; }
-        }
-
-        async function loadMorePopular() {
-            if (!nextPopularUrl) return;
-            const btn = document.getElementById('btn-load-more-popular');
-            btn.innerText = "Loading...";
-            try {
-                const data = await fetchViaProxy(nextPopularUrl);
-                nextPopularUrl = data.next;
-                const popDiv = document.getElementById('popular-books');
-                data.results.forEach(book => {
-                    const item = createOnlineBookItem(book);
-                    if (item) popDiv.appendChild(item);
-                });
-                btn.innerText = "Load More";
-                if (!nextPopularUrl) btn.style.display = 'none';
-            } catch (e) { btn.innerText = "Error"; }
-        }
-
-        function handleSearch(e) { if (e.key === 'Enter') searchOnline(); }
-        function runCategory(cat) { document.getElementById('search-input').value = cat; searchOnline(); }
-
-        async function searchOnline() {
-            const query = document.getElementById('search-input').value.trim();
-            if (!query) return;
-            document.getElementById('online-suggestions').style.display = 'none';
-            const resultsDiv = document.getElementById('online-results');
-            resultsDiv.style.display = 'block';
-            resultsDiv.innerHTML = '<div style="text-align:center; padding:20px;">Searching...</div>';
-            try {
-                const data = await fetchViaProxy(`https://gutendex.com/books?search=${encodeURIComponent(query)}`);
-                resultsDiv.innerHTML = '';
-                if (data.results.length === 0) { resultsDiv.innerHTML = '<div style="text-align:center;">No results.</div>'; return; }
-                data.results.forEach(book => {
-                    const item = createOnlineBookItem(book);
-                    if (item) resultsDiv.appendChild(item);
-                });
-            } catch (e) { resultsDiv.innerHTML = '<div style="text-align:center;">Error.</div>'; }
-        }
-
-        function escapeHtml(text) {
-            if (text == null) return "";
-            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        }
-
-        function createOnlineBookItem(book) {
-            const epubUrl = book.formats['application/epub+zip'];
-            if (!epubUrl) return null;
-            const author = book.authors.length > 0 ? book.authors[0].name : 'Unknown';
-
-            var div = document.createElement('div');
-            div.className = 'online-book';
-            div.innerHTML =
-                '<div class="book-meta"><h3>' + escapeHtml(book.title) +
-                '</h3><p>' + escapeHtml(author) + '</p></div>' +
-                '<button class="sys-btn get-btn">Get</button>';
-
-            div.querySelector('.get-btn').addEventListener('click', function () {
-                triggerStoreDownload(epubUrl, book.title, author);
-            });
-
-            return div;
-        }
-
-
         function toggleFullScreen() {
             document.querySelector('.window').classList.toggle('fullscreen');
         }
 
+        // ============================================================
+        // PROJECT GUTENBERG
+        // Ported from gutenberg.html. Search + browse via Gutenberg's own
+        // OPDS catalogue, plain-text reading, and EPUB downloads.
+        // ============================================================
+        var GB = (function () {
+            'use strict';
+
+            var RECENT_KEY = 'rekindle_gb_recent';
+            var POS_PREFIX = 'rekindle_gb_pos_';
+            var FONT_KEY = 'rekindle_gb_font';
+            var CACHE_NAME = 'rekindle-gutenberg-v1';
+            var FONTS = [16, 18, 20, 24];
+            var TIMEOUT = 20000;
+            var MAX_CHARS = 2000000;
+            var MAX_RECENT = 8;
+            var MAX_TOC = 120;
+            var GUTENBERG = 'https://www.gutenberg.org';
+            var POPULAR_URL = GUTENBERG + '/ebooks/search.opds/?sort_order=downloads';
+
+            var NUMBER_WORDS = 'one|two|three|four|five|six|seven|eight|nine|ten|' +
+                'eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|' +
+                'twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|' +
+                'first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last';
+
+            var HEAD_RE = new RegExp(
+                '^(chapter|book|part)[\\s.:]+(?:the[\\s.:]+)?([ivxlcdm]+|\\d+|' + NUMBER_WORDS + ')\\b', 'i');
+
+            var SMALL_WORDS = {
+                of: 1, a: 1, an: 1, the: 1, and: 1, or: 1, nor: 1, but: 1,
+                to: 1, in: 1, on: 1, at: 1, by: 1, for: 1, from: 1, with: 1,
+                as: 1, is: 1, it: 1
+            };
+
+            var state = {
+                mode: 'browse',
+                open: false,
+                book: null,
+                search: { books: [], nextUrl: '' },
+                popular: { books: [], nextUrl: '', loaded: false, loading: false },
+                pages: 1,
+                pageIndex: 0,
+                pct: 0,
+                font: 18,
+                headings: [],
+                ready: false,
+                busy: false,
+                loadingMore: false,
+                reqId: 0
+            };
+
+            var el = {};
+            var saveTimer = null;
+            var scrollTimer = null;
+            var resizeTimer = null;
+
+            /* ---------------- SMALL HELPERS ---------------- */
+            function byId(id) {
+                return document.getElementById(id);
+            }
+
+            function tr(key, fallback) {
+                if (typeof window.t === 'function') {
+                    return window.t(key, fallback);
+                }
+                return fallback || key;
+            }
+
+            function esc(s) {
+                return String(s).replace(/[&<>]/g, function (c) {
+                    if (c === '&') return '&amp;';
+                    if (c === '<') return '&lt;';
+                    return '&gt;';
+                });
+            }
+
+            function trim(s) {
+                return String(s).replace(/^\s+|\s+$/g, '');
+            }
+
+            function stripTags(s) {
+                return String(s).replace(/<[^>]*>/g, '');
+            }
+
+            function decodeEntities(s) {
+                return String(s || '')
+                    .replace(/&#x([0-9a-fA-F]+);/g, function (m, hex) {
+                        return String.fromCharCode(parseInt(hex, 16));
+                    })
+                    .replace(/&#(\d+);/g, function (m, dec) {
+                        return String.fromCharCode(parseInt(dec, 10));
+                    })
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&apos;/g, "'")
+                    .replace(/&amp;/g, '&');
+            }
+
+            function readJson(key, fallback) {
+                try {
+                    var raw = localStorage.getItem(key);
+                    if (!raw) return fallback;
+                    return JSON.parse(raw);
+                } catch (e) {
+                    return fallback;
+                }
+            }
+
+            function writeJson(key, value) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(value));
+                } catch (e) { /* quota / private mode */ }
+            }
+
+            /* ---------------- NETWORK ---------------- */
+            function proxyUrl(target) {
+                return '/api/gutenberg?url=' + encodeURIComponent(target);
+            }
+
+            function tryFetch(url, timeoutMs) {
+                return new Promise(function (resolve, reject) {
+                    var settled = false;
+                    var controller = null;
+                    var timer = null;
+
+                    function finish(err, text) {
+                        if (settled) return;
+                        settled = true;
+                        if (timer) {
+                            clearTimeout(timer);
+                            timer = null;
+                        }
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(text);
+                        }
+                    }
+
+                    var opts = { method: 'GET', credentials: 'omit' };
+                    if (typeof AbortController !== 'undefined') {
+                        controller = new AbortController();
+                        opts.signal = controller.signal;
+                    }
+
+                    timer = setTimeout(function () {
+                        if (controller) {
+                            try { controller.abort(); } catch (e) { /* ignore */ }
+                        }
+                        finish(new Error('timeout'));
+                    }, timeoutMs);
+
+                    fetch(url, opts).then(function (res) {
+                        if (!res || !res.ok) {
+                            finish(new Error('status ' + (res ? res.status : '0')));
+                            return;
+                        }
+                        res.text().then(function (text) {
+                            finish(null, text);
+                        }, function (err) {
+                            finish(err || new Error('read failed'));
+                        });
+                    }, function (err) {
+                        finish(err || new Error('network'));
+                    });
+                });
+            }
+
+            /* Same-origin proxy first; a direct fetch is the last resort
+               (gutenberg.org sends no CORS headers, so it usually fails). */
+            function fetchText(target) {
+                return tryFetch(proxyUrl(target), TIMEOUT).catch(function () {
+                    return tryFetch(target, TIMEOUT);
+                });
+            }
+
+            /* ---------------- BROWSER CACHE ---------------- */
+            function openCache() {
+                if (typeof caches === 'undefined' || !caches || typeof caches.open !== 'function') {
+                    return null;
+                }
+                try {
+                    return caches.open(CACHE_NAME).catch(function () {
+                        return null;
+                    });
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function cacheGet(url) {
+                var p = openCache();
+                if (!p) return Promise.resolve(null);
+                return p.then(function (cache) {
+                    if (!cache) return null;
+                    return cache.match(url).then(function (res) {
+                        if (!res) return null;
+                        return res.text();
+                    });
+                }).catch(function () {
+                    return null;
+                });
+            }
+
+            function cachePut(url, text) {
+                var p = openCache();
+                if (!p) return Promise.resolve();
+                return p.then(function (cache) {
+                    if (!cache) return;
+                    return cache.put(url, new Response(text, {
+                        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                    }));
+                }).catch(function () { /* best effort */ });
+            }
+
+            /* ---------------- OPDS PARSING ---------------- */
+            function absolutise(href) {
+                if (!href) return '';
+                if (/^https?:\/\//i.test(href)) return href;
+                if (href.charAt(0) === '/') return GUTENBERG + href;
+                return GUTENBERG + '/' + href;
+            }
+
+            function parseOpdsFeed(xml) {
+                /* Thumbnails are multi-KB base64 data URIs; drop them before
+                   matching entries so the regex pass stays cheap. */
+                var clean = String(xml).replace(/<link[^>]*rel="http:\/\/opds-spec\.org\/image[^>]*\/>/g, '');
+                var books = [];
+                var re = /<entry>([\s\S]*?)<\/entry>/g;
+                var m;
+
+                while ((m = re.exec(clean)) !== null) {
+                    var block = m[1];
+
+                    /* Authors/Subjects subsections have no numeric ebook id. */
+                    var idMatch = block.match(/ebooks\/(\d+)\.opds/);
+                    if (!idMatch) continue;
+
+                    var title = '';
+                    var titleMatch = block.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+                    if (titleMatch) title = trim(decodeEntities(stripTags(titleMatch[1])));
+
+                    var author = '';
+                    var authorMatch = block.match(/<content[^>]*type="text"[^>]*>([\s\S]*?)<\/content>/);
+                    if (authorMatch) author = trim(decodeEntities(stripTags(authorMatch[1])));
+
+                    if (!title) title = tr('gutenberg.untitled', 'Untitled');
+                    if (!author) author = tr('gutenberg.author.unknown', 'Unknown author');
+
+                    books.push({ id: idMatch[1], title: title, author: author });
+                }
+
+                var nextUrl = '';
+                var nextMatch = clean.match(/<link[^>]*rel="next"[^>]*href="([^"]+)"/);
+                if (!nextMatch) {
+                    nextMatch = clean.match(/<link[^>]*href="([^"]+)"[^>]*rel="next"/);
+                }
+                if (nextMatch) nextUrl = absolutise(decodeEntities(nextMatch[1]));
+
+                return { books: books, nextUrl: nextUrl };
+            }
+
+            /* ---------------- RECENT SHELF ---------------- */
+            function readRecent() {
+                var arr = readJson(RECENT_KEY, []);
+                if (!Array.isArray(arr)) return [];
+                var out = [];
+                for (var i = 0; i < arr.length; i++) {
+                    var item = arr[i];
+                    if (!item || typeof item.id === 'undefined' || item.id === null) continue;
+                    out.push({
+                        id: item.id,
+                        title: item.title ? String(item.title) : '',
+                        author: item.author ? String(item.author) : '',
+                        pct: typeof item.pct === 'number' ? item.pct : 0,
+                        ts: typeof item.ts === 'number' ? item.ts : 0
+                    });
+                }
+                out.sort(function (a, b) { return b.ts - a.ts; });
+                return out.slice(0, MAX_RECENT);
+            }
+
+            function saveRecent(list) {
+                writeJson(RECENT_KEY, list.slice(0, MAX_RECENT));
+            }
+
+            function addRecent(book) {
+                var list = readRecent();
+                var out = [];
+                var prevPct = 0;
+                for (var i = 0; i < list.length; i++) {
+                    if (String(list[i].id) === String(book.id)) {
+                        prevPct = list[i].pct || 0;
+                    } else {
+                        out.push(list[i]);
+                    }
+                }
+                out.unshift({
+                    id: book.id,
+                    title: book.title || '',
+                    author: book.author || '',
+                    pct: prevPct,
+                    ts: Date.now()
+                });
+                saveRecent(out);
+            }
+
+            function updateRecentPct(id, pct) {
+                var list = readRecent();
+                var changed = false;
+                for (var i = 0; i < list.length; i++) {
+                    if (String(list[i].id) === String(id)) {
+                        list[i].pct = pct;
+                        list[i].ts = Date.now();
+                        changed = true;
+                        break;
+                    }
+                }
+                if (changed) saveRecent(list);
+            }
+
+            function removeRecent(id) {
+                var list = readRecent();
+                var out = [];
+                for (var i = 0; i < list.length; i++) {
+                    if (String(list[i].id) !== String(id)) out.push(list[i]);
+                }
+                saveRecent(out);
+                renderShelf();
+            }
+
+            function renderShelf() {
+                var list = readRecent();
+                el.shelfList.innerHTML = '';
+                if (!list.length) {
+                    el.shelf.style.display = 'none';
+                    return;
+                }
+                el.shelf.style.display = state.mode === 'browse' ? 'block' : 'none';
+
+                for (var i = 0; i < list.length; i++) {
+                    (function (entry) {
+                        var row = document.createElement('div');
+                        row.className = 'gb-recent';
+
+                        var open = document.createElement('button');
+                        open.type = 'button';
+                        open.className = 'gb-recent-open';
+
+                        var title = document.createElement('span');
+                        title.className = 'gb-recent-title';
+                        title.textContent = entry.title || tr('gutenberg.untitled', 'Untitled');
+
+                        var meta = document.createElement('span');
+                        meta.className = 'gb-recent-meta';
+                        var pctText = tr('gutenberg.label.progress', '${pct}% read')
+                            .replace('${pct}', String(Math.round(entry.pct || 0)));
+                        meta.textContent = (entry.author || tr('gutenberg.author.unknown', 'Unknown author')) +
+                            '  ' + pctText;
+
+                        open.appendChild(title);
+                        open.appendChild(meta);
+                        open.onclick = function () {
+                            openRecent(entry);
+                        };
+
+                        var x = document.createElement('button');
+                        x.type = 'button';
+                        x.className = 'gb-recent-x';
+                        x.textContent = 'x';
+                        x.title = tr('gutenberg.shelf.remove', 'Remove from shelf');
+                        x.onclick = function () {
+                            removeRecent(entry.id);
+                        };
+
+                        row.appendChild(open);
+                        row.appendChild(x);
+                        el.shelfList.appendChild(row);
+                    })(list[i]);
+                }
+            }
+
+            /* ---------------- SEARCH / BROWSE ---------------- */
+            function setStatus(msg, isError) {
+                el.searchStatus.textContent = msg || '';
+                el.searchStatus.className = isError ? 'gb-search-status gb-status-error' : 'gb-search-status';
+                el.searchStatus.style.display = msg ? 'block' : 'none';
+            }
+
+            function searchUrl(q) {
+                return GUTENBERG + '/ebooks/search.opds/?query=' + encodeURIComponent(q);
+            }
+
+            function currentList() {
+                return state.mode === 'search' ? state.search : state.popular;
+            }
+
+            function updateMore() {
+                var list = currentList();
+                el.moreWrap.style.display = list.nextUrl ? 'block' : 'none';
+            }
+
+            function buildBookRow(book) {
+                var row = document.createElement('div');
+                row.className = 'gb-book';
+
+                var open = document.createElement('button');
+                open.type = 'button';
+                open.className = 'gb-book-open';
+
+                var title = document.createElement('span');
+                title.className = 'gb-book-title';
+                title.textContent = book.title;
+
+                var author = document.createElement('span');
+                author.className = 'gb-book-meta';
+                author.textContent = book.author;
+
+                open.appendChild(title);
+                open.appendChild(author);
+                open.onclick = function () {
+                    openBook(book);
+                };
+
+                var get = document.createElement('button');
+                get.type = 'button';
+                get.className = 'sys-btn gb-get';
+                get.textContent = tr('gutenberg.btn.get', 'Get');
+                get.title = tr('gutenberg.btn.get.title', 'Download this EPUB to your library');
+                get.onclick = function () {
+                    downloadEpub(book, get);
+                };
+
+                row.appendChild(open);
+                row.appendChild(get);
+                return row;
+            }
+
+            function fetchFeed(url, list, append) {
+                var reqId = ++state.reqId;
+
+                return fetchText(url).then(function (xml) {
+                    if (reqId !== state.reqId) return false;
+                    if (!xml || xml.indexOf('<feed') === -1) {
+                        throw new Error('bad feed');
+                    }
+
+                    var parsed = parseOpdsFeed(xml);
+
+                    if (!append) {
+                        el.results.innerHTML = '';
+                        list.books = [];
+                    }
+
+                    if (!parsed.books.length && list.books.length === 0) {
+                        if (state.mode === 'search') {
+                            setStatus(tr('gutenberg.error.empty', 'No books found.'), false);
+                        }
+                        list.nextUrl = '';
+                        updateMore();
+                        return true;
+                    }
+
+                    if (state.mode === 'search') setStatus('', false);
+
+                    var known = {};
+                    var i;
+                    for (i = 0; i < list.books.length; i++) {
+                        known[String(list.books[i].id)] = true;
+                    }
+
+                    for (i = 0; i < parsed.books.length; i++) {
+                        var book = parsed.books[i];
+                        if (known[String(book.id)]) continue;
+                        known[String(book.id)] = true;
+                        list.books.push(book);
+                        el.results.appendChild(buildBookRow(book));
+                    }
+
+                    list.nextUrl = parsed.nextUrl || '';
+                    updateMore();
+                    return true;
+                }).catch(function () {
+                    if (reqId !== state.reqId) return false;
+                    setStatus(tr('gutenberg.error.network',
+                        'Could not reach the library. Check your connection.'), true);
+                    return false;
+                });
+            }
+
+            function clearResults() {
+                el.results.innerHTML = '';
+            }
+
+            function doSearch(term) {
+                var q = trim(typeof term === 'string' ? term : el.input.value);
+                if (!q) {
+                    showBrowse();
+                    return;
+                }
+
+                el.input.value = q;
+                state.mode = 'search';
+                state.reqId++;
+                state.search.books = [];
+                state.search.nextUrl = '';
+                state.loadingMore = false;
+                clearResults();
+                el.shelf.style.display = 'none';
+                el.resultsTitle.style.display = 'none';
+                el.moreWrap.style.display = 'none';
+                setStatus(tr('gutenberg.status.searching', 'Searching...'), false);
+                fetchFeed(searchUrl(q), state.search, false);
+            }
+
+            function loadPopular() {
+                if (state.popular.loading) return;
+                state.popular.loading = true;
+                setStatus(tr('gutenberg.status.searching', 'Searching...'), false);
+                fetchFeed(POPULAR_URL, state.popular, false).then(function (ok) {
+                    state.popular.loading = false;
+                    if (ok) {
+                        state.popular.loaded = true;
+                        if (state.mode === 'browse') setStatus('', false);
+                    }
+                });
+            }
+
+            function renderPopular() {
+                clearResults();
+                for (var i = 0; i < state.popular.books.length; i++) {
+                    el.results.appendChild(buildBookRow(state.popular.books[i]));
+                }
+                updateMore();
+            }
+
+            function showBrowse() {
+                state.mode = 'browse';
+                // If the popular feed is already in flight, let it land instead
+                // of cancelling it and leaving the tab blank.
+                if (!state.popular.loading) state.reqId++;
+                state.loadingMore = false;
+                state.search.books = [];
+                state.search.nextUrl = '';
+                clearResults();
+                el.resultsTitle.style.display = 'block';
+                el.resultsTitle.textContent = tr('reader.header.popular', 'Popular Now');
+                el.shelf.style.display = readRecent().length ? 'block' : 'none';
+                setStatus('', false);
+
+                if (state.popular.loaded) {
+                    renderPopular();
+                } else if (!state.popular.loading) {
+                    loadPopular();
+                }
+            }
+
+            function ensureBrowse() {
+                renderShelf();
+                if (state.mode !== 'browse') return;
+                if (!state.popular.loaded && !state.popular.loading) {
+                    loadPopular();
+                } else if (state.popular.loaded && !el.results.children.length) {
+                    renderPopular();
+                }
+            }
+
+            function loadMore() {
+                var list = currentList();
+                if (!list.nextUrl || state.loadingMore) return;
+
+                state.loadingMore = true;
+                el.moreBtn.disabled = true;
+                setStatus(tr('gutenberg.status.searching', 'Searching...'), false);
+
+                fetchFeed(list.nextUrl, list, true).then(function () {
+                    state.loadingMore = false;
+                    el.moreBtn.disabled = false;
+                });
+            }
+
+            /* ---------------- EPUB DOWNLOAD ---------------- */
+            function downloadEpub(book, btn) {
+                if (!book || !book.id) return;
+                btn.disabled = true;
+                btn.textContent = tr('gutenberg.btn.saving', 'Saving...');
+
+                var url = GUTENBERG + '/ebooks/' + encodeURIComponent(String(book.id)) + '.epub3.images';
+                fetchAndSaveBook(url, book.title, book.author, true).then(function (ok) {
+                    if (ok) {
+                        btn.textContent = tr('gutenberg.btn.saved', 'In Library');
+                        btn.disabled = true;
+                    } else {
+                        btn.textContent = tr('gutenberg.btn.get', 'Get');
+                        btn.disabled = false;
+                    }
+                });
+            }
+
+            /* ---------------- READER ---------------- */
+            function setReaderHeader(book) {
+                el.rTitle.textContent = book.title || tr('gutenberg.untitled', 'Untitled');
+                el.rAuthor.textContent = book.author || tr('gutenberg.author.unknown', 'Unknown author');
+            }
+
+            function textCandidates(id) {
+                var idPart = encodeURIComponent(String(id));
+                return [
+                    GUTENBERG + '/cache/epub/' + idPart + '/pg' + idPart + '.txt',
+                    GUTENBERG + '/files/' + idPart + '/' + idPart + '-0.txt',
+                    GUTENBERG + '/ebooks/' + idPart + '.txt.utf-8'
+                ];
+            }
+
+            async function loadBookText(id) {
+                var urls = textCandidates(id);
+                var i;
+
+                /* Cache-first: reopening a book must be instant. */
+                for (i = 0; i < urls.length; i++) {
+                    var cached = await cacheGet(urls[i]);
+                    if (cached) return cached;
+                }
+
+                var lastErr = null;
+                for (i = 0; i < urls.length; i++) {
+                    try {
+                        var raw = await fetchText(urls[i]);
+                        if (raw && raw.length) {
+                            await cachePut(urls[i], raw);
+                            return raw;
+                        }
+                    } catch (e) {
+                        lastErr = e;
+                    }
+                }
+                throw lastErr || new Error('no text');
+            }
+
+            function openRecent(entry) {
+                if (state.busy) return;
+                openBook({
+                    id: entry.id,
+                    title: entry.title,
+                    author: entry.author
+                });
+            }
+
+            async function openBook(book) {
+                if (state.busy) return;
+                if (state.book && state.ready) savePositionNow();
+
+                state.busy = true;
+                state.ready = false;
+                state.open = true;
+                state.book = book;
+                state.headings = [];
+                state.pages = 1;
+                state.pageIndex = 0;
+                state.pct = 0;
+
+                el.reader.style.display = 'flex';
+                document.getElementById('library-overlay').style.display = 'none';
+                setAppTitle(String(book.title || 'Reader').substring(0, 15) + '...');
+
+                setReaderHeader(book);
+                el.notice.style.display = 'none';
+                el.notice.textContent = '';
+                el.pageInd.textContent = '';
+                el.prevBtn.disabled = true;
+                el.nextBtn.disabled = true;
+                el.pane.scrollTop = 0;
+                el.pane.innerHTML = '<p class="gb-status">' +
+                    esc(tr('gutenberg.status.loading', 'Opening book...')) + '</p>';
+
+                try {
+                    var raw = await loadBookText(book.id);
+                    var text = cleanText(raw);
+
+                    if (!text) throw new Error('empty');
+
+                    var truncated = false;
+                    if (text.length > MAX_CHARS) {
+                        text = text.slice(0, MAX_CHARS);
+                        truncated = true;
+                    }
+
+                    renderText(text);
+
+                    if (truncated) {
+                        el.notice.textContent = tr('gutenberg.notice.long', 'Long book: showing the first part.');
+                        el.notice.style.display = 'block';
+                    }
+
+                    el.pane.scrollTop = 0;
+                    state.ready = true;
+                    restorePosition(book.id);
+                    addRecent(book);
+                    renderShelf();
+                    updateFontButtons();
+                } catch (e) {
+                    el.pane.innerHTML = '<p class="gb-status gb-error">' +
+                        esc(tr('gutenberg.error.book', 'Could not open this book. Try again.')) + '</p>';
+                }
+
+                state.busy = false;
+            }
+
+            function backToLibrary() {
+                if (state.ready) savePositionNow();
+                state.open = false;
+                state.ready = false;
+                el.reader.style.display = 'none';
+                document.getElementById('library-overlay').style.display = 'flex';
+                setAppTitle(typeof window.t === 'function' ? window.t('reader.title', 'Reader') : 'Reader');
+                setLibTab('gutenberg');
+                renderShelf();
+            }
+
+            function renderText(text) {
+                var blocks = text.split(/\n{2,}/);
+                var out = [];
+                var headings = [];
+                var i, line;
+
+                for (i = 0; i < blocks.length; i++) {
+                    if (!blocks[i]) continue;
+                    line = trim(blocks[i].replace(/\n/g, ' ').replace(/[ \t]+/g, ' '));
+                    if (!line) continue;
+
+                    if (headings.length < MAX_TOC && isHeading(line)) {
+                        var id = 'gb-h-' + headings.length;
+                        headings.push({ id: id, label: line });
+                        out.push('<p class="gb-h" id="' + id + '">' + esc(line) + '</p>');
+                    } else {
+                        out.push('<p>' + esc(line) + '</p>');
+                    }
+                }
+
+                /* One wrapper node keeps the i18n MutationObserver from walking
+                   thousands of paragraphs one-by-one. */
+                var body = document.createElement('div');
+                body.className = 'gb-body';
+                body.innerHTML = out.join('');
+
+                el.pane.innerHTML = '';
+                el.pane.appendChild(body);
+                state.headings = headings;
+            }
+
+            /* ---------------- TEXT CLEANUP ---------------- */
+            function cleanText(raw) {
+                var text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+                var startRe = /\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[^\n]*\*\*\*/i;
+                var endRe = /\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[^\n]*\*\*\*/i;
+
+                var startMatch = startRe.exec(text);
+                if (startMatch) {
+                    text = text.slice(startMatch.index + startMatch[0].length);
+                }
+                var endMatch = endRe.exec(text);
+                if (endMatch) {
+                    text = text.slice(0, endMatch.index);
+                }
+
+                text = text.replace(/\n{3,}/g, '\n\n');
+                return trim(text);
+            }
+
+            /* ---------------- HEADINGS ---------------- */
+            function looksTitleCased(line) {
+                if (line === line.toUpperCase()) return true;
+                var words = line.split(' ');
+                for (var i = 0; i < words.length; i++) {
+                    var w = words[i];
+                    if (!w) continue;
+                    var first = w.charAt(0);
+                    if (first === first.toUpperCase()) continue;
+                    var bare = trim(w.toLowerCase().replace(/[^a-z]/g, ''));
+                    if (i > 0 && SMALL_WORDS[bare]) continue;
+                    return false;
+                }
+                return true;
+            }
+
+            function isHeading(line) {
+                if (!line || line.length > 60) return false;
+                if (!HEAD_RE.test(line)) return false;
+                return looksTitleCased(line);
+            }
+
+            /* ---------------- PAGINATION ---------------- */
+            function pageHeight() {
+                return Math.max(1, el.pane.clientHeight || 1);
+            }
+
+            function scrollMax() {
+                return Math.max(0, el.pane.scrollHeight - pageHeight());
+            }
+
+            function measure() {
+                var h = pageHeight();
+                var total = Math.ceil(el.pane.scrollHeight / h);
+                if (!isFinite(total) || total < 1) total = 1;
+
+                var max = scrollMax();
+
+                /* Round so the last, partial page is reachable; pin the index
+                   when the pane is scrolled to the very bottom. */
+                var idx;
+                if (max > 0 && el.pane.scrollTop >= max - 0.5) {
+                    idx = total - 1;
+                } else {
+                    idx = Math.round(el.pane.scrollTop / h);
+                }
+                if (idx < 0) idx = 0;
+                if (idx > total - 1) idx = total - 1;
+
+                state.pages = total;
+                state.pageIndex = idx;
+                state.pct = max > 0 ? (el.pane.scrollTop / max) : 0;
+                updatePager();
+            }
+
+            function updatePager() {
+                el.pageInd.textContent = tr('gutenberg.label.page', 'Page ${page} / ${pages}')
+                    .replace('${page}', String(state.pageIndex + 1))
+                    .replace('${pages}', String(state.pages));
+                el.prevBtn.disabled = state.pageIndex <= 0;
+                el.nextBtn.disabled = state.pageIndex >= state.pages - 1;
+            }
+
+            function goPage(delta) {
+                if (!state.ready) return;
+                var h = pageHeight();
+                var max = scrollMax();
+                var target = (state.pageIndex + delta) * h;
+
+                if (target < 0) target = 0;
+                if (target > max) target = max;
+
+                el.pane.scrollTop = target;
+                measure();
+                savePositionNow();
+            }
+
+            function scrollPct() {
+                var max = scrollMax();
+                if (max <= 0) return 0;
+                var pct = el.pane.scrollTop / max;
+                if (pct < 0) pct = 0;
+                if (pct > 1) pct = 1;
+                return pct;
+            }
+
+            /* ---------------- POSITION ---------------- */
+            function positionKey(id) {
+                return POS_PREFIX + String(id);
+            }
+
+            function savePositionNow() {
+                if (!state.book || !state.ready) return;
+                var max = scrollMax();
+                var pct = max > 0 ? Math.round(scrollPct() * 100) : 0;
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                writeJson(positionKey(state.book.id), {
+                    scrollTop: Math.round(el.pane.scrollTop),
+                    pct: pct
+                });
+                updateRecentPct(state.book.id, pct);
+            }
+
+            function scheduleSave() {
+                if (saveTimer) clearTimeout(saveTimer);
+                saveTimer = setTimeout(function () {
+                    saveTimer = null;
+                    savePositionNow();
+                }, 600);
+            }
+
+            function restorePosition(id) {
+                var pos = readJson(positionKey(id), null);
+                var max = scrollMax();
+                var target = 0;
+
+                if (pos) {
+                    if (typeof pos.scrollTop === 'number' && isFinite(pos.scrollTop)) {
+                        target = pos.scrollTop;
+                    } else if (typeof pos.pct === 'number' && isFinite(pos.pct)) {
+                        target = max * (pos.pct / 100);
+                    }
+                }
+
+                if (!(target >= 0)) target = 0;
+                if (target > max) target = max;
+
+                el.pane.scrollTop = target;
+                measure();
+            }
+
+            /* ---------------- FONT SIZE ---------------- */
+            function readFont() {
+                try {
+                    var raw = parseInt(localStorage.getItem(FONT_KEY), 10);
+                    if (FONTS.indexOf(raw) !== -1) return raw;
+                } catch (e) { /* ignore */ }
+                return 18;
+            }
+
+            function updateFontButtons() {
+                var idx = FONTS.indexOf(state.font);
+                if (idx < 0) idx = 1;
+                el.fontDown.disabled = idx <= 0;
+                el.fontUp.disabled = idx >= FONTS.length - 1;
+            }
+
+            function changeFont(delta) {
+                var idx = FONTS.indexOf(state.font);
+                if (idx < 0) idx = 1;
+                idx += delta;
+                if (idx < 0) idx = 0;
+                if (idx > FONTS.length - 1) idx = FONTS.length - 1;
+
+                var px = FONTS[idx];
+                if (px === state.font) return;
+
+                var keep = state.pct;
+                state.font = px;
+                try {
+                    localStorage.setItem(FONT_KEY, String(px));
+                } catch (e) { /* ignore */ }
+
+                el.pane.style.fontSize = px + 'px';
+
+                var max = scrollMax();
+                el.pane.scrollTop = max * keep;
+                measure();
+                updateFontButtons();
+                if (state.ready) savePositionNow();
+            }
+
+            /* ---------------- CONTENTS ---------------- */
+            function openContents() {
+                el.tocList.innerHTML = '';
+
+                if (!state.headings.length) {
+                    var empty = document.createElement('div');
+                    empty.className = 'gb-toc-empty';
+                    empty.textContent = tr('gutenberg.error.nocontents', 'No chapters found.');
+                    el.tocList.appendChild(empty);
+                } else {
+                    for (var i = 0; i < state.headings.length; i++) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'gb-toc-item';
+                        btn.textContent = state.headings[i].label;
+                        btn.setAttribute('data-idx', String(i));
+                        btn.onclick = onTocClick;
+                        el.tocList.appendChild(btn);
+                    }
+                }
+                el.modal.classList.add('open');
+            }
+
+            function closeContents() {
+                el.modal.classList.remove('open');
+            }
+
+            function onTocClick() {
+                var idx = parseInt(this.getAttribute('data-idx'), 10);
+                var entry = state.headings[idx];
+                if (entry) {
+                    var target = byId(entry.id);
+                    if (target) {
+                        var paneRect = el.pane.getBoundingClientRect();
+                        var targetRect = target.getBoundingClientRect();
+                        var top = el.pane.scrollTop + (targetRect.top - paneRect.top) - 2;
+                        if (top < 0) top = 0;
+                        var max = scrollMax();
+                        if (top > max) top = max;
+                        el.pane.scrollTop = top;
+                        measure();
+                        if (state.ready) savePositionNow();
+                    }
+                }
+                closeContents();
+            }
+
+            /* ---------------- HEADER COLLAPSE ---------------- */
+            function toggleHeader() {
+                var keep = state.pct;
+                if (el.head.className.indexOf('collapsed') === -1) {
+                    el.head.className = 'collapsed';
+                    el.headToggle.textContent = '+';
+                } else {
+                    el.head.className = '';
+                    el.headToggle.textContent = '-';
+                }
+                if (state.ready) {
+                    var max = scrollMax();
+                    el.pane.scrollTop = max * keep;
+                    measure();
+                }
+            }
+
+            /* ---------------- EVENT WIRING ---------------- */
+            function wire() {
+                el.searchBtn.onclick = function () {
+                    doSearch(null);
+                };
+
+                el.input.addEventListener('keydown', function (e) {
+                    if (e.keyCode === 13 || e.key === 'Enter') {
+                        e.preventDefault();
+                        doSearch(null);
+                    }
+                });
+
+                // Clearing the box returns to the popular browse list, so the
+                // user does not have to hunt for a "back" control on e-ink.
+                el.input.addEventListener('input', function () {
+                    if (state.mode === 'search' && !trim(el.input.value)) {
+                        showBrowse();
+                    }
+                });
+
+                el.chips.addEventListener('click', function (e) {
+                    var node = e.target;
+                    while (node && node !== el.chips) {
+                        if (node.getAttribute && node.getAttribute('data-q')) {
+                            doSearch(node.getAttribute('data-q'));
+                            return;
+                        }
+                        node = node.parentNode;
+                    }
+                });
+
+                el.moreBtn.onclick = loadMore;
+
+                el.prevBtn.onclick = function () { goPage(-1); };
+                el.nextBtn.onclick = function () { goPage(1); };
+
+                el.fontDown.onclick = function () { changeFont(-1); };
+                el.fontUp.onclick = function () { changeFont(1); };
+
+                el.contentsBtn.onclick = openContents;
+                el.tocClose.onclick = closeContents;
+
+                el.modal.onclick = function (e) {
+                    if (e.target === el.modal) closeContents();
+                };
+
+                el.backBtn.onclick = backToLibrary;
+
+                el.headToggle.onclick = toggleHeader;
+
+                el.pane.addEventListener('scroll', function () {
+                    if (!state.open || !state.ready) return;
+                    if (scrollTimer) return;
+                    scrollTimer = setTimeout(function () {
+                        scrollTimer = null;
+                        if (!state.open || !state.ready) return;
+                        measure();
+                        scheduleSave();
+                    }, 120);
+                });
+
+                window.addEventListener('resize', function () {
+                    if (resizeTimer) clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(function () {
+                        resizeTimer = null;
+                        if (!state.open || !state.ready) return;
+                        var keep = state.pct;
+                        measure();
+                        var max = scrollMax();
+                        el.pane.scrollTop = max * keep;
+                        measure();
+                        scheduleSave();
+                    }, 300);
+                });
+
+                window.addEventListener('beforeunload', function () {
+                    if (state.ready) savePositionNow();
+                });
+
+                document.addEventListener('keydown', function (e) {
+                    if ((e.key === 'Escape' || e.keyCode === 27) && el.modal.classList.contains('open')) {
+                        closeContents();
+                    }
+                });
+            }
+
+            /* ---------------- INIT ---------------- */
+            function init() {
+                el.pane = byId('gb-pane');
+                el.notice = byId('gb-notice');
+                el.pageInd = byId('gb-page-ind');
+                el.prevBtn = byId('gb-btn-prev');
+                el.nextBtn = byId('gb-btn-next');
+                el.rTitle = byId('gb-r-title');
+                el.rAuthor = byId('gb-r-author');
+                el.head = byId('gb-reader-head');
+                el.headToggle = byId('gb-head-toggle');
+                el.results = byId('gb-results');
+                el.moreWrap = byId('gb-more-wrap');
+                el.moreBtn = byId('gb-more-btn');
+                el.searchStatus = byId('gb-search-status');
+                el.resultsTitle = byId('gb-results-title');
+                el.shelf = byId('gb-shelf');
+                el.shelfList = byId('gb-shelf-list');
+                el.input = byId('gb-q');
+                el.modal = byId('gb-modal');
+                el.tocList = byId('gb-toc-list');
+                el.tocClose = byId('gb-toc-close');
+                el.searchBtn = byId('gb-search-btn');
+                el.chips = byId('gb-chips');
+                el.reader = byId('gb-reader');
+                el.fontDown = byId('gb-btn-fontdown');
+                el.fontUp = byId('gb-btn-fontup');
+                el.contentsBtn = byId('gb-btn-contents');
+                el.backBtn = byId('gb-btn-back');
+
+                state.font = readFont();
+                el.pane.style.fontSize = state.font + 'px';
+
+                el.headToggle.textContent = '-';
+                el.headToggle.title = tr('gutenberg.head.toggle', 'Show or hide book details');
+                el.headToggle.setAttribute('aria-label', tr('gutenberg.head.toggle', 'Show or hide book details'));
+
+                updatePager();
+                updateFontButtons();
+                renderShelf();
+                wire();
+            }
+
+            return {
+                init: init,
+                ensureBrowse: ensureBrowse,
+                renderShelf: renderShelf
+            };
+        })();
+
+        // ============================================================
+        // STANDARD EBOOKS
+        // Ported from standardebooks.html. New-release feed downloads are
+        // cleaned of blank spine items and saved into the shared library.
+        // ============================================================
+        var SE = (function () {
+            'use strict';
+
+            var RSS_FEED_URL = 'https://standardebooks.org/feeds/rss/new-releases';
+            var loaded = false;
+            var loading = false;
+            var el = {};
+            var toastTimer = null;
+
+            function byId(id) {
+                return document.getElementById(id);
+            }
+
+            function tr(key, fallback) {
+                if (typeof window.t === 'function') {
+                    return window.t(key, fallback);
+                }
+                return fallback || key;
+            }
+
+            function trim(s) {
+                return String(s).replace(/^\s+|\s+$/g, '');
+            }
+
+            function showToast(msg) {
+                if (!el.toast) return;
+                el.toast.innerText = msg;
+                el.toast.style.display = 'block';
+                if (toastTimer) clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () {
+                    toastTimer = null;
+                    el.toast.style.display = 'none';
+                }, 3000);
+            }
+
+            function renderLoading(msg) {
+                el.grid.innerHTML = '<div class="se-loading">' + escapeHtml(msg) + '</div>';
+            }
+
+            function renderError(msg) {
+                el.grid.innerHTML = '<div class="se-error">' + escapeHtml(msg) + '</div>';
+            }
+
+            async function fetchFeed(url, isBinary) {
+                var timeout = isBinary ? 60000 : 20000;
+                var res = await fetchWithTimeout(proxyBaseFor(url) + encodeURIComponent(url), timeout);
+                if (!res || !res.ok) throw new Error('Status ' + (res ? res.status : '0'));
+                return isBinary ? await res.blob() : await res.text();
+            }
+
+            function ensureFeed() {
+                if (loaded || loading) return;
+                loadFeed();
+            }
+
+            async function loadFeed() {
+                loading = true;
+                renderLoading(tr('se.msg.loading', 'Fetching new releases...'));
+                el.status.textContent = tr('se.status.connecting', 'Connecting to Standard Ebooks...');
+
+                try {
+                    var text = await fetchFeed(RSS_FEED_URL, false);
+                    if (!text) throw new Error(tr('se.error.proxies', 'All proxies failed'));
+                    loaded = parseAndRenderXML(text);
+                } catch (e) {
+                    console.error('Standard Ebooks feed error', e);
+                    renderError(tr('se.error.feed', 'Failed to load feed. Standard Ebooks may be unreachable.'));
+                    el.status.textContent = tr('se.error.feed', 'Failed to load feed. Standard Ebooks may be unreachable.');
+                }
+
+                loading = false;
+            }
+
+            function parseAndRenderXML(xmlText) {
+                try {
+                    var parser = new DOMParser();
+                    var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+
+                    var parserError = xmlDoc.getElementsByTagName('parsererror');
+                    if (parserError.length > 0) {
+                        throw new Error(tr('se.error.xml_parse', 'XML Parsing Error'));
+                    }
+
+                    // Standard Ebooks now 301s /feeds/rss/new-releases to the
+                    // Atom feed. Accept either shape: RSS <item> first, then
+                    // Atom <entry> (which carries <author><name> and
+                    // rel="enclosure" links instead of an <enclosure> element).
+                    var items = Array.prototype.slice.call(xmlDoc.getElementsByTagName('item'), 0, 15);
+                    var isAtom = false;
+                    if (!items.length) {
+                        items = Array.prototype.slice.call(xmlDoc.getElementsByTagName('entry'), 0, 15);
+                        isAtom = true;
+                    }
+
+                    if (!items.length) {
+                        throw new Error(tr('se.error.no_items', 'No items found in XML'));
+                    }
+
+                    renderXmlBooks(items, isAtom);
+                    el.status.textContent = tr('se.status.loaded', 'Latest releases') + ' (' + items.length + ')';
+                    return true;
+                } catch (e) {
+                    console.error('Standard Ebooks parse error', e);
+                    renderError(tr('se.error.parse', 'Failed to parse feed. ') + e.message);
+                    el.status.textContent = tr('se.error.parse', 'Failed to parse feed. ') + e.message;
+                    return false;
+                }
+            }
+
+            function renderXmlBooks(items, isAtom) {
+                el.grid.innerHTML = '';
+
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    var titleEl = item.getElementsByTagName('title')[0];
+                    var title = titleEl ? trim(titleEl.textContent) : tr('se.label.unknown_title', 'Unknown Title');
+
+                    var author = '';
+
+                    if (isAtom) {
+                        var authorNodes = item.getElementsByTagName('author');
+                        if (authorNodes.length) {
+                            var nameNodes = authorNodes[0].getElementsByTagName('name');
+                            if (nameNodes.length) author = trim(nameNodes[0].textContent);
+                        }
+                    } else {
+                        // Old RSS style: "Title, by Author"
+                        var sep = title.lastIndexOf(', by ');
+                        if (sep !== -1) {
+                            author = trim(title.substring(sep + 5));
+                            title = trim(title.substring(0, sep));
+                        }
+                    }
+
+                    if (!author) author = tr('se.label.unknown_author', 'Unknown Author');
+                    if (!title) title = tr('se.label.unknown_title', 'Unknown Title');
+
+                    // EPUB link: Atom uses <link rel="enclosure" type="application/epub+zip">,
+                    // RSS uses an <enclosure> element.
+                    var dlUrl = null;
+                    var links = item.getElementsByTagName('link');
+                    var j;
+
+                    for (j = 0; j < links.length; j++) {
+                        var linkType = links[j].getAttribute('type');
+                        var linkRel = links[j].getAttribute('rel');
+                        if (linkType === 'application/epub+zip' && linkRel === 'enclosure') {
+                            dlUrl = links[j].getAttribute('href') || trim(links[j].textContent);
+                            break;
+                        }
+                    }
+
+                    if (!dlUrl) {
+                        for (j = 0; j < links.length; j++) {
+                            if (links[j].getAttribute('type') === 'application/epub+zip') {
+                                dlUrl = links[j].getAttribute('href') || trim(links[j].textContent);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!dlUrl) {
+                        var enclosures = item.getElementsByTagName('enclosure');
+                        for (j = 0; j < enclosures.length; j++) {
+                            if (enclosures[j].getAttribute('type') === 'application/epub+zip') {
+                                dlUrl = enclosures[j].getAttribute('url');
+                                break;
+                            }
+                        }
+                    }
+
+                    // Last resort: the item's first link (old RSS behaviour).
+                    if (!dlUrl && links.length) {
+                        dlUrl = links[0].getAttribute('href') || trim(links[0].textContent);
+                    }
+
+                    if (!dlUrl) continue;
+
+                    // Cover: media:thumbnail (both feeds), then <thumbnail>,
+                    // then an <img> inside the description/content.
+                    var coverUrl = '';
+                    var mediaThumb = item.getElementsByTagName('media:thumbnail')[0];
+                    var thumb = item.getElementsByTagName('thumbnail')[0];
+
+                    if (mediaThumb) coverUrl = mediaThumb.getAttribute('url');
+                    else if (thumb) coverUrl = thumb.getAttribute('url');
+
+                    if (!coverUrl) {
+                        var bodyEl = item.getElementsByTagName('description')[0]
+                            || item.getElementsByTagName('content')[0];
+                        if (bodyEl) {
+                            var match = String(bodyEl.textContent || '').match(/src=["'](.*?)["']/);
+                            if (match) coverUrl = match[1];
+                        }
+                    }
+
+                    // Fix Standard Ebooks relative URLs if needed
+                    if (coverUrl && coverUrl.charAt(0) === '/') {
+                        coverUrl = 'https://standardebooks.org' + coverUrl;
+                    }
+
+                    renderCard(title, author, coverUrl, dlUrl);
+                }
+
+                if (!el.grid.children.length) {
+                    renderError(tr('se.msg.none', 'No compatible ebooks found.'));
+                }
+            }
+
+            function renderCard(title, author, coverUrl, dlUrl) {
+                var card = document.createElement('div');
+                card.className = 'se-book';
+
+                var img = document.createElement('img');
+                img.className = 'se-cover';
+                img.setAttribute('alt', '');
+                if (coverUrl) {
+                    img.src = coverUrl;
+                    img.onerror = function () { this.style.visibility = 'hidden'; };
+                } else {
+                    img.style.visibility = 'hidden';
+                }
+
+                var info = document.createElement('div');
+                info.className = 'se-info';
+
+                var titleEl = document.createElement('span');
+                titleEl.className = 'se-title';
+                titleEl.textContent = title;
+
+                var authorEl = document.createElement('span');
+                authorEl.className = 'se-author';
+                authorEl.textContent = author;
+
+                info.appendChild(titleEl);
+                info.appendChild(authorEl);
+
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'sys-btn se-get';
+                btn.textContent = tr('se.btn.download', 'Download');
+                btn.onclick = function () {
+                    downloadBook(dlUrl, title, author, btn);
+                };
+
+                card.appendChild(img);
+                card.appendChild(info);
+                card.appendChild(btn);
+                el.grid.appendChild(card);
+            }
+
+            async function downloadBook(url, title, author, btn) {
+                // Already saved: confirm instead of downloading it again.
+                var currentIndex = [];
+                try { currentIndex = await localforage.getItem('library_index') || []; } catch (e) { /* ignore */ }
+                for (var d = 0; d < currentIndex.length; d++) {
+                    // Match by URL, or by title+author for entries saved by the
+                    // old standalone app (whose RSS enclosure URL may differ).
+                    if (currentIndex[d].url === url ||
+                        (currentIndex[d].title === title && currentIndex[d].author === author)) {
+                        btn.textContent = tr('se.btn.saved', 'In Library');
+                        btn.disabled = true;
+                        showToast(tr('se.btn.saved', 'In Library'));
+                        return;
+                    }
+                }
+
+                btn.disabled = true;
+                btn.textContent = tr('se.btn.saving', 'Saving...');
+                showToast(tr('common.loading', 'Loading') + ' ' + title + '...');
+
+                try {
+                    // 1. Fetch File Blob through the proxy
+                    var blob = await fetchFeed(url, true);
+                    if (!blob || blob.size < 1000) {
+                        throw new Error(tr('se.error.invalid_file', 'Invalid file received (too small)'));
+                    }
+
+                    // 2. CLEANUP STEP: Remove blank pages
+                    showToast(tr('se.msg.clean', 'Cleaning EPUB...'));
+                    var cleanedBlob = await cleanEpub(blob);
+
+                    // 3. Convert to ArrayBuffer
+                    var buffer = await blobToArrayBuffer(cleanedBlob);
+
+                    // 4. Generate Key
+                    var key = 'book_' + Date.now();
+
+                    // 5. Save to LocalForage (shared storage with the reader)
+                    await localforage.setItem(key, buffer);
+
+                    // 6. Update Index
+                    var index = await localforage.getItem('library_index') || [];
+                    var exists = false;
+                    for (var i = 0; i < index.length; i++) {
+                        if (index[i].title === title && index[i].author === author) {
+                            exists = true;
+                            break;
+                        }
+                    }
+
+                    if (!exists) {
+                        index.push({
+                            title: title,
+                            author: author,
+                            url: url,
+                            key: key,
+                            date: Date.now(),
+                            cfi: null
+                        });
+                        await localforage.setItem('library_index', index);
+                    }
+
+                    // 7. Cloud Sync (if logged in)
+                    if (typeof currentUser !== 'undefined' && currentUser) {
+                        var snap = await db.collection('users').doc(currentUser.uid).collection('library')
+                            .where('url', '==', url).get();
+
+                        if (snap.empty) {
+                            await db.collection('users').doc(currentUser.uid).collection('library').add({
+                                title: title,
+                                author: author,
+                                url: url,
+                                cfi: null,
+                                added: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                    }
+
+                    btn.textContent = tr('se.btn.saved', 'In Library');
+                    showToast(tr('se.msg.saved', 'Book Saved to Reader!'));
+                    if (typeof loadLocalLibrary === 'function') loadLocalLibrary();
+
+                } catch (e) {
+                    console.error(e);
+                    btn.textContent = tr('se.btn.error', 'Error');
+                    btn.disabled = false;
+                    showToast(tr('se.error.generic', 'Error: ') + e.message);
+                }
+            }
+
+            // --- EPUB CLEANER (drops blank spine documents) ---
+            async function cleanEpub(blob) {
+                try {
+                    var zip = await JSZip.loadAsync(blob);
+
+                    // 1. Find OPF file path
+                    var containerXml = await zip.file('META-INF/container.xml').async('string');
+                    var rootfileMatch = containerXml.match(/full-path="([^"]+)"/);
+                    if (!rootfileMatch) throw new Error(tr('se.error.invalid_container', 'Invalid Container XML'));
+
+                    var opfPath = rootfileMatch[1];
+                    var opfContent = await zip.file(opfPath).async('string');
+
+                    // 2. Parse OPF
+                    var parser = new DOMParser();
+                    var opfDoc = parser.parseFromString(opfContent, 'application/xml');
+                    var manifest = opfDoc.getElementsByTagName('manifest')[0];
+                    var spine = opfDoc.getElementsByTagName('spine')[0];
+                    var ns = opfDoc.documentElement.namespaceURI;
+
+                    var getItemHref = function (id) {
+                        var item = null;
+                        try {
+                            if (ns) item = manifest.querySelector('[id="' + id + '"]');
+                        } catch (e) { /* ignore */ }
+
+                        if (!item) {
+                            for (var i = 0; i < manifest.children.length; i++) {
+                                if (manifest.children[i].getAttribute('id') === id) {
+                                    item = manifest.children[i];
+                                    break;
+                                }
+                            }
+                        }
+                        return item ? item.getAttribute('href') : null;
+                    };
+
+                    // 3. Iterate Spine Items
+                    var itemrefs = Array.prototype.slice.call(spine.getElementsByTagName('itemref'));
+                    var removedCount = 0;
+                    var opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+
+                    for (var r = 0; r < itemrefs.length; r++) {
+                        var itemref = itemrefs[r];
+                        var id = itemref.getAttribute('idref');
+                        var href = getItemHref(id);
+
+                        if (href && (href.indexOf('.html') !== -1 || href.indexOf('.xhtml') !== -1)) {
+                            var fullPath = opfDir + href;
+                            var file = zip.file(fullPath);
+
+                            if (file) {
+                                var content = await file.async('string');
+
+                                // 4. Use textContent for XML/XHTML documents
+                                var doc = parser.parseFromString(content, 'application/xml');
+                                var text = doc.documentElement.textContent.trim();
+
+                                var hasImg = doc.getElementsByTagName('img').length > 0;
+                                var hasSvg = doc.getElementsByTagName('svg').length > 0;
+                                var hasImage = doc.getElementsByTagName('image').length > 0;
+
+                                // If text is very short (< 50 chars) AND no images/graphics
+                                if (text.length < 50 && !hasImg && !hasSvg && !hasImage) {
+                                    spine.removeChild(itemref);
+                                    removedCount++;
+                                }
+                            }
+                        }
+                    }
+
+                    if (removedCount > 0) {
+                        var serializer = new XMLSerializer();
+                        zip.file(opfPath, serializer.serializeToString(opfDoc));
+                        return await zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
+                    }
+
+                    return blob;
+
+                } catch (e) {
+                    console.error('Clean failed, returning original', e);
+                    return blob;
+                }
+            }
+
+            function init() {
+                el.grid = byId('se-grid');
+                el.status = byId('se-status');
+                el.toast = byId('se-toast');
+            }
+
+            return {
+                init: init,
+                ensureFeed: ensureFeed
+            };
+        })();
+
+        // The inline script sits at the end of <body>, so the DOM is ready.
+        // Initialise the library tabs here rather than in window.onload so a
+        // slow third-party script cannot leave the tabs dead.
+        GB.init();
+        SE.init();
 
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11" integrity="sha384-nhrsdECZledRaozO3oR4Yu+cq4ACLwBiZ/azuVbm3o9QGzXLdLaRx+r/zDUQ6bLl" crossorigin="anonymous"></script>
+        data-utcoffset="11" integrity="sha384-nhrsdECZledRaozO3oR4Yu+cq4ACLwBiZ/azuVbm3o9QGzXLdLaRx+r/zDUQ6bLl" crossorigin="anonymous" defer></script>
     <!-- STANDARD MODAL POPUP -->
     <div id="generic-modal-overlay">
         <div class="modal-box">

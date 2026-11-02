@@ -4,7 +4,9 @@
     
     <title>Books</title>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 
@@ -203,7 +205,7 @@
         .book-user-rating { color: black; font-size: 1.1rem; letter-spacing: 2px; }
 
         /* AUTH MESSAGE */
-        .auth-msg { padding: 20px; text-align: center; display: none; }
+        .auth-msg { padding: 20px; text-align: center; display: none; align-items: center; justify-content: center; min-height: 60vh; box-sizing: border-box; }
 
         /* --- MODAL STYLES --- */
         .modal-overlay {
@@ -257,11 +259,12 @@
         .generic-modal-btn { background: white; border: 2px solid black; padding: 6px 20px; font-weight: bold; cursor: pointer; box-shadow: 2px 2px 0 black; font-family: inherit; }
         .generic-modal-btn:active { background: black; color: white; transform: translate(1px, 1px); box-shadow: none; }
     </style>
-    <link rel="stylesheet" href="css/custom-select.css">
-    <script src="time.js"></script>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/custom-select.js"></script>
+    <link rel="stylesheet" href="css/custom-select.css?v=1">
+    <script src="time.js?v=5"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/ui-kit.js?v=2"></script>
+    <script src="js/custom-select.js?v=2"></script>
 </head>
 
 <body>
@@ -279,7 +282,7 @@
         </div>
 
         <div class="window-content">
-            <div id="auth-msg-saved" class="auth-msg" data-i18n="books.msg.auth">
+            <div id="auth-msg-saved" class="auth-msg">
                 Please log in on the Home screen to save books.
             </div>
 
@@ -390,6 +393,19 @@
             if (window.rekindleApplyWallpaper) window.rekindleApplyWallpaper();
             initCurrentWeek();
 
+            const authEl = document.getElementById('auth-msg-saved');
+            if (authEl) {
+                authEl.innerHTML = window.rekindleEmptyState(
+                    window.t('books.msg.auth', 'Please log in on the Home screen to save books.'),
+                    {
+                        icon: 'book',
+                        card: true,
+                        action: '<button class="rk-empty-btn" onclick="location.href=\'index?login=true\'">' +
+                            window.t('login.btn.login', 'Login') + '</button>'
+                    }
+                );
+            }
+
             auth.onAuthStateChanged(user => {
                 if (user) {
                     currentUser = user;
@@ -397,7 +413,7 @@
                     loadCloudDataLog();
                 } else {
                     document.getElementById('saved-view').style.display = 'none';
-                    document.getElementById('auth-msg-saved').style.display = 'block';
+                    document.getElementById('auth-msg-saved').style.display = 'flex';
                     loadLocalDataLog();
                 }
             });
@@ -415,7 +431,7 @@
 
             if (tab === 'saved') {
                 if (currentUser) document.getElementById('saved-view').style.display = 'flex';
-                else document.getElementById('auth-msg-saved').style.display = 'block';
+                else document.getElementById('auth-msg-saved').style.display = 'flex';
             } else if (tab === 'log') {
                 document.getElementById('log-view').style.display = 'flex';
                 document.getElementById('auth-msg-saved').style.display = 'none';
@@ -509,58 +525,159 @@
             }).catch((e) => showModal("Error saving book."));
         }
 
+        var savedBooksInitialDone = false;
+
+        function savedBookData(book, docId) {
+            const status = book.status || 'read'; // Fallback to 'read' for legacy un-categorized items
+            const coverUrl = book.coverId
+                ? `https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg`
+                : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+            return { ...book, docId, coverUrl, status };
+        }
+
+        function createSavedBookItem(bookData) {
+            const item = document.createElement('div');
+            item.className = 'book-item';
+            item.dataset.docId = bookData.docId;
+            item.onclick = () => openDetails(bookData, 'saved');
+
+            let userStars = "";
+            if (bookData.status === 'read' && bookData.userRating) {
+                userStars = "★".repeat(bookData.userRating) + "☆".repeat(5 - bookData.userRating);
+            }
+
+            item.innerHTML = `
+                <img src="${bookData.coverUrl}" class="book-cover">
+                <div class="book-info">
+                    <div class="book-title">${bookData.title}</div>
+                    <div class="book-author">${bookData.author}</div>
+                    ${userStars ? `<div class="book-user-rating">${userStars}</div>` : ''}
+                </div>
+            `;
+            return item;
+        }
+
+        function bookListForStatus(status) {
+            return document.getElementById(status === 'want_to_read' ? 'want-to-read-list' : 'read-list');
+        }
+
+        function refreshSavedEmptyStates() {
+            var want = document.getElementById('want-to-read-list');
+            var read = document.getElementById('read-list');
+            if (!want || !read) return;
+
+            var titleWant = document.getElementById('title-want-read');
+            var titleRead = document.getElementById('title-read');
+            var total = want.querySelectorAll('.book-item').length + read.querySelectorAll('.book-item').length;
+
+            // One guided empty state instead of two identical "No books here."
+            // blocks, and a route into the free Reader catalogue.
+            if (total === 0) {
+                if (titleWant) titleWant.style.display = 'none';
+                if (titleRead) titleRead.style.display = 'none';
+                read.style.display = 'none';
+                var readPh = read.querySelector('[data-books-empty]');
+                if (readPh) readPh.remove();
+
+                var empty = want.querySelector('[data-books-empty]');
+                if (!empty) {
+                    empty = document.createElement('div');
+                    empty.setAttribute('data-books-empty', '1');
+                    want.appendChild(empty);
+                }
+                empty.innerHTML = window.rekindleEmptyState(
+                    window.t('books.empty.none', 'No books yet.'),
+                    {
+                        icon: 'book',
+                        hint: window.t('books.empty.hint', 'Search for a title or author above, or borrow a free classic in Reader.'),
+                        action: '<a class="rk-empty-btn" href="reader.html" style="display:inline-block;text-decoration:none;">' +
+                            window.t('books.btn.browse', 'Browse Reader') + '</a>'
+                    }
+                );
+                return;
+            }
+
+            if (titleWant) titleWant.style.display = '';
+            if (titleRead) titleRead.style.display = '';
+            read.style.display = '';
+
+            function setEmpty(list, message) {
+                var count = list.querySelectorAll('.book-item').length;
+                var ph = list.querySelector('[data-books-empty]');
+                if (count === 0) {
+                    if (!ph) {
+                        var d = document.createElement('div');
+                        d.setAttribute('data-books-empty', '1');
+                        d.innerHTML = window.rekindleEmptyState(message, { icon: 'book', compact: true });
+                        list.appendChild(d);
+                    }
+                } else if (ph) {
+                    ph.remove();
+                }
+            }
+            setEmpty(want, window.t('books.empty.want', 'No books here.'));
+            setEmpty(read, window.t('books.empty.read', 'No books here.'));
+        }
+
+        function renderSavedBooks(snapshot) {
+            const wantList = document.getElementById('want-to-read-list');
+            const readList = document.getElementById('read-list');
+            wantList.innerHTML = '';
+            readList.innerHTML = '';
+            snapshot.forEach(doc => {
+                const bookData = savedBookData(doc.data(), doc.id);
+                bookListForStatus(bookData.status).appendChild(createSavedBookItem(bookData));
+            });
+            refreshSavedEmptyStates();
+        }
+
         function loadSavedBooks() {
             if (!currentUser) return;
+            // A re-subscribe (sign out/in) starts a fresh snapshot: render it in
+            // full instead of treating it as incremental changes.
+            savedBooksInitialDone = false;
             db.collection('users').doc(currentUser.uid).collection('reading_list')
                 .orderBy('addedAt', 'desc')
                 .onSnapshot((snapshot) => {
-                    const wantList = document.getElementById('want-to-read-list');
-                    const readList = document.getElementById('read-list');
-                    wantList.innerHTML = '';
-                    readList.innerHTML = '';
+                    if (!savedBooksInitialDone) {
+                        savedBooksInitialDone = true;
+                        renderSavedBooks(snapshot);
+                        return;
+                    }
 
-                    let wantCount = 0;
-                    let readCount = 0;
+                    // Patch only what changed. A status toggle used to wipe both
+                    // lists and re-create every <img>, re-decoding all the covers.
+                    snapshot.docChanges().forEach(change => {
+                        const docId = change.doc.id;
+                        const existing = document.querySelector('.book-item[data-doc-id="' + docId + '"]');
 
-                    snapshot.forEach(doc => {
-                        const book = doc.data();
-                        const status = book.status || 'read'; // Fallback to 'read' for legacy un-categorized items
-                        const coverUrl = book.coverId
-                            ? `https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg`
-                            : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-
-                        const bookData = { ...book, docId: doc.id, coverUrl, status };
-
-                        const item = document.createElement('div');
-                        item.className = 'book-item';
-                        item.onclick = () => openDetails(bookData, 'saved');
-
-                        let userStars = "";
-                        if (status === 'read' && book.userRating) {
-                            userStars = "★".repeat(book.userRating) + "☆".repeat(5 - book.userRating);
+                        if (change.type === 'removed') {
+                            if (existing) existing.remove();
+                            return;
                         }
 
-                        item.innerHTML = `
-                            <img src="${coverUrl}" class="book-cover">
-                            <div class="book-info">
-                                <div class="book-title">${book.title}</div>
-                                <div class="book-author">${book.author}</div>
-                                ${userStars ? `<div class="book-user-rating">${userStars}</div>` : ''}
-                            </div>
-                        `;
+                        const bookData = savedBookData(change.doc.data(), docId);
+                        const target = bookListForStatus(bookData.status);
 
-                        if (status === 'want_to_read') {
-                            wantList.appendChild(item);
-                            wantCount++;
-                        } else {
-                            readList.appendChild(item);
-                            readCount++;
+                        if (change.type === 'modified' && existing) {
+                            const sameList = existing.parentNode === target;
+                            if (sameList) {
+                                // Rebuild this row only (status/stars changed).
+                                const fresh = createSavedBookItem(bookData);
+                                existing.parentNode.replaceChild(fresh, existing);
+                            } else {
+                                existing.remove();
+                                target.insertBefore(createSavedBookItem(bookData), target.firstChild);
+                            }
+                            return;
+                        }
+
+                        if (change.type === 'added' && !existing) {
+                            // Newest first, matching orderBy('addedAt','desc').
+                            target.insertBefore(createSavedBookItem(bookData), target.firstChild);
                         }
                     });
-
-                    // Hide empty states nicely
-                    if(wantCount === 0) wantList.innerHTML = `<div style="color:#666; font-style:italic; padding:10px;">No books here.</div>`;
-                    if(readCount === 0) readList.innerHTML = `<div style="color:#666; font-style:italic; padding:10px;">No books here.</div>`;
+                    refreshSavedEmptyStates();
                 });
         }
 
@@ -647,8 +764,8 @@
                 statusHtml = `
                     <div class="status-toggle-wrapper">
                         <select class="status-toggle" onchange="changeBookStatus(this.value)">
-                            <option value="want_to_read" ${bookData.status === 'want_to_read' ? 'selected' : ''}>⏳ Want to Read</option>
-                            <option value="read" ${bookData.status === 'read' ? 'selected' : ''}>✅ Read</option>
+                            <option value="want_to_read" ${bookData.status === 'want_to_read' ? 'selected' : ''}>[ ] Want to Read</option>
+                            <option value="read" ${bookData.status === 'read' ? 'selected' : ''}>[x] Read</option>
                         </select>
                     </div>
                 `;

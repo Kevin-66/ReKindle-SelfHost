@@ -29,6 +29,43 @@
 
     var MAX_COMMENT_LENGTH = 200;
 
+    /**
+     * Every report must explain itself. The moderation Worker rejects a report
+     * without a real comment, so the modal checks the same rule first.
+     *
+     * "Proper word" = at least one run of two or more letters in any script.
+     * "ok", "spam", "no way" and "это спам" pass; "", "!!!", "12345", ":) :)"
+     * and emoji-only comments do not.
+     *
+     * KEEP IN SYNC with reportCommentError() in
+     * workers/rekindle-moderate/worker.js (the server-side gate).
+     */
+    function hasProperWord(text) {
+        if (!text) return false;
+        try {
+            // Unicode property escapes are ES2018. Build the regex in a
+            // try/catch so an engine without them falls back to ASCII instead
+            // of failing to parse the whole file.
+            return new RegExp('\\p{L}{2,}', 'u').test(text);
+        } catch (e) {
+            return /[A-Za-z]{2,}/.test(text);
+        }
+    }
+
+    function reportCommentError(comment) {
+        var text = String(comment || '').trim();
+        if (!text) {
+            return 'Please add a comment explaining what is wrong with this content.';
+        }
+        if (!hasProperWord(text)) {
+            return 'Please write at least one word — symbols, numbers or emoji alone are not enough.';
+        }
+        if (text.length > MAX_COMMENT_LENGTH) {
+            return 'Please keep the comment under ' + MAX_COMMENT_LENGTH + ' characters.';
+        }
+        return '';
+    }
+
     function escapeHtml(str) {
         if (!str) return '';
         return String(str)
@@ -50,7 +87,7 @@
         
         var msg = document.createElement('div');
         msg.style.cssText = 'text-align:center;padding:20px;font-size:1rem;';
-        msg.innerHTML = '<strong>Thank you.</strong><br><br>Your report has been submitted and will be reviewed by our moderation team.';
+        msg.innerHTML = '<strong>Thank you.</strong><br><br>Your report has been submitted. Content that breaks the rules is removed automatically; reports are checked by our automated moderation system.';
         body.appendChild(msg);
 
         var okBtn = document.createElement('button');
@@ -68,7 +105,11 @@
         if (typeof MODERATION_WORKER_URL !== 'undefined' && MODERATION_WORKER_URL) {
             return MODERATION_WORKER_URL;
         }
-        return 'https://rekindle-moderate.timjarnott.workers.dev';
+        if (window.rekindleSocialEndpoints && window.rekindleSocialEndpoints.moderation) {
+            return window.rekindleSocialEndpoints.moderation;
+        }
+        // Social Workers live in the separate "ReKindle Social" account.
+        return 'https://rekindle-moderate.rekindle-social.workers.dev';
     }
 
     function getAuthToken() {
@@ -116,6 +157,16 @@
             return;
         }
 
+        var commentProblem = reportCommentError(comment);
+        if (commentProblem) {
+            if (errorEl) errorEl.textContent = commentProblem;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Report';
+            }
+            return;
+        }
+
         getAuthToken().then(function (token) {
             var reportData = {
                 type: 'report',
@@ -137,7 +188,9 @@
                 body: JSON.stringify(reportData)
             });
         }).then(function (resp) {
-            return resp.json();
+            return window.rekindleWorkerClient
+                ? window.rekindleWorkerClient.readJson(resp)
+                : resp.json();
         }).then(function (result) {
             if (result.error) {
                 throw new Error(result.error);
@@ -145,7 +198,8 @@
             showReportSuccess();
         })['catch'](function (err) {
             console.error('Report submission error:', err);
-            if (errorEl) errorEl.textContent = err.message || 'Failed to submit report. Please try again.';
+            var outage = window.rekindleWorkerClient && window.rekindleWorkerClient.errorMessage(err);
+            if (errorEl) errorEl.textContent = outage || err.message || 'Failed to submit report. Please try again.';
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit Report';
@@ -204,14 +258,20 @@
         body.appendChild(select);
 
         var commentLabel = document.createElement('label');
-        commentLabel.textContent = 'Additional Comment (optional)';
+        commentLabel.textContent = 'Comment *';
         commentLabel.style.cssText = 'display:block;font-weight:bold;font-size:0.85rem;margin-bottom:4px;margin-top:10px;';
         body.appendChild(commentLabel);
 
+        var commentHint = document.createElement('div');
+        commentHint.style.cssText = 'font-size:0.75rem;color:#555;margin-bottom:4px;';
+        commentHint.textContent = 'Required: say what is wrong with this content (at least one word).';
+        body.appendChild(commentHint);
+
         var textarea = document.createElement('textarea');
         textarea.id = 'report-comment-input';
-        textarea.placeholder = 'Provide any additional details...';
+        textarea.placeholder = 'e.g. spamming the same message, harassing another user';
         textarea.maxLength = MAX_COMMENT_LENGTH;
+        textarea.required = true;
         textarea.style.cssText = 'width:100%;min-height:80px;border:2px solid black;border-radius:0;padding:6px;font-family:inherit;font-size:0.85rem;resize:vertical;box-sizing:border-box;margin-top:4px;';
         
         var counter = document.createElement('div');
@@ -235,7 +295,7 @@
 
         var warningEl = document.createElement('div');
         warningEl.style.cssText = 'background:#fff3cd;border:1px solid #ffc107;padding:8px;margin-top:10px;font-size:0.75rem;color:#856404;';
-        warningEl.innerHTML = '<strong>Warning:</strong> Misuse of the report system will lead to a permanent ban. KindleChat messages, suggestion comments, topic comments and neighbourhood comments are removed immediately when reported. Suggestions, topics and neighbourhood posts require 2 reports from different users before they are automatically deleted.';
+        warningEl.innerHTML = '<strong>Warning:</strong> Misuse of the report system will lead to a permanent ban. KindleChat messages, suggestion comments, topic comments and neighbourhood comments are removed immediately when reported and moderation agrees, or when 2 different users report them. Suggestions, topics and neighbourhood posts require 2 reports from different users before they are automatically deleted.';
         body.appendChild(warningEl);
 
         var errorEl = document.createElement('div');
@@ -268,4 +328,11 @@
     };
 
     window.rekindleCloseReportModal = closeReportModal;
+
+    // Exposed so the client gate and the Worker gate can be checked together
+    // (scripts/test-reports.js) and so a report button can pre-validate.
+    window.rekindleReportCommentError = reportCommentError;
+    window.rekindleReportCommentIsValid = function (comment) {
+        return reportCommentError(comment) === '';
+    };
 })();

@@ -35,6 +35,7 @@ admin.initializeApp({
 // Initialize secondary app for social project (optional — falls back to main if key missing)
 let socialRtdb = admin.database();
 let socialDb = null;
+let hasSocialAdmin = false;
 try {
     if (fs.existsSync(SOCIAL_SERVICE_ACCOUNT_PATH)) {
         const socialServiceAccount = require(SOCIAL_SERVICE_ACCOUNT_PATH);
@@ -44,6 +45,7 @@ try {
         }, 'social-admin');
         socialRtdb = socialApp.database();
         socialDb = socialApp.firestore();
+        hasSocialAdmin = true;
         console.log('Social admin app initialized.');
     } else {
         console.warn('Social service account not found at ' + SOCIAL_SERVICE_ACCOUNT_PATH + ' — using main project for social data.');
@@ -76,6 +78,9 @@ async function main() {
 
         // 1. Scan KindleChat RTDB
         await scanKindleChatRTDB();
+
+        // 1b. Scan KindleChat direct messages (social RTDB)
+        await scanKindleChatDMs();
 
         // 2. Scan KindleChat Firestore
         await scanKindleChatFirestore();
@@ -179,6 +184,92 @@ async function scanKindleChatRTDB() {
                 id: child.key,
                 summary: (child.val().text || '').substring(0, 50),
                 action: () => child.ref.remove()
+            });
+        });
+    });
+}
+
+async function scanKindleChatDMs() {
+    if (!hasSocialAdmin) {
+        console.error("Skipping KindleChat DMs: the social service account is required (DM data must never be touched in the primary RTDB).");
+        return;
+    }
+    if (!targetUid) {
+        console.log("Skipping KindleChat DMs (No UID resolved)");
+        return;
+    }
+    console.log("Scanning KindleChat DMs (social RTDB)...");
+
+    const threadIds = new Set();
+
+    // Inbox rows are the cheapest way to find this user's threads.
+    const inboxSnap = await socialRtdb.ref(`kindlechat/dm_user_threads/${targetUid}`).once('value');
+    inboxSnap.forEach(child => threadIds.add(child.key));
+
+    // Also check every thread (covers a missing inbox row).
+    const allThreadsSnap = await socialRtdb.ref('kindlechat/dm_threads').once('value');
+    allThreadsSnap.forEach(child => {
+        const thread = child.val();
+        if (thread && thread.participants && thread.participants[targetUid] === true) {
+            threadIds.add(child.key);
+        }
+    });
+
+    for (const threadId of threadIds) {
+        const threadSnap = await socialRtdb.ref(`kindlechat/dm_threads/${threadId}`).once('value');
+        const thread = threadSnap.val() || {};
+
+        const messagesSnap = await socialRtdb.ref(`kindlechat/dm_messages/${threadId}`).once('value');
+        messagesSnap.forEach(msg => {
+            deletionTasks.push({
+                type: `KindleChat DM (${threadId})`,
+                id: msg.key,
+                summary: (msg.val().text || '').substring(0, 50),
+                action: () => msg.ref.remove()
+            });
+        });
+
+        deletionTasks.push({
+            type: 'KindleChat DM Thread',
+            id: threadId,
+            summary: 'thread',
+            action: () => socialRtdb.ref(`kindlechat/dm_threads/${threadId}`).remove()
+        });
+        deletionTasks.push({
+            type: 'KindleChat DM Inbox',
+            id: `${targetUid}/${threadId}`,
+            summary: 'inbox row',
+            action: () => socialRtdb.ref(`kindlechat/dm_user_threads/${targetUid}/${threadId}`).remove()
+        });
+
+        Object.keys(thread.participants || {}).forEach(participant => {
+            if (participant === targetUid) return;
+            deletionTasks.push({
+                type: 'KindleChat DM Inbox',
+                id: `${participant}/${threadId}`,
+                summary: 'peer inbox row',
+                action: () => socialRtdb.ref(`kindlechat/dm_user_threads/${participant}/${threadId}`).remove()
+            });
+        });
+    }
+
+    deletionTasks.push({
+        type: 'KindleChat DM Prefs',
+        id: targetUid,
+        summary: 'request preference',
+        action: () => socialRtdb.ref(`kindlechat/dm_prefs/${targetUid}`).remove()
+    });
+
+    // Remove blocks made by this user and blocks pointing at them.
+    const blocksSnap = await socialRtdb.ref('kindlechat/dm_blocks').once('value');
+    blocksSnap.forEach(userNode => {
+        userNode.forEach(targetNode => {
+            if (userNode.key !== targetUid && targetNode.key !== targetUid) return;
+            deletionTasks.push({
+                type: 'KindleChat DM Block',
+                id: `${userNode.key}/${targetNode.key}`,
+                summary: 'block',
+                action: () => targetNode.ref.remove()
             });
         });
     });

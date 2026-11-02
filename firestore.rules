@@ -72,9 +72,16 @@ service cloud.firestore {
       allow read: if request.auth != null && (request.auth.uid == userId || isDeveloper());
       
       // Allow create, but strictly BLOCK setting 'isPro', 'proExpiresAt', or 'substack_sid' during creation.
-      allow create: if request.auth != null && 
-                       request.auth.uid == userId &&
-                       !request.resource.data.keys().hasAny(['isPro', 'proExpiresAt', 'substack_sid']);
+      // The owner may create any user document: plenty of accounts never save a
+      // setting, so users/{uid} does not exist yet, and a console Pro grant is a
+      // create (not an update) for them. Without the isDeveloper() branch that
+      // grant failed with "Missing or insufficient permissions".
+      allow create: if request.auth != null && (
+                       isDeveloper()
+                       ||
+                       (request.auth.uid == userId &&
+                        !request.resource.data.keys().hasAny(['isPro', 'proExpiresAt', 'substack_sid']))
+                     );
       
       // Allow update, but:
       // - BLOCK modifying 'isPro' or 'proExpiresAt' (unless admin)
@@ -209,66 +216,65 @@ service cloud.firestore {
 
     // 2. TETRIS LEADERBOARD
     match /leaderboard_tetris/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 4. SNAKE LEADERBOARD
     match /leaderboard_snake/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 4.0.1 PACMAN LEADERBOARD
     match /leaderboard_pacman/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 4.1 WORDLE LEADERBOARD
     match /leaderboard_wordle/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number &&
-                      request.resource.data.stats is map;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 4.2 SPELLING BEE LEADERBOARD
     match /leaderboard_spellingbee/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number &&
-                      request.resource.data.stats is map;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 4.5 DINO LEADERBOARD
     match /leaderboard_dino_v1/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-      // Allow user to reset their score (delete document)
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 4.6 MAZE LEADERBOARD
     match /leaderboard_maze/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 5. WORDS (Multiplayer Game)
@@ -288,130 +294,159 @@ service cloud.firestore {
 
     // 7. HANOI LEADERBOARD
     match /leaderboard_hanoi_3/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     match /leaderboard_hanoi_4/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     match /leaderboard_hanoi_5/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     match /leaderboard_hanoi_6/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     match /leaderboard_hanoi_7/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 8. LIGHTS OUT LEADERBOARD
     match /leaderboard_lightsout_3/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     match /leaderboard_lightsout_4/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     match /leaderboard_lightsout_5/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId && isValidActionUsername(request.resource.data.username) && request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 9. TRIVIA LEADERBOARD
     match /leaderboard_trivia/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.totalPercent is number &&
-                      request.resource.data.gameCount is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10. SOLITAIRE LEADERBOARD
     match /leaderboard_solitaire/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.moves is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.5 BLOCK BLAST LEADERBOARD
     match /leaderboard_blockblast/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId 
-                      && request.resource.data.score > resource.data.score;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.6 PET LEADERBOARD
     match /leaderboard_pet_v1/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId 
-                      && request.resource.data.score > resource.data.score;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.7 MARIO LEADERBOARD
     match /leaderboard_mario/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.8 YAHTZEE LEADERBOARD
     match /leaderboard_yahtzee/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId
-                        && isValidActionUsername(request.resource.data.username)
-                        && request.resource.data.score is number;
-      allow update: if request.auth != null && request.auth.uid == userId 
-                        && isValidActionUsername(request.resource.data.username)
-                        && request.resource.data.score is number
-                        && request.resource.data.score > resource.data.score;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.9 PERFECT CIRCLE LEADERBOARD
     match /leaderboard_circle/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.10 CROSSY ROAD LEADERBOARD
     match /leaderboard_crossy/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.11 SURFER LEADERBOARD
     match /leaderboard_surfer/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 10.12 JUMPY LEADERBOARD
     match /leaderboard_jumpy/{userId} {
+      // Scores are written ONLY by the submitScore Cloud Function
+      // (firebase-functions/scores.js). Direct client writes used to let
+      // anyone set any number here. Owners may still delete to reset.
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-                      request.auth.uid == userId &&
-                      isValidActionUsername(request.resource.data.username) &&
-                      request.resource.data.score is number;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 10.13 OREGON TRAIL LEADERBOARD
+    match /leaderboard_oregontrail/{userId} {
+      // Server-written only - bounds live in firebase-functions/score-config.js.
+      allow read: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // 11. INTERACTIVE BLACKLIST

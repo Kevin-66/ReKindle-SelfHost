@@ -8,12 +8,13 @@
     <title>Substack</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="js/ip-ban.js"></script>
+    <script src="js/ip-ban.js?v=1"></script>
 
     <style>
         /* SYSTEM 7 AESTHETICS */
@@ -454,7 +455,7 @@
             padding: 10px 20px;
             border-bottom: 2px solid black;
             background: #fcfcfc;
-            position: sticky;
+            position: static;
             top: 0;
             z-index: 5;
         }
@@ -541,11 +542,12 @@
             }
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="time.js"></script>
-    <script src="pro-gate.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="js/emoji-render.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="time.js?v=5"></script>
+    <script src="pro-gate.js?v=7"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="js/emoji-render.js?v=1"></script>
+    <script src="js/safe-html.js?v=1"></script>
 </head>
 
 <body>
@@ -717,7 +719,11 @@
 
     <script>
         // --- CONFIG ---
-        const API_PATH = "/api"; // Sub-path handled by worker
+        // Substack answers a large share of Cloudflare Worker egress requests
+        // with 429 (see firebase-functions/substack.js), so the reader API is
+        // proxied by a Google Cloud function instead of the old
+        // workers/rekindle-substack. The worker file is kept for rollback.
+        const SUBSTACK_API = "https://us-central1-rekindle-dd1fa.cloudfunctions.net/substack";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDY7x7vVmlYUyVZNLuCCmIQYa6PWFVfZqQ",
@@ -784,12 +790,9 @@
         }
 
         // --- STATE ---
-        // Hardcoded Worker URL as requested
-        const WORKER_URL = "https://rekindle-substack.timjarnott.workers.dev";
-
         let state = {
             sid: '', // Only loaded from Firestore (Pro-protected)
-            workerUrl: WORKER_URL,
+            apiUrl: SUBSTACK_API,
             user: null, // ReKindle User
             subs: [],
             inbox: [],
@@ -805,6 +808,10 @@
             maxCache: 300, // Maximum posts to keep in memory for aggregated feed
             maxDomItems: 100 // Maximum items to render at once
         };
+
+        // Page size for the aggregated feed. The offset must advance by exactly
+        // this much or posts between pages become unreachable.
+        const AGG_PAGE_SIZE = 15;
 
         let auth, db;
 
@@ -855,33 +862,50 @@
         // --- API CLIENT ---
         async function apiCall(endpoint, options = {}) {
             if (!state.sid) throw new Error("No SID provided");
-            // Always use the constant since input is removed
-            const baseUrl = WORKER_URL.replace(/\/$/, "");
-            const target = `${baseUrl}${API_PATH}${endpoint}`;
+            if (!auth || !auth.currentUser) throw new Error("Please log in to ReKindle again.");
+
+            // The relay is a public HTTPS endpoint, so it only accepts calls
+            // that carry a signed-in ReKindle user's Firebase ID token.
+            let token = '';
+            try { token = await auth.currentUser.getIdToken(); } catch (e) { }
+            if (!token) throw new Error("Please log in to ReKindle again.");
+
+            const target = new URL(SUBSTACK_API);
+            target.searchParams.set('path', '/api/v1' + endpoint);
+            const targetHost = (options.headers || {})['X-Substack-Target'];
+            if (targetHost) target.searchParams.set('host', targetHost);
 
             try {
-                // Merge headers
-                const headers = {
-                    'X-Substack-SID': state.sid,
-                    'Content-Type': 'application/json',
-                    ...(options.headers || {})
-                };
-
-
-
-                const res = await fetch(target, {
-                    headers: headers
+                const res = await fetch(target.toString(), {
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'X-Substack-SID': state.sid
+                    }
                 });
 
                 if (res.ok) {
                     return await res.json();
                 }
 
-                if (res.status === 403 || res.status === 401) {
+                let payload = null;
+                try { payload = await res.json(); } catch (e) { }
+
+                if (res.status === 401 && payload && payload.error === 'unauthorized') {
+                    throw new Error("Please log in to ReKindle again.");
+                }
+                if (res.status === 403 && payload && payload.error === 'target_not_allowed') {
+                    throw new Error("This publication's feed address is not supported.");
+                }
+                if (res.status === 401 || res.status === 403) {
                     throw new Error(`Access Denied (${res.status}). Check your SID.`);
                 }
+                if (res.status === 429) {
+                    throw new Error(payload && payload.error === 'rate_limited'
+                        ? "Too many Substack requests from this device. Wait a moment and try again."
+                        : "Substack is rate-limiting ReKindle right now. Try again in a minute.");
+                }
 
-                throw new Error(`Worker/API Error ${res.status}`);
+                throw new Error(`Substack proxy error ${res.status}`);
 
             } catch (e) {
                 console.error("API failed:", e.message);
@@ -977,7 +1001,6 @@
                     state.sid = sid;
                     closeModal('settings-modal');
                     refreshData();
-                    console.log("Substack SID saved (encrypted).");
                 } catch (e) {
                     console.error("Failed to save SID (Pro required):", e);
                     document.getElementById('pro-required-modal').style.display = 'flex';
@@ -1035,9 +1058,15 @@
 
 
             // 1. Fetch Subscriptions (ensure loaded)
+            let subsError = null;
             if (state.subs.length === 0) {
                 try {
-                    const subData = await apiCall('/subscriptions');
+                    // `/subscriptions` is the legacy endpoint: it now requires
+                    // `tvOnly` and returns an empty list for real accounts.
+                    // Substack's own web app uses `/subscriptions/page_v2`,
+                    // whose {subscriptions, publications} shape is what the
+                    // merge below already expects.
+                    const subData = await apiCall('/subscriptions/page_v2');
                     // MERGE LOGIC
                     const pubsMap = {};
                     if (subData.publications) subData.publications.forEach(p => pubsMap[p.id] = p);
@@ -1049,16 +1078,22 @@
                         return sub;
                     }).filter(s => s.publication);
                     renderSubs(); // Sidebar update
-                } catch (e) { console.warn("Subs failed", e); }
+                } catch (e) { subsError = e; console.warn("Subs failed", e); }
             }
 
 
 
             // 3. Refresh Content based on activeFeed
             if (state.activeFeed === 'subscriptions') {
+                if (subsError) { renderLoadError(subsError.message); return; }
                 renderLibrary();
                 return;
             }
+
+            // Without subscriptions there is no feed to aggregate. Show the
+            // real failure instead of a misleading "No posts found." — Substack
+            // rate-limits the proxy worker, so this is the common failure mode.
+            if (subsError) { renderLoadError(subsError.message); return; }
 
             // Post Logic:
             try {
@@ -1093,19 +1128,16 @@
                                 state.fullInbox = state.fullInbox.concat(uniqueNew);
                                 // Re-sort after merge
                                 state.fullInbox.sort((a, b) => new Date(b.post_date) - new Date(a.post_date));
-                                console.log(`Added ${uniqueNew.length} new posts. Total: ${state.fullInbox.length}`);
                             } else {
                                 state.fullInbox = morePosts;
                             }
-                            state.subOffset += 50; // Increment for next fetch
+                            state.subOffset += AGG_PAGE_SIZE; // must match the ?limit= below
                         } else {
-                            console.log("No more posts available from subscriptions.");
                         }
                     }
 
                     // Paginate from the full local list
                     if (state.fullInbox) {
-                        console.log(`Slicing fullInbox: total=${state.fullInbox.length}, offset=${state.offset}, limit=${state.limit}`);
                         newPosts = state.fullInbox.slice(state.offset, state.offset + state.limit);
                     }
                 } else {
@@ -1134,9 +1166,9 @@
                     const allPosts = [];
                     // REDUCED FOR KINDLE STABILITY
                     const batchSize = 2;
-                    const subLimit = 15;
+                    const subLimit = AGG_PAGE_SIZE;
+                    let lastError = null;
 
-                    console.log(`Fetching ${subLimit} posts from ${state.subs.length} subs (offset: ${offset})...`);
 
                     for (let i = 0; i < state.subs.length; i += batchSize) {
                         const batch = state.subs.slice(i, i + batchSize);
@@ -1165,28 +1197,30 @@
 
                         results.forEach(res => {
                             if (res.status === 'fulfilled') allPosts.push.apply(allPosts, res.value);
+                            else lastError = res.reason;
                         });
 
                         // Small cooling period between batches
                         await new Promise(r => setTimeout(r, 100));
                     }
 
+                    // If every publication failed, surface the reason instead of
+                    // rendering an empty feed (the 429 block is silent otherwise).
+                    if (allPosts.length === 0 && lastError) throw lastError;
+
                     // Deduplicate by ID and Sort
                     const unique = Array.from(new Map(allPosts.map(p => [p.id, p])).values());
                     const sorted = unique.sort((a, b) => new Date(b.post_date) - new Date(a.post_date));
-                    console.log(`Fetched: ${sorted.length} posts`);
                     return sorted;
                 }
 
                 // Pagination analysis
                 const rawLength = data ? ((data.posts || data || []).length) : newPosts.length;
-                console.log(`Feed analysis: fetched=${rawLength}, currentOffset=${state.offset}, limit=${state.limit}`);
 
                 // Filter out duplicates
                 if (state.offset > 0) {
                     const existingIds = new Set(state.inbox.map(p => p.id));
                     newPosts = newPosts.filter(p => !existingIds.has(p.id));
-                    console.log(`After filtering duplicates: ${newPosts.length} new unique posts`);
                 }
 
                 if (state.offset === 0) {
@@ -1205,7 +1239,6 @@
 
                 // Proactive hasMore check
                 if (rawLength < state.limit || rawLength === 0) {
-                    console.log("Reached end of feed (fetched less than limit). setting hasMore=false");
                     state.hasMore = false;
                 } else {
                     state.hasMore = true; // explicitly keep true if we got a full batch
@@ -1223,9 +1256,24 @@
                         msg = "Access Denied. Check Settings.";
                         openSettings();
                     }
-                    document.getElementById('post-list').innerHTML = `<div style="padding:20px; text-align:center; color:red;">${msg}</div>`;
+                    renderLoadError(msg);
                 }
             }
+        }
+
+        // Shared failure state for the feed pane. Without this the app painted
+        // "No posts found." for every API/proxy failure, which reads like an
+        // empty account instead of a broken connection.
+        function renderLoadError(msg) {
+            const list = document.getElementById('post-list');
+            const safe = String(msg || 'Unknown error').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+            list.innerHTML = '<div class="empty-state" style="padding:32px 20px; max-width:360px; margin:0 auto; text-align:center;">' +
+                '<div style="font-weight:bold; margin-bottom:8px;">Could not load Substack</div>' +
+                '<div style="font-size:0.85rem; color:#444; max-width:320px; margin:0 auto 16px;">' + safe + '</div>' +
+                '<button class="sys-btn" style="min-height:48px; padding:0 20px;" onclick="refreshData()">Retry</button>' +
+                '</div>';
         }
 
         // --- NEW RENDERERS ---
@@ -1359,6 +1407,51 @@
         }
 
         // --- READER ---
+        function renderSubstackBody(container, title, html) {
+            container.innerHTML = '';
+            const heading = document.createElement('h1');
+            heading.textContent = title || '';
+            container.appendChild(heading);
+            if (window.rekindleSetSafeHtml) {
+                window.rekindleSetSafeHtml(container, html || '<p>Content not available.</p>');
+            } else {
+                container.appendChild(document.createTextNode(String(html || '')));
+            }
+            renderEmojis(container);
+
+            // Block remote images (tracking pixels) until the reader asks for them.
+            const remote = [];
+            container.querySelectorAll('img[src]').forEach(function (img) {
+                const src = img.getAttribute('src') || '';
+                if (/^https?:/i.test(src)) {
+                    img.setAttribute('data-remote-src', src);
+                    img.setAttribute('src', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
+                    remote.push(img);
+                }
+            });
+            if (remote.length) {
+                const bar = document.createElement('div');
+                bar.style.cssText = 'border:1px solid #ccc;background:#f6f6f6;padding:6px 8px;margin:0 0 10px;font-size:0.78rem;';
+                const label = document.createElement('span');
+                label.textContent = 'Remote images are blocked for privacy. ';
+                bar.appendChild(label);
+                const btn = document.createElement('button');
+                btn.className = 'sys-btn';
+                btn.style.cssText = 'font-size:0.75rem;padding:4px 8px;';
+                btn.textContent = 'Load images';
+                btn.onclick = function () {
+                    remote.forEach(function (img) {
+                        const src = img.getAttribute('data-remote-src');
+                        if (src) img.setAttribute('src', src);
+                        img.removeAttribute('data-remote-src');
+                    });
+                    bar.remove();
+                };
+                bar.appendChild(btn);
+                container.insertBefore(bar, container.firstChild);
+            }
+        }
+
         function openReader(post) {
             state.currentArticle = post;
             document.getElementById('reader-modal').style.display = 'flex';
@@ -1367,8 +1460,7 @@
 
             // Substack API usually returns post content in `body_html`
             if (post.body_html) {
-                content.innerHTML = `<h1>${post.title}</h1>` + post.body_html;
-                renderEmojis(content);
+                renderSubstackBody(content, post.title, post.body_html);
             } else {
                 // Fetch full post if snippet
                 content.innerHTML = "Loading full content...";
@@ -1400,7 +1492,6 @@
                     } catch (e) { }
                 }
 
-                console.log("Target Domain:", targetDomain);
 
                 let data;
                 try {
@@ -1415,16 +1506,14 @@
                 }
 
                 var readerContent = document.getElementById('reader-content');
-                readerContent.innerHTML =
-                    `<h1>${data.title}</h1>` + (data.body_html || "<p>Content not available.</p>");
-                renderEmojis(readerContent);
+                renderSubstackBody(readerContent, data.title, data.body_html);
 
             } catch (e) {
                 console.warn(e);
                 document.getElementById('reader-content').innerHTML = `
                     <div style="color:red; padding:20px;">
                         <h3>Error loading content</h3>
-                        <p>${e.message}</p>
+                        <p>${window.t ? window.t('substack.error.load', 'Could not load this post.') : 'Could not load this post.'}</p>
                         <p>Try opening the original link.</p>
                         <button class="sys-btn" onclick="openOriginal()">Open Original</button>
                     </div>`;
@@ -1454,28 +1543,35 @@
             if (!u || !p) { showAlertModal("Enter credentials"); return; }
             const email = u.includes('@') ? u : u + "@rekindle.ink";
 
-            if (isLogin) {
-                try {
-                    await auth.signInWithEmailAndPassword(email, p);
-                    const ipResult = await RekindleIpBan.checkOnLogin();
-                    if (ipResult.banned) {
-                        await auth.signOut();
-                        showAlertModal("Your IP address has been banned from this network.");
-                        return;
+            // Hold off the service-worker controllerchange reload while the
+            // auth request is in flight (theme.js checks this flag).
+            window.__rkAuthBusy = true;
+            try {
+                if (isLogin) {
+                    try {
+                        await auth.signInWithEmailAndPassword(email, p);
+                        const ipResult = await RekindleIpBan.checkOnLogin();
+                        if (ipResult.banned) {
+                            await auth.signOut();
+                            showAlertModal("Your IP address has been banned from this network.");
+                            return;
+                        }
+                        closeModal('login-modal');
+                    } catch (e) {
+                        showAlertModal(e.message);
                     }
-                    closeModal('login-modal');
-                } catch (e) {
-                    showAlertModal(e.message);
+                } else {
+                    try {
+                        const registerUser = firebase.functions().httpsCallable('registerUser');
+                        const result = await registerUser({ username: u, password: p });
+                        await auth.signInWithCustomToken(result.data.customToken);
+                        closeModal('login-modal');
+                    } catch (e) {
+                        showAlertModal(e.message || "Registration failed.");
+                    }
                 }
-            } else {
-                try {
-                    const registerUser = firebase.functions().httpsCallable('registerUser');
-                    const result = await registerUser({ username: u, password: p });
-                    await auth.signInWithCustomToken(result.data.customToken);
-                    closeModal('login-modal');
-                } catch (e) {
-                    showAlertModal(e.message || "Registration failed.");
-                }
+            } finally {
+                window.__rkAuthBusy = false;
             }
         }
 
@@ -1535,12 +1631,10 @@
 
         async function loadMorePosts() {
             if (state.isLoading || !state.hasMore) {
-                console.log("Skipping loadMore: isLoading=" + state.isLoading + ", hasMore=" + state.hasMore);
                 return;
             }
             state.isLoading = true;
             state.offset += state.limit;
-            console.log("Loading more posts... New Offset:", state.offset, "Feed:", state.activeFeed);
 
             try {
                 await refreshData();

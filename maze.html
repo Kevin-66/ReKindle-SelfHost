@@ -8,11 +8,15 @@
 
     <title>Maze</title>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="js/score-submit.js?v=1" data-game="maze"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="js/i18n.js"></script>
-    <script src="theme.js?v=18"></script>
+    <script src="js/i18n.js?v=4"></script>
+    <script src="theme.js?v=35"></script>
 
     <style>
         /* SYSTEM 7 AESTHETICS */
@@ -37,7 +41,7 @@
             font-family: "Geneva", "Verdana", sans-serif;
             background-color: #e5e5e5;
             margin: 0;
-            padding: clamp(8px, 2vw, 20px);
+            padding: 12px;
             height: 100vh;
             overflow: hidden;
             display: flex;
@@ -56,7 +60,7 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            max-width: min(600px, 95vw);
+            max-width: 600px;
             min-height: 0;
             max-height: 95vh;
             position: relative;
@@ -154,7 +158,7 @@
 
         /* GAME CONTENT */
         .window-content {
-            padding: clamp(10px, 3vw, 20px);
+            padding: 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -187,7 +191,6 @@
             max-height: 100%;
             width: auto;
             height: auto;
-            aspect-ratio: 1 / 1;
         }
 
         /* D-PAD CONTROLS */
@@ -296,12 +299,39 @@
         .score-board {
             display: flex;
             justify-content: center;
+            align-items: center;
             width: 100%;
             margin-bottom: 15px;
             font-family: monospace;
             font-weight: bold;
             font-size: 1rem;
             flex-shrink: 0;
+        }
+
+        /* Difficulty picker: plain buttons (no select, no new dependency) so the
+           row still works on a Kindle without custom-select.js. Margins, not
+           flex `gap` — Chromium 75 has no flex gap. */
+        .level-picker {
+            margin-left: 12px;
+            white-space: nowrap;
+        }
+
+        .level-btn {
+            background: white;
+            color: black;
+            border: 2px solid black;
+            padding: 3px 8px;
+            margin-left: 4px;
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: none;
+        }
+
+        .level-btn:active {
+            background: black;
+            color: white;
         }
 
         @media (max-height: 700px), (max-width: 400px) {
@@ -340,6 +370,11 @@
         <div class="window-content">
             <div class="score-board">
                 <span><span data-i18n="maze.label.completed">Completed</span>: <span id="score">0</span></span>
+                <span class="level-picker">
+                    <button id="maze-level-easy" class="level-btn" onclick="setMazeLevel('easy')" data-i18n="maze.level.easy">Easy</button>
+                    <button id="maze-level-normal" class="level-btn" onclick="setMazeLevel('normal')" data-i18n="maze.level.normal">Normal</button>
+                    <button id="maze-level-hard" class="level-btn" onclick="setMazeLevel('hard')" data-i18n="maze.level.hard">Hard</button>
+                </span>
             </div>
 
             <div class="canvas-container">
@@ -399,9 +434,49 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const CANVAS_SIZE = 500;
-        const GRID_SIZE = 25;
-        const COLS = CANVAS_SIZE / GRID_SIZE;
-        const ROWS = CANVAS_SIZE / GRID_SIZE;
+
+        // Difficulty presets (suggestion: "make the mazes harder", 2026-10-26).
+        // The canvas stays 500x500 and every preset divides it evenly, so wall
+        // lines land on whole pixels and stay crisp on e-ink. A perfect maze has
+        // exactly one solution, so more cells = longer, harder maze.
+        const MAZE_LEVELS = {
+            easy: { grid: 50 },
+            normal: { grid: 25 },
+            hard: { grid: 20 }
+        };
+        let currentMazeLevel = 'normal';
+        let GRID_SIZE = MAZE_LEVELS.normal.grid;
+        let COLS = CANVAS_SIZE / GRID_SIZE;
+        let ROWS = CANVAS_SIZE / GRID_SIZE;
+
+        function syncMazeLevelButtons() {
+            Object.keys(MAZE_LEVELS).forEach(function (id) {
+                var btn = document.getElementById('maze-level-' + id);
+                if (!btn) return;
+                if (id === currentMazeLevel) {
+                    btn.style.background = 'black';
+                    btn.style.color = 'white';
+                } else {
+                    btn.style.background = 'white';
+                    btn.style.color = 'black';
+                }
+            });
+        }
+
+        function applyMazeLevel(level) {
+            if (!MAZE_LEVELS[level]) level = 'normal';
+            currentMazeLevel = level;
+            GRID_SIZE = MAZE_LEVELS[level].grid;
+            COLS = CANVAS_SIZE / GRID_SIZE;
+            ROWS = COLS;
+            try { localStorage.setItem('rekindle_maze_level', level); } catch (e) { /* storage disabled */ }
+            syncMazeLevelButtons();
+        }
+
+        function setMazeLevel(level) {
+            applyMazeLevel(level);
+            initGame();
+        }
 
         let grid = [];
         let path = [];
@@ -443,6 +518,10 @@
             });
 
             onAuthReady.then(() => {
+                // Restore the saved difficulty before the first maze is built.
+                var savedLevel = null;
+                try { savedLevel = localStorage.getItem('rekindle_maze_level'); } catch (e) { /* storage disabled */ }
+                applyMazeLevel(savedLevel || 'normal');
                 loadPersonalHighScore().then(() => {
                     initGame();
                 });
@@ -476,11 +555,7 @@
                 localStorage.setItem('maze_high_score', personalHighScore);
 
                 if (uid) {
-                    db.collection('leaderboard_maze').doc(uid).set({
-                        username: username,
-                        score: newScore,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+                    window.RekindleScores.submit('leaderboard_maze', { score: newScore });
                 }
             }
         }
@@ -495,7 +570,7 @@
             const modal = document.getElementById('leaderboard-modal');
             modal.style.display = 'flex';
             const list = document.getElementById('lb-content');
-            list.innerText = window.t ? window.t('tetris.status.loading') : 'Loading...';
+            list.innerText = window.t ? window.t('tetris.status.loading', "Loading...") : 'Loading...';
             list.removeAttribute('data-i18n');
 
             const user = auth.currentUser;
@@ -508,7 +583,7 @@
 
                     list.innerHTML = '';
                     if (snapshot.empty) {
-                        list.innerText = window.t ? window.t('tetris.status.no_scores') : "No scores yet!";
+                        list.innerText = window.t ? window.t('tetris.status.no_scores', "No scores yet!") : "No scores yet!";
                         return;
                     }
                     let rank = 1;
@@ -531,10 +606,10 @@
                     });
                 } catch (e) {
                     console.error("Error loading leaderboard:", e);
-                    list.innerText = window.t ? window.t('tetris.status.error_loading') : "Error loading scores.";
+                    list.innerText = window.t ? window.t('tetris.status.error_loading', "Error loading scores.") : "Error loading scores.";
                 }
             } else {
-                list.innerText = window.t ? window.t('tetris.status.login_required') : "Log in to see global scores.";
+                list.innerText = window.t ? window.t('tetris.status.login_required', "Log in to see global scores.") : "Log in to see global scores.";
             }
         }
 

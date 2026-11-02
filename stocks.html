@@ -9,7 +9,9 @@
     <title>Stocks</title>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 
@@ -354,8 +356,8 @@
             margin-left: 10px;
         }
     </style>
-    <script src="theme.js?v=18"></script>
-    <script src="js/i18n.js"></script>
+    <script src="theme.js?v=35"></script>
+    <script src="js/i18n.js?v=4"></script>
 </head>
 
 <body>
@@ -541,11 +543,17 @@
                 renderStock(symbol, null);
             });
 
-            // 2. Fetch data in parallel (Non-blocking updates)
-            symbols.forEach(async (symbol) => {
-                const data = await fetchStockDataWithRetry(symbol, 3);
-                updateStockUI(symbol, data);
-            });
+            // 2. Fetch in small batches. This used to fire one request per symbol
+            // at once (each with 3 retries), which is exactly the burst that gets
+            // the shared Cloudflare egress rate-limited by Yahoo.
+            const FETCH_BATCH = 4;
+            for (let i = 0; i < symbols.length; i += FETCH_BATCH) {
+                const batch = symbols.slice(i, i + FETCH_BATCH);
+                await Promise.all(batch.map(async (symbol) => {
+                    const data = await fetchStockDataWithRetry(symbol, 2);
+                    updateStockUI(symbol, data);
+                }));
+            }
         }
 
         // Creates a stock row (either blank placeholder or full)
@@ -615,8 +623,8 @@
                     const data = await fetchStockData(symbol);
                     if (data) return data;
                 } catch (e) {
-                    // Exponential backoff or simple delay could go here
-                    await new Promise(r => setTimeout(r, 500));
+                    // Simple backoff; the proxy already serves stale data on 429.
+                    await new Promise(r => setTimeout(r, 800));
                 }
             }
             return getDemoData(symbol); // Fallback if all retries fail
@@ -846,7 +854,7 @@
 
     </script>
     <script src="https://cdn.counter.dev/script.js" data-id="4e551911-0e5d-4c48-91a6-b828c3301675"
-        data-utcoffset="11"></script>
+        data-utcoffset="11" defer></script>
 
 
 </body>
