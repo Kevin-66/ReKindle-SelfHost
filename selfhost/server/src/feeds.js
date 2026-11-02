@@ -4,7 +4,7 @@
 // CaiXin feed, 2026-11-02) and, without an API key, the `count` parameter, so the
 // reader's "Load more" always failed.
 
-import { DOMParser } from 'linkedom';
+import { DOMParser, parseHTML } from 'linkedom';
 import { withPublicNetworkOnly } from './netguard.js';
 
 const MAX_FEED_BYTES = 32 * 1024 * 1024;
@@ -23,7 +23,7 @@ export async function handleFeed(req, res, url) {
         const feedUrl = feedAddress(url.searchParams.get('rss_url'));
         const count = parseInt(url.searchParams.get('count'), 10);
         const { feed, items } = await cached(feedUrl);
-        body = { status: 'ok', feed: { url: feedUrl, ...feed }, items: items.slice(0, count > 0 ? count : 10) };
+        body = { status: 'ok', feed: { url: feedUrl, ...feed }, items: items.slice(0, count > 0 ? count : 10).map(cleanItem) };
     } catch (e) {
         if (!(e instanceof FeedError)) console.error('[feeds]', e);
         body = { status: 'error', message: e instanceof FeedError ? e.message : 'Cannot download this RSS feed, make sure the Rss URL is correct.' };
@@ -99,6 +99,39 @@ export function decode(buf, contentType) {
     const label = /charset=["']?([\w-]+)/i.exec(contentType || '')?.[1] ||
         /^\s*<\?xml[^>]*\bencoding=["']([\w-]+)/i.exec(buf.subarray(0, 200).toString('latin1'))?.[1];
     try { return new TextDecoder(label || 'utf-8').decode(buf); } catch { return new TextDecoder().decode(buf); }
+}
+
+// ---------------------------------------------------------------- cleaning
+
+// Feed HTML reaches the pages as HTML: the reader shows an article's own text from the
+// feed (transform.js rkReaderFetch) in a same-origin frame, and both pages read
+// descriptions through innerHTML for pictures. So scripts, frames, forms, styles and
+// event handlers go, and so do javascript: addresses.
+const UNSAFE = 'script, style, iframe, frame, frameset, object, embed, applet, form, input, button, textarea, select, link, meta, base, noscript, template';
+const scratch = parseHTML('<!doctype html><html><body></body></html>').document;
+const cleaned = new WeakMap(); // parsed item -> cleaned copy, while the feed is cached
+
+export function cleanHtml(html) {
+    if (!html || !html.includes('<')) return html;
+    const box = scratch.createElement('div');
+    box.innerHTML = html;
+    for (const el of box.querySelectorAll(UNSAFE)) el.remove();
+    for (const el of box.querySelectorAll('*')) {
+        for (const name of el.getAttributeNames()) {
+            const value = el.getAttribute(name).replace(/[\s\0-\x1f]/g, '');
+            if (/^on/i.test(name) || /^(javascript|vbscript|data:text\/html)/i.test(value)) el.removeAttribute(name);
+        }
+    }
+    return box.innerHTML;
+}
+
+function cleanItem(item) {
+    let c = cleaned.get(item);
+    if (!c) {
+        c = { ...item, description: cleanHtml(item.description), content: cleanHtml(item.content) };
+        cleaned.set(item, c);
+    }
+    return c;
 }
 
 // ---------------------------------------------------------------- parsing

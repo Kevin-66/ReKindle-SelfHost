@@ -1,7 +1,47 @@
 // node --test selfhost/server/test/feeds.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFeed, decode, formatDate, handleFeed } from '../src/feeds.js';
+import fs from 'node:fs';
+import { parseFeed, decode, formatDate, handleFeed, cleanHtml } from '../src/feeds.js';
+import { transformHtml } from '../src/transform.js';
+
+test('feed HTML loses scripts, frames, styles, handlers and javascript: links', () => {
+    assert.equal(cleanHtml(
+        '<p onclick="steal()">Text <img src="https://example.com/a.jpg" onerror="steal()"></p>' +
+        '<script>steal()</script><style>p{}</style><iframe src="https://evil"></iframe>' +
+        '<a href=" java\tscript:steal()">x</a><a href="https://example.com/">ok</a>' +
+        '<svg><a xlink:href="javascript:steal()"><text>y</text></a></svg>'),
+    '<p>Text <img src="https://example.com/a.jpg"></p><a>x</a><a href="https://example.com/">ok</a><svg><a><text>y</text></a></svg>');
+    assert.equal(cleanHtml('Plain text & more'), 'Plain text & more');
+    assert.equal(cleanHtml(''), '');
+});
+
+test('the RSS reader shows the feed\'s text when the page has less (paywalls)', async () => {
+    const page = transformHtml(fs.readFileSync(new URL('../../../rssreader.html', import.meta.url), 'utf8'), 'rssreader.html');
+    // Every edit found its place in upstream's page.
+    assert.match(page, /rkContent: item\.content \|\| "",/);
+    assert.match(page, /const res = await rkReaderFetch\(article, `\$\{READER_WORKER_URL\}\/\?url=/);
+    assert.match(page, /async function rkReaderFetch[\s\S]*?\n {8}async function openArticle\(articleOrUrl\) \{/);
+
+    const source = /async function rkReaderFetch[\s\S]*?\n {8}\}\n/.exec(page)[0];
+    const readerFetch = (answer) => new Function('fetch', 'Response', `${source}; return rkReaderFetch;`)(answer, Response);
+    const pageAnswer = (text) => async () => new Response(JSON.stringify({ title: 'Page', textContent: text, content: `<p>${text}</p>` }));
+    const article = { title: 'Feed title', source: 'Caixin', rkContent: '<p>' + '全文'.repeat(3000) + '</p>' };
+
+    const paywalled = await (await readerFetch(pageAnswer('Teaser'))(article, 'u', {})).json();
+    assert.deepEqual(paywalled, { title: 'Feed title', siteName: 'Caixin', content: article.rkContent });
+    const fuller = await (await readerFetch(pageAnswer('x'.repeat(7000)))(article, 'u', {})).json();
+    assert.equal(fuller.title, 'Page');
+    const failed = async () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }); };
+    assert.equal((await (await readerFetch(failed)(article, 'u', {})).json()).content, article.rkContent);
+    const refused = async () => new Response('{"error":"Blocked"}', { status: 403 });
+    assert.equal((await (await readerFetch(refused)(article, 'u', {})).json()).content, article.rkContent);
+    // Without feed text (or opened by address) the reader gets the page's answer as it was.
+    const original = new Response('{}', { status: 502 });
+    assert.equal(await readerFetch(async () => original)({ title: 't', rkContent: '' }, 'u', {}), original);
+    assert.equal(await readerFetch(async () => original)(null, 'u', {}), original);
+    await assert.rejects(readerFetch(failed)(null, 'u', {}), /aborted/);
+});
 
 test('RSS 2.0 items come out in rss2json\'s fields', () => {
     const { feed, items } = parseFeed(`<?xml version="1.0" encoding="UTF-8"?>

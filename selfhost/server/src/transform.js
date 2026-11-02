@@ -56,6 +56,40 @@ function rewriteRss2json(code) {
     return code.split(RSS2JSON_API).join('/__rk/rss2json');
 }
 
+// The RSS reader opens an article by fetching its page through the rekindle-reader
+// Worker (Readability), even when the feed carries the whole text: for paywalled sites
+// that is the teaser (caixin.com: 229 of the feed's 6,300 characters). Cards keep the
+// feed's content (feeds.js cleans it), and the reader shows whichever is longer, or the
+// feed's text when the page fails to load.
+const RSS_READER_FETCH = `
+        // Self-hosting (transform.js): the feed's own text when it is longer than the page's.
+        async function rkReaderFetch(article, input, init) {
+            var feedHtml = (article && article.rkContent) || '';
+            var page = null;
+            try {
+                var res = await fetch(input, init);
+                if (!feedHtml) return res;
+                if (res.ok) page = await res.json();
+            } catch (e) {
+                if (!feedHtml) throw e;
+            }
+            var pageText = page ? String(page.textContent || page.content || '').replace(/<[^>]*>/g, '') : '';
+            var data = feedHtml.replace(/<[^>]*>/g, '').length > pageText.length
+                ? { title: article.title, siteName: article.source, content: feedHtml }
+                : page;
+            return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        async function openArticle(articleOrUrl) {`;
+
+function patchRssReader(html) {
+    html = html.replace('snippet: stripHtml(item.description || item.content || ""),',
+        'snippet: stripHtml(item.description || item.content || ""),\n                            rkContent: item.content || "",');
+    html = html.replace('\n        async function openArticle(articleOrUrl) {', RSS_READER_FETCH);
+    return html.replace('const res = await fetch(`${READER_WORKER_URL}/?url=${encodeURIComponent(url)}`, {',
+        'const res = await rkReaderFetch(article, `${READER_WORKER_URL}/?url=${encodeURIComponent(url)}`, {');
+}
+
 // The old-browser redirect sends Kobo / old Kindles to lite.rekindle.ink and
 // legacy.rekindle.ink. Those builds are served from /lite/ and /legacy/ here.
 // The hostname stays in the script as a string the page turns into the path when
@@ -207,6 +241,7 @@ export function transformHtml(html, fileName) {
         // Long press to flag (selfhost/site/js/rk-minesweeper.js).
         html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, '<script src="js/rk-minesweeper.js"></script>\n</body>');
     }
+    if (base === 'rssreader.html') html = patchRssReader(html);
     if (base === 'substack.html') {
         // Font and formatting of the article view (selfhost/site/css/rk-substack.css).
         // CSS is cached for a day (static.js): bump ?v= whenever that file changes.

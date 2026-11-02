@@ -531,6 +531,15 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   public addresses only (netguard.js); 120 requests a minute per IP.
 - `prepare.js` fails the build if a page still names `api.rss2json.com` (upstream
   changed the address).
+- Articles: the reader opens one by fetching its page through the `rekindle-reader`
+  Worker (Readability), even when the feed has the whole text. For paywalled sites that
+  is the teaser (caixin.com: 229 of the feed's 6,300 characters). `patchRssReader`
+  (transform.js) keeps each item's `content` on its card (`rkContent`) and wraps that
+  fetch in `rkReaderFetch`: the feed's text is shown when it is longer than the page's,
+  or when the page fails. Summary-only feeds (BBC) still get the page.
+  `feeds.test.js` checks the edits still apply to upstream's `rssreader.html`.
+- Feed HTML is cleaned (`cleanHtml`): no scripts, styles, frames, forms, `on*`
+  handlers or `javascript:` links, since the article frame shares the page's origin.
 
 ## Substack (`substack.html`)
 
