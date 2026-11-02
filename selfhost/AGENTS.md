@@ -543,8 +543,17 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   screen before it has finished drawing it, and Chromium fills a layer's undrawn tiles
   with its background, which for the fixed `#article-modal` was transparent.
   `patchRssReader` makes it white, so the undrawn part should come out blank instead.
-  Not yet checked on the Kindle. The drawing itself (a full screen of Chinese text) is
-  the Kindle's speed; nothing is fetched on a page turn.
+  Not yet checked on the Kindle. Nothing is fetched on a page turn.
+- Page turn speed (same day, an experiment): a turn is `body.scrollTo()` by one page in
+  the article frame, whose `<body>` was `overflow-x: hidden`. Chromium 80 only scrolls
+  `auto`/`scroll` boxes on the compositor; a hidden one is drawn again from scratch on
+  every scroll (about a second for a screen of Chinese text on the Scribe).
+  `patchRssReader` makes it `overflow-x: scroll` (the page already hides
+  `body::-webkit-scrollbar`) with `touch-action: none` so swipes still don't scroll it,
+  hoping the compositor draws the pages either side ahead. Pagination is unchanged
+  (checked at 993x1216). Not yet checked on the Kindle: if turns aren't faster, revert it.
+- Upstream bug, left alone: `totalPages = Math.ceil(scrollWidth / clientWidth)` counts an
+  unreachable extra page when the content is a pixel over (BBC: 1887 / 943 = "3 pages").
 - Feed HTML is cleaned (`cleanHtml`): no scripts, styles, frames, forms, `on*`
   handlers or `javascript:` links, since the article frame shares the page's origin.
 

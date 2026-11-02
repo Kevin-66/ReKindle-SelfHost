@@ -88,6 +88,13 @@ function patchRssReader(html) {
     // was transparent, so every page turn showed the headline list behind it for about
     // half a second (owner's video, Kindle Scribe, 2026-11-02). Opaque, they come out white.
     html = html.replace(/<\/head>/i, '<style>#article-modal{background:#fff}</style>\n</head>');
+    // Page turns scroll the article frame's <body> sideways by a page. Chromium 80 scrolls
+    // an overflow: hidden box by drawing it again from scratch (about a second for a screen
+    // of Chinese text on the Kindle); an overflow: scroll box is scrolled by the compositor,
+    // which has drawn the pages on either side ahead. The scrollbar stays hidden (the
+    // page's ::-webkit-scrollbar rule), and touch-action keeps swipes from scrolling it.
+    html = html.replace('overflow-x: hidden; /* Disable user scrolling */',
+        'overflow-x: scroll; /* Self-hosting: composited scrolling (transform.js) */\n                        touch-action: none; /* Disable user scrolling */');
     html = html.replace('snippet: stripHtml(item.description || item.content || ""),',
         'snippet: stripHtml(item.description || item.content || ""),\n                            rkContent: item.content || "",');
     html = html.replace('\n        async function openArticle(articleOrUrl) {', RSS_READER_FETCH);
