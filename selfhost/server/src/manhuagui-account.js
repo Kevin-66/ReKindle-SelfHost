@@ -195,9 +195,9 @@ export function readTime(text, now = Date.now()) {
     return null;
 }
 
-// One shelf page: { books: [{ id, title, cover, lastRead }], pages } (pages from
-// "共N记录"). lastRead ("最近阅读", set by /tools/count.ashx when a chapter opens):
-// { chapter: 'bookId/chapterId', name, time } or null.
+// One shelf page: { books: [{ id, title, cover, lastRead, latest }], pages } (pages from
+// "共N记录"). lastRead ("最近阅读", set by /tools/count.ashx when a chapter opens) and
+// latest (the title's newest chapter, "更新内容"): { chapter: 'bookId/chapterId', name, time } or null.
 export function parseShelf(html, now = Date.now()) {
     const { document } = parseHTML(html);
     const books = [];
@@ -209,16 +209,19 @@ export function parseShelf(html, now = Date.now()) {
         const h3 = li.querySelector('.dy_r h3 a');
         const title = (h3 && h3.textContent.trim()) || (img && img.getAttribute('alt')) || a.getAttribute('title') || '';
         const src = img && (img.getAttribute('src') || img.getAttribute('data-src'));
-        let lastRead = null;
+        let lastRead = null, latest = null;
         for (const para of li.querySelectorAll('.dy_r p')) {
-            if (!para.textContent.includes('最近阅读')) continue;
+            const read = para.textContent.includes('最近阅读');
+            if (!read && !para.textContent.includes('更新内容')) continue;
             const link = para.querySelector('a[href]');
             const ch = link && (link.getAttribute('href') || '').match(/\/comic\/(\d+)\/(\d+)\.html/);
             const when = para.querySelectorAll('em');
-            if (ch) lastRead = { chapter: `${ch[1]}/${ch[2]}`, name: link.textContent.trim(), time: readTime(when.length > 1 ? when[when.length - 1].textContent : '', now) };
+            if (!ch) continue;
+            const chapter = { chapter: `${ch[1]}/${ch[2]}`, name: link.textContent.trim(), time: readTime(when.length > 1 ? when[when.length - 1].textContent : '', now) };
+            if (read) lastRead = chapter; else latest = chapter;
         }
         // The shelf shows small covers (/cpic/s/, 88x118); search results use /cpic/b/.
-        books.push({ id: m[1], title: title.trim(), cover: imageUrl(absUrl(src && src.replace('/cpic/s/', '/cpic/b/'))), lastRead });
+        books.push({ id: m[1], title: title.trim(), cover: imageUrl(absUrl(src && src.replace('/cpic/s/', '/cpic/b/'))), lastRead, latest });
     }
     let pages = 1;
     const count = (document.querySelector('.flickr.right span') || {}).textContent || '';
@@ -367,15 +370,21 @@ async function runSync(uid, body, fetcher) {
         nextSeen[id] = book.lastRead.chapter;
         if (seen[id] !== book.lastRead.chapter) lastRead.push({ id, ...book.lastRead });
     }
+    // Newest chapter (更新内容) of every title in the library, for the app's "New" marks.
+    const latest = [];
+    for (const [id, book] of shelf) {
+        if (book.latest && (library.includes(id) || plan.libraryAdd.includes(id))) latest.push({ id, chapter: book.latest.chapter, name: book.latest.name });
+    }
     const now = Date.now();
     putSynced.run(JSON.stringify([...synced]), JSON.stringify(nextSeen), now, ops.signedOut ? null : session.cookie, now, uid);
 
     const pendingDeletes = new Set(plan.shelfDelete.filter((id) => !ops.deleted.includes(id)));
     return {
         ...shelfSummary(row, ops, removed, pendingDeletes),
-        add: plan.libraryAdd.map((id) => { const { lastRead: _, ...book } = shelf.get(id); return book; }),
+        add: plan.libraryAdd.map((id) => { const { lastRead: _, latest: __, ...book } = shelf.get(id); return book; }),
         remove: plan.libraryRemove,
         lastRead,
+        latest,
         previousSync: row.last_sync || null
     };
 }

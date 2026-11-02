@@ -70,6 +70,8 @@ test('shelf pages: ids, titles, signed covers and page count', () => {
     const coverUrl = Buffer.from(decodeURIComponent(data.books[0].cover.match(/u=([^&]+)/)[1]), 'base64url').toString();
     assert.equal(coverUrl, 'https://cf.mhgui.com/cpic/b/19430_33.jpg');   // the list size, not the shelf's small one
     assert.deepEqual(data.books[0].lastRead, { chapter: '19430/836643', name: '第01卷', time: Date.UTC(2026, 4, 19) - 8 * 3600000 });
+    assert.deepEqual(parseShelf(shelfPage([['19430', '鬼灭之刃']], 1), Date.UTC(2026, 10, 2)).books[0].latest,
+        { chapter: '19430/913941', name: '第29话', time: Date.UTC(2026, 10, 2) - 2 * 86400000 });   // 更新内容, "1天前"
     assert.deepEqual(parseShelf(shelfPage([], 0)), { books: [], pages: 1 });
 });
 
@@ -117,6 +119,7 @@ test('sign in keeps only the session cookie, then syncs both ways', async () => 
     assert.deepEqual(result.remove, []);
     assert.deepEqual(result.shelf, { added: 1, deleted: 0, failed: 0 });
     assert.deepEqual(result.add[0].lastRead, undefined, 'last read goes in lastRead, not in the library item');
+    assert.deepEqual(result.add[0].latest, undefined, 'the newest chapter goes in latest, not in the library item');
     assert.deepEqual(result.lastRead.map((r) => [r.id, r.chapter]), [['2', '2/836643'], ['3', '3/836643']]);
     assert.equal(result.previousSync, null);
     const add = site.calls.find((c) => c.key.endsWith('user_book_shelf_add'));
@@ -135,6 +138,8 @@ test('sign in keeps only the session cookie, then syncs both ways', async () => 
     assert.deepEqual(second.removedDone, ['3']);
     // Only titles in the library, and only last reads not seen before.
     assert.deepEqual(second.lastRead.map((r) => r.id), ['1']);
+    // The newest chapter of every library title on the shelf, every time (not only changes).
+    assert.deepEqual(second.latest, [{ id: '1', chapter: '1/913941', name: '第29话' }]);
     assert.ok(second.previousSync);
     assert.deepEqual(site2.calls.find((c) => c.key.endsWith('user_book_shelf_delete')).form, { book_id: '3' });
     removeAccount(uid);

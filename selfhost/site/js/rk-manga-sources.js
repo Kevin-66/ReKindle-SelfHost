@@ -111,6 +111,9 @@
             '#rk-ch-btn{max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}' +
             '#rk-ch-btn.open{background:#000;color:#fff;}' +
             '#rk-azw3-btn[disabled]{color:#999;border-color:#999 !important;box-shadow:none !important;cursor:default;}' +
+            // "New: 第30话" on library cards (markNewChapters), under manga.html's black progress label.
+            '.rk-new-ch{align-self:flex-start;max-width:100%;box-sizing:border-box;border:2px solid #000;background:#fff;color:#000;' +
+            'font-size:0.7rem;font-weight:bold;padding:1px 5px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
             // Page-only full screen (see enterFullPage): bars hidden, the window covers the screen.
             'html.rk-manga-full .window{position:fixed !important;top:0 !important;left:0 !important;margin:0 !important;' +
             'width:calc(100vw / var(--rekindle-scale, 1)) !important;height:calc(100vh / var(--rekindle-scale, 1)) !important;' +
@@ -1263,6 +1266,54 @@
         return !!view && view.style.display !== 'none' && !(typeof isReaderOpen !== 'undefined' && isReaderOpen);
     }
 
+    // "New" marks (owner's request 2026-11-02, "mark new chapters"): every full sync brings
+    // the newest chapter (更新内容) of each library title on the 书架, kept in localStorage
+    // rk_mhg_latest. A Manhuagui card shows "New: <chapter>" while that chapter is newer
+    // than the one last read: Manhuagui numbers chapters as they are uploaded, so newer is a
+    // larger chapter id. Titles not started yet get no mark.
+    var LATEST_KEY = 'rk_mhg_latest';
+
+    // True when the newest chapters changed (the library is then drawn again).
+    function storeLatest(list) {
+        if (!list) return false;   // a server from before this
+        var map = {};
+        list.forEach(function (c) { map[c.id] = { chapter: c.chapter, name: c.name }; });
+        var text = JSON.stringify(map);
+        if (text === lsGet(LATEST_KEY)) return false;
+        lsSet(LATEST_KEY, text);
+        return true;
+    }
+
+    function chapterNumber(chapterId) { return parseInt(String(chapterId || '').split('/')[1], 10) || 0; }
+
+    function markNewChapters(latest, progress) {
+        var cards = document.querySelectorAll('#view-library > .card');
+        for (var i = 0; i < cards.length && i < library.length; i++) {
+            var item = library[i], card = cards[i], title = card.querySelector('.book-title');
+            if (!isMhg(item) || !title || title.textContent !== item.title || card.querySelector('.rk-new-ch')) continue;
+            var newest = latest[mhgId(item)], read = progress[item.id];
+            if (!newest || !read || !read.chapterId || chapterNumber(newest.chapter) <= chapterNumber(read.chapterId)) continue;
+            card.insertBefore(el('div', { 'class': 'rk-new-ch' }, 'New: ' + newest.name), card.querySelector('button'));
+        }
+    }
+
+    // manga.html's renderLibrary reads the progress, then makes the cards. Reading it here
+    // first lets the marks go in straight after, in the same redraw (e-ink).
+    if (typeof renderLibrary === 'function' && window.localforage) {
+        var originalRenderLibrary = renderLibrary;
+        renderLibrary = function () {
+            var self = this, args = arguments, latest = {};
+            try { latest = JSON.parse(lsGet(LATEST_KEY) || '{}') || {}; } catch (e) { }
+            if (!Object.keys(latest).length) return originalRenderLibrary.apply(self, args);
+            return localforage.getItem('manga_progress')['catch'](function () { return null; }).then(function (progress) {
+                return Promise.resolve(originalRenderLibrary.apply(self, args)).then(function (v) {
+                    markNewChapters(latest, progress || {});
+                    return v;
+                });
+            });
+        };
+    }
+
     // Library side of a sync, applied to the page's library as the reader's own adds and
     // removes would be. True when something changed.
     function applyShelfChanges(r) {
@@ -1359,10 +1410,11 @@
             left.ids = left.ids.filter(function (id) { return r.removedDone.indexOf(id) < 0; });
             writeRemoved(left);
             var changed = applyShelfChanges(r);
+            var marks = storeLatest(r.latest);
             if (r.more) mhgSyncAgain = true;
             return adoptLastRead(r.lastRead, r.previousSync).then(function (readCount) {
-                // One redraw for both (e-ink).
-                if ((changed || readCount) && libraryShown()) renderLibrary();
+                // One redraw for all of it (e-ink).
+                if ((changed || readCount || marks) && libraryShown()) renderLibrary();
                 var text = syncSummary(r, readCount);
                 if (text || manual) showStatus(text || 'Manhuagui: your library and 书架 are the same.');
             });

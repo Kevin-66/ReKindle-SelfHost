@@ -45,7 +45,9 @@ only Manhuagui's sign-in cookie, with your account. The whole shelf is checked w
 library opens (at most every 10 minutes) and with **Sync now**; the shelf only ever
 loses a title you removed in the app. The last chapter read is synced too: a chapter
 you open in the app becomes the title's 最近阅读 on Manhuagui, and a chapter you read on
-Manhuagui becomes the title's place in the app (when it is the newer one).
+Manhuagui becomes the title's place in the app (when it is the newer one). Library
+titles with a chapter newer than the one you last read show **New:** and that chapter's
+name, until you read it.
 
 In the Store, tap a title to start reading it without adding it to the library (Back
 returns to the Store). Removing a title from the library asks first.

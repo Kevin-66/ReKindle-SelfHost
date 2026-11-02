@@ -712,6 +712,20 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
     if it's gone. Entries taken from the shelf have no position: `chapter: 1` is only
     there so manga.html's card shows the label (it needs chapter > 0 or page > 0). The
     page within a chapter is not synced (Manhuagui only knows the chapter).
+  - New chapters (owner's request 2026-11-02, "mark new chapters"): each shelf entry also
+    has `<p>更新内容：<a href="/comic/<id>/<chapter>.html">第29话</a> <em>1天前</em>`, the
+    title's newest chapter. `parseShelf` reads it as `latest`, and every full sync returns
+    `latest: [{id, chapter, name}]` for the library's titles (all of them, not only
+    changes; no extra requests). The app keeps it in localStorage `rk_mhg_latest`
+    (`storeLatest`) and wraps `renderLibrary`: a Manhuagui card gets "New: <name>"
+    (`.rk-new-ch`, under the progress label) while the newest chapter's id is larger than
+    the progress entry's `chapterId` (Manhuagui numbers chapters as they are uploaded).
+    No progress or no `chapterId`: no mark. The wrapper reads `manga_progress` before
+    calling the original, so the marks go in right after the cards, in the same redraw.
+    Only for titles on a linked 书架; MangaDex titles get no marks (its API has
+    `latestUploadedChapter`, if that is ever wanted). Checked in the browser with stored
+    test data (mark shown, none for read-up / unstarted / MangaDex titles, gone after
+    reading the newest chapter); the sync side by the account tests.
   - Cost: every request shares manhuagui.js's `siteSlot` (10 per 10 s) with browsing; a
     full sync reads one page per 20 titles (8 for 143), so the app runs it when the
     library opens at most every 10 minutes (`rk_mhg_last_sync`) and from Sync now, and
