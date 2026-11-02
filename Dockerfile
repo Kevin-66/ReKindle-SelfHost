@@ -4,7 +4,8 @@
 # --- 1. Build the site (main, lite and legacy versions) -----------------------
 FROM node:24-bookworm-slim AS site
 # build-automation.js downloads the legacy build's polyfills with curl.
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+# zip: build-automation.js packages ReKindle Fullscreen (scripts/build-kindle.js) since 2026-10.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates zip \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
