@@ -31,6 +31,14 @@ test('upstream Worker addresses point at this server, on either Workers account'
     assert.doesNotMatch(out, /workers\.dev/);
 });
 
+test('the RSS reader and Newspaper fetch feeds from this server, not rss2json.com', () => {
+    const reader = transformHtml("<html><head></head><body><script>const api = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&count=' + fetchCount;</script></body></html>", 'rssreader.html');
+    const paper = transformHtml('<html><head></head><body><script>const RSS_BASE = "https://api.rss2json.com/v1/api.json?rss_url=";</script></body></html>', 'newspaper.html');
+    assert.match(reader, /const api = '\/__rk\/rss2json\?rss_url=' \+ encodeURIComponent\(feed\.url\)/);
+    assert.match(paper, /const RSS_BASE = "\/__rk\/rss2json\?rss_url=";/);
+    assert.doesNotMatch(reader + paper, /rss2json\.com/);
+});
+
 test('upstream HTTP Cloud Functions run here at /__rk/fn/<name>', () => {
     const out = transformJs([
         'const SUBSTACK_API = "https://us-central1-rekindle-dd1fa.cloudfunctions.net/substack";',

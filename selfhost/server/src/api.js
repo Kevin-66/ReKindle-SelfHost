@@ -14,6 +14,7 @@ import * as mhgAccount from './manhuagui-account.js';
 import * as mangaState from './manga-state.js';
 import * as mangaAzw3 from './manga-azw3.js';
 import { handleImage, pageOptions, sendImage, serveImage } from './images.js';
+import { handleFeed } from './feeds.js';
 import { listBooks } from './zlibrary.js';
 import * as zlibAccount from './zlibrary-account.js';
 import * as notesAgent from './notes-agent.js';
@@ -399,6 +400,11 @@ export async function handleApi(req, res, url) {
         if (section === 'st') return await handleStorage(req, res, parts[2], parts.slice(3).join('/'), url);
         if (section === 'manga') return await handleManga(req, res, url, parts);
         if (section === 'img') return await handleImage(req, res, url);
+        if (section === 'rss2json') {
+            // The RSS reader's and Newspaper's feeds, in place of api.rss2json.com (feeds.js).
+            rateLimit(req, 'rss2json', 120, 60000);
+            return await handleFeed(req, res, url);
+        }
         if (section === 'notes') return await handleNotes(req, res, url, parts);
         if (section === 'zlibrary') {
             // The reader's Z-Library cookie and downloads with it (zlibrary-account.js).

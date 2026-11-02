@@ -46,6 +46,16 @@ function rewriteWorkerUrls(code) {
         (m, q, name, rest) => `(location.protocol + '//' + location.host + ${q}/__rk/fn/${name}${rest}${q})`);
 }
 
+// The RSS reader and Newspaper fetch every feed through api.rss2json.com, which
+// refuses feeds over about 10 MB and, without an API key, returns only 10 items.
+// This server answers the same API at /__rk/rss2json (feeds.js); prepare.js fails
+// the build if a page still calls rss2json.
+export const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json';
+
+function rewriteRss2json(code) {
+    return code.split(RSS2JSON_API).join('/__rk/rss2json');
+}
+
 // The old-browser redirect sends Kobo / old Kindles to lite.rekindle.ink and
 // legacy.rekindle.ink. Those builds are served from /lite/ and /legacy/ here.
 // The hostname stays in the script as a string the page turns into the path when
@@ -131,6 +141,7 @@ export function transformHtml(html, fileName) {
     html = addHeiti(html);
     html = html.replace(/<head(\s[^>]*)?>/i, (tag) => tag + HEITI_HEAD);
     html = rewriteWorkerUrls(html);
+    html = rewriteRss2json(html);
     html = rewriteTrafficCop(html);
 
     // No tap highlight: the browser paints a translucent box over whatever was tapped,
@@ -325,6 +336,7 @@ const ICONS_FILTER = `
 export function transformJs(code, fileName) {
     const base = fileName.split('/').pop();
     code = rewriteWorkerUrls(code);
+    code = rewriteRss2json(code);
     code = addHeiti(code);
     if (base === 'icons.js' || base === 'icons-beta.js') code += ICONS_FILTER;
     if (base === 'emoji-render.js') {

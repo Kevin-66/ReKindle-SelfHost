@@ -513,6 +513,25 @@ cancels. `contextmenu` is prevented: right-click flags on a computer, and a brow
 long-press menu that fires before the timer flags once (the timer is cancelled). It
 calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
 
+## RSS Reader and Newspaper feeds (`server/src/feeds.js`)
+
+- Upstream's `rssreader.html` and `newspaper.html` fetch every feed through
+  `https://api.rss2json.com/v1/api.json?rss_url=...&count=N`. rss2json refused the
+  owner's 10 MB CaiXin feed (1000 full-text items; 9 MB / 865 items still converted,
+  2026-11-02), cached that refusal, and without an API key rejects `count`, so the
+  reader showed 10 items and "Load more" always failed.
+- `transform.js` (`RSS2JSON_API`) points both pages at `/__rk/rss2json`, which answers
+  the same JSON: `{ status: 'ok', feed: { url, title, link, author, description, image },
+  items: [{ title, pubDate, link, guid, author, thumbnail, description, content,
+  enclosure, categories }] }`, or HTTP 422 `{ status: 'error', message }`. `pubDate` must
+  stay rss2json's UTC `YYYY-MM-DD HH:MM:SS`: the reader swaps `-` for `/` and adds ` UTC`.
+  RSS 2.0, RSS 1.0 and Atom; charset from HTTP, then the XML declaration (GBK works).
+- `count` defaults to 10 (as rss2json). "Load more" asks again with count + 10, so a
+  parsed feed is cached 5 minutes (96 MB of feeds at most). Feeds up to 32 MB, 30 s;
+  public addresses only (netguard.js); 120 requests a minute per IP.
+- `prepare.js` fails the build if a page still names `api.rss2json.com` (upstream
+  changed the address).
+
 ## Substack (`substack.html`)
 
 `transform.js` edits the page at build time (upstream file untouched):

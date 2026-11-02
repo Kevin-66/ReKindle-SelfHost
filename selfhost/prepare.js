@@ -56,4 +56,10 @@ if (leftovers.length) {
     console.error(`Firebase SDK still referenced in: ${leftovers.join(', ')}`);
     process.exit(1);
 }
+// Nor fetch feeds through rss2json.com: this server answers its API (transform.js RSS2JSON_API).
+const rss2json = fs.readdirSync(out).filter((f) => f.endsWith('.html') && /api\.rss2json\.com/.test(fs.readFileSync(path.join(out, f), 'utf8')));
+if (rss2json.length) {
+    console.error(`rss2json.com still called by: ${rss2json.join(', ')}`);
+    process.exit(1);
+}
 console.log(`Prepared self-hosted site in ${out}`);

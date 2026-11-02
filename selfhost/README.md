@@ -283,6 +283,8 @@ not built.
   - `manhuagui.js` – Manhuagui source for the Manga app; `manhuagui-account.js` – a
     reader's Manhuagui sign-in and bookshelf sync
   - `images.js` – picture shrinking for e-readers; `/__rk/img?url=` (Hacker News, Manga pages)
+  - `feeds.js` – rss2json.com's API at `/__rk/rss2json` for the RSS Reader and Newspaper:
+    any feed size, and `count` works without an API key
   - `cache.js` – Cache API stand-in for the upstream `/api` functions
   - `transform.js` – the page edits; `static.js` – serves the site
 - `prepare.js` – applies the page edits to a copy of the repo before the build.
