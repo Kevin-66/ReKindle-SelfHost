@@ -36,22 +36,6 @@ off, to go straight from page to page (kept with your account). Swipe left or ri
 turn pages; the corners icon next to the chapter name hides the title bar and status
 line so the page uses the whole screen (the icon in the corner brings them back).
 
-**Kindle Comic Converter (KCC)**: [KCC](https://github.com/ciromattia/kcc) can prepare
-Manga pages for the Kindle, with two settings under Settings > Accessibility (kept with
-your account). **Manga: AZW3 Book** chooses how the AZW3 button makes a chapter:
-*Original* (the pages as the source serves them, as before), *KCC* (white margins and
-page numbers cropped, contrast and gamma tuned for e-ink, double pages split in two,
-every page sized to the Kindle Scribe's 1860x2480 screen) or *KCC Manga* (the same, read
-right to left: the Kindle turns the pages the other way and the right half of a double
-page comes first). **Manga: KCC for Reader Pages** (off by default) shows the reader's
-pages as KCC makes them: margins and page numbers cropped, contrast tuned; double pages
-stay whole, so page numbers don't change. Each page goes through KCC once (about a
-second) and is then kept in the page cache; if KCC is missing or fails, the original page
-is shown. Colour pages stay in colour. KCC runs in the converter service (installed by
-`Dockerfile.zlibrary-browser`, version `KCC_VERSION`); only its page processing is used:
-its own MOBI/AZW3 output needs Amazon's KindleGen, which is no longer available, so
-Calibre still makes the book.
-
 **Manhuagui bookshelf sync**: under Store > Manhuagui, sign in with your own Manhuagui
 account and its bookshelf (书架) and your Manga library stay the same, both ways:
 titles on the shelf appear in the library, Manhuagui titles you add or remove in the
@@ -158,9 +142,6 @@ Based on [ReKindle](https://github.com/ReKindleOS/ReKindle) by Ukiyo
 non-commercial use only, give credit, and share changes under the same license. The
 changes are described in this file; new code lives in `selfhost/`, and the few original
 files that are edited are listed under "Updating from the original ReKindle".
-
-The converter service installs [Kindle Comic Converter](https://github.com/ciromattia/kcc)
-by Ciro Mattia Gonano, Paweł Jastrzębski and others (ISC licence), unmodified.
 
 ## Quick start
 

@@ -513,9 +513,7 @@
         fetch('/__rk/manga/azw3', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            // Settings > Accessibility > "Manga: AZW3 Book": original pages, KCC or KCC
-            // right to left (localStorage rk_manga_azw3; the server checks the value).
-            body: JSON.stringify({ title: title, pages: currentReading.pages, style: lsGet('rk_manga_azw3') || 'original' })
+            body: JSON.stringify({ title: title, pages: currentReading.pages })
         }).then(json).then(function (d) { follow(d.id); }, function (e) { done('AZW3 failed: ' + e.message); });
     }
 
@@ -592,7 +590,7 @@
     // the background, and near the end of a chapter fetch the next chapter's page
     // list and first pages, so page turns and chapter changes are instant.
     // Kept to a small window because e-readers have little memory: 5 pages (owner,
-    // 2026-10-19: "at least 5"; it was 2). Also gives KCC reader pages time to be made.
+    // 2026-10-19: "at least 5"; it was 2).
     // Set localStorage 'rk_manga_preload' to '0' to turn it off.
 
     var PRELOAD_AHEAD = 5;
@@ -790,15 +788,12 @@
     }
 
     // The page URL to show: MangaDex pages come as /api/proxy links (manga.html),
-    // Manhuagui ones as this server's signed /__rk/manga/img links. With Settings >
-    // Accessibility > "Manga: KCC for Reader Pages" on (localStorage rk_manga_kcc = '1'),
-    // &kcc=1 asks the server for Kindle Comic Converter's version of the page.
+    // Manhuagui ones as this server's signed /__rk/manga/img links.
     function pageSrc(url) {
         if (!url) return url;
-        var page = '&page=1' + (lsGet('rk_manga_kcc') === '1' ? '&kcc=1' : '');
         var m = /^\/api\/proxy\?url=([^&]+)$/.exec(url);
-        if (m) return '/__rk/img?url=' + m[1] + page;
-        if (url.indexOf('/__rk/manga/img?') === 0) return url + page;
+        if (m) return '/__rk/img?url=' + m[1] + '&page=1';
+        if (url.indexOf('/__rk/manga/img?') === 0) return url + '&page=1';
         return url;
     }
 

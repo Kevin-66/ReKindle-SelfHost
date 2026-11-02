@@ -385,8 +385,7 @@ Kindle that wiped its browser data). It skipped displayMode, opendyslexicFont, s
 scaleAuto, homeLayout and timezoneOffset, so those stayed at their defaults outside
 Settings. `transform.js` adds them (applying display mode, font and scale at once) plus
 this server's `rkTextSize` (`rk_text_size`), `rkPageButtons` (`rk_page_buttons`),
-`rkMangaBlank` (`rk_manga_blank`), `rkMangaKcc` (`rk_manga_kcc`), `rkMangaAzw3`
-(`rk_manga_azw3`) and `rkSubstackMargin` (`rk_substack_margin`),
+`rkMangaBlank` (`rk_manga_blank`) and `rkSubstackMargin` (`rk_substack_margin`),
 which `rk-textsize.js` and `rk-pager.js` now save to the account with the same signal
 (`saveToAccount`). New per-user settings should follow this pattern.
 
@@ -596,8 +595,8 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   2026-10-05, don't bring back: resizing/re-encoding pages to the screen (mozjpeg made
   page turns ~1 s slower), whitening the background, grayscale conversion, and a
   dithered black-and-white mode. The owner wants the original images, colour included
-  (Kindle Scribe Colorsoft); Kindle Comic Converter's version (below) is an opt-in
-  setting, off by default, that the owner asked for on 2026-10-19. Display size: manga.html's `.reader-page` (`max-width` /
+  (Kindle Scribe Colorsoft); Kindle Comic Converter was tried as an option and dropped
+  (below). Display size: manga.html's `.reader-page` (`max-width` /
   `max-height: 100%`) only shrinks, and the server-side fitting that used to enlarge
   pages went with the originals, so small pages (Manhuagui 650x924) sat small in the
   middle on the Scribe ("viewer is now zoomed out", 2026-10-06). rk-manga-sources.js
@@ -828,55 +827,16 @@ which wraps `loadStore`, `openReader`, `loadChapter` and `updateMangaPage`.
   the new page in one redraw (the old page stays until the new one has loaded). A
   version with a Blank button in the reader bar and a Manga-state option was dropped
   before deploying.
-- Kindle Comic Converter (owner's request 2026-10-19: "add an option in my setting", then
-  "since the image passthrough anyway" for the reader too). KCC
-  (github.com/ciromattia/kcc, ISC) is installed in the converter service
-  (`Dockerfile.zlibrary-browser`: its own venv `/opt/kcc`, `pip install --no-deps` of the
-  `v$KCC_VERSION` tag tarball plus its CLI requirements, `python-slugify<9` as KCC pins it;
-  `kcc-c2e --help` at build time checks the imports). Only its page processing is used:
-  `-f FOLDER` needs neither KindleGen (Amazon no longer offers it; KCC's MOBI/AZW3 output
-  depends on it) nor 7-Zip (folder in, folder out). v12.0.0's `comic2ebook.py` does not
-  import Qt, but KCC's master branch already imports `PySide6.QtCore` there: check that
-  before raising `KCC_VERSION`, or the CLI needs PySide6 too.
-  - Settings > Accessibility, added by `rk-pager.js` after "White Page Between Pages":
-    "Manga: KCC for Reader Pages" (`rk_manga_kcc` '1' on, default off) and "Manga: AZW3
-    Book" (`rk_manga_azw3` `original` default | `kcc` | `kcc-rtl`, buttons styled like Text
-    Size but with their own `.rk-azw3-opt` CSS). Both go to the account (`rkMangaKcc`,
-    `rkMangaAzw3`) and come back via `syncGeneralSettings`.
-  - Common KCC arguments (`service.mjs` `KCC_ARGS`): `-p KS` (1860x2480, the `SCREEN` the
-    comic pipeline already uses; the owner's Scribe Colorsoft is KSCS 1986x2648, but the
-    Kindle scales a fixed-layout page anyway and 1860x2480 is what was checked on the
-    device) and `--forcecolor` (colour pages stay colour; KCC still stores pages without
-    colour as greyscale). KCC's defaults stay: cropping 2 (margins + page numbers),
-    automatic gamma, autocontrast, JPEG q90 with a JFIF header (Calibre keeps such JPEGs
-    byte for byte, see 5. above).
-  - Books: `makeBook` sends the ORIGINAL pages (`kccImage`: as fetched when KCC reads the
-    format, else JPEG) and header `X-Comic-Style: kcc|kcc-rtl` to `/convert`; the service
-    unpacks the CBZ with `python3 -m zipfile -e`, runs KCC with `--upscale` (+ `-m` for
-    rtl), zips KCC's pictures back (stored, `python3 -m zipfile -c`) and runs Calibre as
-    before, all inside the one-at-a-time `converting` queue. `--upscale` makes every page
-    exactly 1860x2480 (small ones enlarged, other shapes padded in KCC's detected border
-    colour, `-f FOLDER` counts as CBZ there), so the server skips `bookPageSize`/
-    `comicImage` and gives `setExth` `SCREEN`; `kcc-rtl` also sets EXTH 525
-    `horizontal-rl` and 527 `rtl` (`fixedLayoutRecords(page, {rtl})`, as KindleGen marks
-    KCC's manga books). KCC names its pictures `kcc-<name>-kcc-<x>.jpg`; a split double
-    page gives `-b` then `-c` (in manga mode `-b` is the right half), so a plain name sort
-    is the reading order. Pages come out ~600 KB each (real MangaDex chapter, 2026-10-19).
-  - Reader pages: `pageSrc()` adds `&kcc=1`; `pageOptions` gives `{key: 'page', kcc: true}`
-    and `serveImage` hands those to `serveKccPage`: the original from the usual cache,
-    POST `/kcc` (body = the picture, its Content-Type), the answer cached in memory and on
-    disk under `'kcc:' + key` (`stableKey` keeps the prefix, so it never collides with the
-    original). Reader arguments: no `--upscale` (the browser enlarges; smaller files) and
-    `-r 1 --norotate` (double pages stay whole: the chapter must keep its page count).
-    Any failure serves the original page uncached; a 501 (KCC not installed) skips KCC
-    for 5 minutes (`kccMissingUntil`). Timeouts: 25 s in the service, 30 s in the server.
-    The service runs at most 2 reader pages at once (`PAGES_AT_ONCE`), separate from
-    Calibre's queue. Measured on a Mac (2026-10-19, real MangaDex pages): 0.5-0.7 s per
-    page the first time, ~1 ms from the cache, about half the original's bytes, white
-    margins cropped (891 -> 810 px wide), black-and-white pages stored as greyscale.
-  - Tested locally (no Docker running on the Mac): the real KCC 12.0.0 in a venv
-    (`KCC_C2E=<venv>/bin/kcc-c2e`), the service on its own port, a stand-in
-    `ebook-convert` on PATH that kept the CBZ it got and wrote a minimal KF8 file, and the
-    ReKindle server with `ZLIBRARY_BROWSER_ENDPOINT` pointing at it. Not yet checked: the
-    image build (Debian bookworm's Python 3.11; no 3.12-only syntax was found in KCC's
-    sources), real Calibre with KCC's pages, and the books and pages on the Kindle.
+- Kindle Comic Converter: added 2026-10-19 (63f19a8: an AZW3 Book setting Original / KCC /
+  KCC Manga and "KCC for Reader Pages", KCC 12.0.0 in the converter service, POST `/kcc`)
+  and removed on 2026-11-01 at the owner's request ("not working that well... drop kcc
+  entirely"). Measured that day on a real MangaDex chapter (37 pages, the service's own
+  arguments, M4 Mac): reader pages took 0.54-1.05 s each because every page started a
+  new `kcc-c2e` process (one run over the whole chapter took 1.7 s); trimming was the
+  only visible change (tones measured equal on the same area; colour and double pages
+  untouched), and it trimmed each page differently, so the art grew and shrank by up to
+  15% between page turns; the chapter was no smaller (14.0 -> 14.3 MB: black-and-white
+  PNG pages come out the same or larger as JPEG). Books split double pages correctly
+  (right half first in manga mode) but were twice the size (28.2 MB). If KCC comes back,
+  start from that commit, run it once per chapter rather than per page, and think
+  about cropping (`-c 0`) for the reader.

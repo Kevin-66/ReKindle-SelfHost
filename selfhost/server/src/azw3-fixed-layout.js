@@ -12,9 +12,7 @@
 
 const EXTH_FLAG = 0x40;
 
-// `rtl`: a right-to-left book (manga): the Kindle turns its pages the other way, as
-// KindleGen marks KCC's manga books.
-export function fixedLayoutRecords({ width, height }, { rtl = false } = {}) {
+export function fixedLayoutRecords({ width, height }) {
     return [
         [122, 'true'],                  // fixed-layout
         [123, 'comic'],                 // book-type
@@ -23,8 +21,8 @@ export function fixedLayoutRecords({ width, height }, { rtl = false } = {}) {
         [127, 'true'],                  // zero-gutter
         [128, 'true'],                  // zero-margin
         [132, 'false'],                 // region magnification (panel zoom) off
-        [525, rtl ? 'horizontal-rl' : 'horizontal-lr'],   // primary-writing-mode
-        [527, rtl ? 'rtl' : 'ltr']                        // page-progression-direction
+        [525, 'horizontal-lr'],         // primary-writing-mode
+        [527, 'ltr']                    // page-progression-direction
     ];
 }
 
