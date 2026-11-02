@@ -22,6 +22,8 @@ test('the RSS reader shows the feed\'s text when the page has less (paywalls)', 
     assert.match(page, /rkContent: item\.content \|\| "",/);
     assert.match(page, /const res = await rkReaderFetch\(article, `\$\{READER_WORKER_URL\}\/\?url=/);
     assert.match(page, /async function rkReaderFetch[\s\S]*?\n {8}async function openArticle\(articleOrUrl\) \{/);
+    // Page turns on the Kindle: not-yet-drawn parts of the overlay come out white.
+    assert.match(page, /#article-modal \{[^}]*background: transparent;[\s\S]*<style>#article-modal\{background:#fff\}<\/style>\n<\/head>/);
 
     const source = /async function rkReaderFetch[\s\S]*?\n {8}\}\n/.exec(page)[0];
     const readerFetch = (answer) => new Function('fetch', 'Response', `${source}; return rkReaderFetch;`)(answer, Response);

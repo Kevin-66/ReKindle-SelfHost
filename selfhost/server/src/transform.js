@@ -83,6 +83,11 @@ const RSS_READER_FETCH = `
         async function openArticle(articleOrUrl) {`;
 
 function patchRssReader(html) {
+    // The Kindle shows a screen before it has finished drawing it, and the parts of a
+    // layer not drawn yet are filled with the layer's background. The article overlay's
+    // was transparent, so every page turn showed the headline list behind it for about
+    // half a second (owner's video, Kindle Scribe, 2026-11-02). Opaque, they come out white.
+    html = html.replace(/<\/head>/i, '<style>#article-modal{background:#fff}</style>\n</head>');
     html = html.replace('snippet: stripHtml(item.description || item.content || ""),',
         'snippet: stripHtml(item.description || item.content || ""),\n                            rkContent: item.content || "",');
     html = html.replace('\n        async function openArticle(articleOrUrl) {', RSS_READER_FETCH);

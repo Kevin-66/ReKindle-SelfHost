@@ -538,6 +538,13 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   fetch in `rkReaderFetch`: the feed's text is shown when it is longer than the page's,
   or when the page fails. Summary-only feeds (BBC) still get the page.
   `feeds.test.js` checks the edits still apply to upstream's `rssreader.html`.
+- Page turns in an article (owner's video, Kindle Scribe, 2026-11-02): for 0.5-1.5 s the
+  headline list showed inside the Reader box, then the new page. The Kindle shows a
+  screen before it has finished drawing it, and Chromium fills a layer's undrawn tiles
+  with its background, which for the fixed `#article-modal` was transparent.
+  `patchRssReader` makes it white, so the undrawn part should come out blank instead.
+  Not yet checked on the Kindle. The drawing itself (a full screen of Chinese text) is
+  the Kindle's speed; nothing is fetched on a page turn.
 - Feed HTML is cleaned (`cleanHtml`): no scripts, styles, frames, forms, `on*`
   handlers or `javascript:` links, since the article frame shares the page's origin.
 
