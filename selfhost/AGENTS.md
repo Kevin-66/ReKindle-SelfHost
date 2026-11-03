@@ -544,16 +544,14 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   with its background, which for the fixed `#article-modal` was transparent.
   `patchRssReader` makes it white, so the undrawn part should come out blank instead.
   Not yet checked on the Kindle. Nothing is fetched on a page turn.
-- Page turn speed (same day): a turn is `body.scrollTo()` by one page in
-  the article frame, whose `<body>` was `overflow-x: hidden`. Chromium 80 only scrolls
-  `auto`/`scroll` boxes on the compositor; a hidden one is drawn again from scratch on
-  every scroll (about a second for a screen of Chinese text on the Scribe).
-  `patchRssReader` makes it `overflow-x: scroll` (the page already hides
-  `body::-webkit-scrollbar`) with `touch-action: none` so swipes still don't scroll it,
-  so the compositor draws the pages either side ahead. Pagination is unchanged
-  (checked at 993x1216). The owner confirmed on the Scribe that turns are faster
-  (2026-11-02): keep it. Other apps that page with `scrollTo()` on an `overflow: hidden`
-  box may gain the same way.
+- Page turn speed (same day), tried and reverted: a turn is `body.scrollTo()` by one
+  page in the article frame, whose `<body>` is `overflow-x: hidden`, which Chromium 80
+  does not scroll on the compositor (every turn draws the screen again from scratch,
+  about a second for Chinese text on the Scribe). Making it `overflow-x: scroll` with
+  `touch-action: none` (2026.11.02.7) made turns faster on the Scribe, but the owner
+  then found the pages broken (2026-11-03), although pagination looked right in a
+  desktop browser at 993x1216. Reverted; the white `#article-modal` stays. Don't try
+  it again, here or in other readers, without checking on the Kindle itself.
 - Upstream bug, left alone: `totalPages = Math.ceil(scrollWidth / clientWidth)` counts an
   unreachable extra page when the content is a pixel over (BBC: 1887 / 943 = "3 pages").
 - Feed HTML is cleaned (`cleanHtml`): no scripts, styles, frames, forms, `on*`
