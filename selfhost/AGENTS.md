@@ -531,6 +531,17 @@ calls the page's own `toggleFlag()`, `saveGame()` and `startTimer()`.
   public addresses only (netguard.js); 120 requests a minute per IP.
 - `prepare.js` fails the build if a page still names `api.rss2json.com` (upstream
   changed the address).
+- Auto load (owner, 2026-11-12): `patchRssReader` (`RSS_AUTO_LOAD`) loads the next 10
+  per feed by itself when a scroll *down* in `#view-headlines` brings the Load More
+  footer on screen (`scrollHeight - scrollTop - clientHeight <= footer.offsetHeight`,
+  layout pixels; 200 ms after the last scroll event). Scrolling up never starts it, so a
+  list that got shorter (Refresh at the bottom, Unread) doesn't load by itself. The scroll
+  position is put back after the re-render. A load that brings no new items (end of the
+  feeds, or a failed fetch) stops it until Refresh (`resetAndFetch` clears
+  `rkAutoLoad.stopped`); when the new items are all filtered out it loads at most three
+  more times. The button stays for a manual tap. Verified in Chromium with the page
+  buttons (2026-11-12), not yet on the Kindle. Testing tip: a hidden browser pane renders
+  no frames, so the browser fires no scroll events and the page buttons don't move.
 - Articles: the reader opens one by fetching its page through the `rekindle-reader`
   Worker (Readability), even when the feed has the whole text. For paywalled sites that
   is the teaser (caixin.com: 229 of the feed's 6,300 characters). `patchRssReader`

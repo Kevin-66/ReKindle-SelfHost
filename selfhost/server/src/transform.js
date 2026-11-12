@@ -82,7 +82,62 @@ const RSS_READER_FETCH = `
 
         async function openArticle(articleOrUrl) {`;
 
+// Auto load (owner, 2026-11-12): paging down to the end of the headline list, where the
+// Load More button comes into view, loads the next items without a tap. Only scrolling
+// down starts it, so opening the reader, a short list (Unread, a category) or Refresh at
+// the bottom (the list gets shorter and the position moves up) fetches nothing extra. It stops when a load brings no new items (end of the feeds, or the fetch failed)
+// until Refresh; the button stays for that. When the new items are all hidden by the
+// filter it tries at most three more times. Plain ES5, in the page's own script (it uses
+// the page's fetchCount, articlesCache and fetchAllFeeds).
+const RSS_AUTO_LOAD = `
+        // Self-hosting (transform.js): load more by itself at the end of the headline list.
+        var rkAutoLoad = { busy: false, stopped: false, empty: 0, timer: null, quietUntil: 0, lastTop: 0 };
+
+        function rkAutoLoadCheck() {
+            var view = document.getElementById('view-headlines');
+            var footer = document.querySelector('#articles-container .list-footer-controls');
+            var btn = document.getElementById('load-more-btn');
+            if (!view || !footer || !btn || btn.disabled || !view.offsetParent) return;
+            if (rkAutoLoad.busy || rkAutoLoad.stopped || feeds.length === 0) return;
+            // Is the footer (Load More) on screen? Layout pixels, safe under theme.js zoom.
+            if (view.scrollHeight - view.scrollTop - view.clientHeight > footer.offsetHeight) return;
+            var before = articlesCache.length;
+            var shown = document.querySelectorAll('#articles-container .article').length;
+            var top = view.scrollTop;
+            rkAutoLoad.busy = true;
+            fetchCount += 10;
+            fetchAllFeeds().then(function () {
+                if (view.scrollTop !== top) { rkAutoLoad.quietUntil = Date.now() + 500; view.scrollTop = top; }
+                rkAutoLoad.lastTop = view.scrollTop;
+                rkAutoLoad.busy = false;
+                if (articlesCache.length <= before) { rkAutoLoad.stopped = true; return; }
+                if (document.querySelectorAll('#articles-container .article').length > shown) rkAutoLoad.empty = 0;
+                else if (++rkAutoLoad.empty > 3) return;
+                rkAutoLoadCheck();
+            }, function () { rkAutoLoad.busy = false; });
+        }
+
+        (function () {
+            var view = document.getElementById('view-headlines');
+            if (!view) return;
+            view.addEventListener('scroll', function () {
+                // Only scrolling down counts: a list that got shorter (Refresh at the
+                // bottom, the Unread filter) moves the position up by itself.
+                var down = view.scrollTop > rkAutoLoad.lastTop;
+                rkAutoLoad.lastTop = view.scrollTop;
+                if (!down || Date.now() < rkAutoLoad.quietUntil) return;
+                rkAutoLoad.empty = 0;
+                clearTimeout(rkAutoLoad.timer);
+                rkAutoLoad.timer = setTimeout(rkAutoLoadCheck, 200);
+            }, { passive: true });
+        })();
+
+        function loadMore() {`;
+
 function patchRssReader(html) {
+    html = html.replace('\n        function loadMore() {', RSS_AUTO_LOAD);
+    html = html.replace('function resetAndFetch() {\n            fetchCount = 10;',
+        'function resetAndFetch() {\n            fetchCount = 10;\n            rkAutoLoad.stopped = false;');
     // The Kindle shows a screen before it has finished drawing it, and the parts of a
     // layer not drawn yet are filled with the layer's background. The article overlay's
     // was transparent, so every page turn showed the headline list behind it for about

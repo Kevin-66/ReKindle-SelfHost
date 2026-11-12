@@ -47,6 +47,82 @@ test('the RSS reader shows the feed\'s text when the page has less (paywalls)', 
     await assert.rejects(readerFetch(failed)(null, 'u', {}), /aborted/);
 });
 
+test('the RSS reader loads more by itself at the end of the headline list', async () => {
+    const page = transformHtml(fs.readFileSync(new URL('../../../rssreader.html', import.meta.url), 'utf8'), 'rssreader.html');
+    // Both edits found their place in upstream's page.
+    assert.match(page, /function resetAndFetch\(\) \{\n {12}fetchCount = 10;\n {12}rkAutoLoad\.stopped = false;/);
+    const source = /\n {8}\/\/ Self-hosting \(transform\.js\): load more by itself[\s\S]*?(?=\n {8}function loadMore\(\) \{)/.exec(page)[0];
+
+    // A headline list of `cards` cards, 100 px each, under 1000 px of other content;
+    // 800 px on screen; the footer (Load More) is the last 100 px.
+    const view = { scrollTop: 0, clientHeight: 800, offsetParent: {}, on: {}, addEventListener(type, fn) { this.on[type] = fn; } };
+    const footer = { offsetHeight: 100 };
+    const btn = { disabled: false };
+    let cards = 10;
+    let filtered = false; // Unread: the new items are all read already
+    const render = (n) => { if (!filtered) cards = n; view.scrollHeight = 1000 + cards * 100; };
+    render(10);
+    const document = {
+        getElementById: (id) => ({ 'view-headlines': view, 'load-more-btn': btn })[id] || null,
+        querySelector: () => footer,
+        querySelectorAll: () => ({ length: cards })
+    };
+    const timers = [];
+    const feed = { size: 45 };
+    const page$ = new Function('document', 'setTimeout', 'clearTimeout', 'render', 'feed', `
+        var feeds = [{ url: 'caixin' }], fetchCount = 10, articlesCache = new Array(10), fetches = 0;
+        function fetchAllFeeds() { fetches++; articlesCache = new Array(Math.min(fetchCount, feed.size)); render(articlesCache.length); return Promise.resolve(); }
+        ${source}
+        return { state: rkAutoLoad, fetches: function () { return fetches; }, count: function () { return fetchCount; } };`)(
+        document, (fn) => { timers.push(fn); return timers.length; }, () => { }, render, feed);
+    const scrollTo = async (y) => {
+        view.scrollTop = y;
+        view.on.scroll();
+        timers.splice(0).forEach((fn) => fn());
+        await new Promise((resolve) => setImmediate(resolve));
+    };
+
+    await scrollTo(400); // middle of the list: nothing
+    assert.equal(page$.fetches(), 0);
+    await scrollTo(1200); // the end: Load More is on screen
+    assert.equal(page$.fetches(), 1);
+    assert.equal(page$.count(), 20);
+    assert.equal(view.scrollTop, 1200); // the place is kept; the new items are below
+    await scrollTo(2200);
+    await scrollTo(3200);
+    assert.equal(page$.fetches(), 3); // 40 of the feed's 45
+    await scrollTo(4200);
+    assert.equal(page$.fetches(), 4); // 45: the last 5
+    await scrollTo(4700);
+    assert.equal(page$.fetches(), 5); // asked for 60, still 45: the end of the feed
+    assert.equal(page$.state.stopped, true);
+    await scrollTo(4600);
+    await scrollTo(4700);
+    assert.equal(page$.fetches(), 5); // stopped until Refresh
+
+    // Refresh at the bottom: the list gets shorter and the position moves up by itself.
+    page$.state.stopped = false;
+    render(10);
+    await scrollTo(1200);
+    assert.equal(page$.fetches(), 5);
+
+    // The new items are all hidden by the filter: three more tries, then it waits.
+    render(45);
+    feed.size = 1000;
+    filtered = true;
+    await scrollTo(4600);
+    const before = page$.fetches();
+    await scrollTo(4700);
+    assert.equal(page$.fetches() - before, 4);
+    assert.equal(page$.state.stopped, false);
+    // A load already running (the button is disabled) is never doubled.
+    btn.disabled = true;
+    await scrollTo(4600);
+    const during = page$.fetches();
+    await scrollTo(4700);
+    assert.equal(page$.fetches(), during);
+});
+
 test('RSS 2.0 items come out in rss2json\'s fields', () => {
     const { feed, items } = parseFeed(`<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:dc="http://purl.org/dc/elements/1.1/">
