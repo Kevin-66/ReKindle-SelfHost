@@ -15,6 +15,12 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # sitemap.xml <lastmod> comes from each file's last commit date, so the
+          # build needs real history. actions/checkout defaults to a depth-1
+          # clone, where every file looks like it changed in the same commit and
+          # every lastmod would be "today" - exactly the signal Google ignores.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,6 +35,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify deploy targets contain no secrets
+        run: |
+          node scripts/deploy-guard.js _deploy/main
+          node scripts/deploy-guard.js _deploy/lite
+          node scripts/deploy-guard.js _deploy/legacy
 
       - name: Verify service-worker cache stamp
         run: |

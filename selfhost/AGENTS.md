@@ -22,18 +22,36 @@ as possible so `git merge upstream/main` stays clean.
 ## Upstream files that are changed (keep this list in sync with the README)
 
 - `time.js` – automatic time-zone detection before the city prompt.
-- `js/i18n.js`, `settings.html` – Canada (CA) no longer maps to French.
+- `js/i18n.js` – Canada (CA) no longer maps to French: `CA` is left out of `COUNTRY_LANGUAGE`.
+  (`settings.html` used to repeat the country lists; since the 2026-11-17 merge it asks
+  `window.rekindleLanguages`, so it is upstream's file again.)
 - Dark mode follows upstream ("the author's way", owner 2026-10-06): upstream switched it
   back on on 2026-10-26 (89752b2, Settings > Theme, marked BETA; images, video and canvases
   are re-inverted), and that came in with the 2026-11-01 merge. `theme.js`, `index.html`,
-  `index_old.html` are upstream's files, and `settings.html` differs only by the Canada
-  line. The fork's own dark mode (2d411d7, 1f31ec6: `darkBackdrops()`, true-colour boards,
+  `index_old.html` and `settings.html` are upstream's files. The fork's own dark mode (2d411d7, 1f31ec6: `darkBackdrops()`, true-colour boards,
   map tiles) was removed on 2026-10-06; look there if upstream's misses something.
 
-## Merging upstream (last: 2026-11-01, upstream 6cf122e)
+## Merging upstream (last: 2026-11-17, upstream 9d8950b)
 
-`git merge upstream/main` merged cleanly. What needed care, and should be checked again
-next time:
+2026-11-17 (23 commits: 30 more languages, ReKindle+ promotion and gift codes, Scores with
+137 leagues, account-deletion and moderation fixes) had three conflicts, all in the files
+this fork changes:
+- `js/i18n.js`: upstream replaced the per-language country lists with one
+  `COUNTRY_LANGUAGE` table. Take theirs and delete `CA: 'fr'` again.
+- `settings.html`: upstream dropped its copy of those lists. Take theirs.
+- `time.js`: upstream turned the time-zone prompt into a time-zone and language prompt.
+  Take theirs, keep `browserTimeZoneLooksReal()` and `autoDetectTimezone()` in front of it,
+  and keep the `_rekindleTzAutoTried` hook as the first thing inside
+  `if (!hasSavedTimezone())` in `checkTimezoneOffset()`.
+Checked after it: `npm test` and the site build pass, all 34 `transform.js` patterns still
+match (same set as before the merge), the server starts with upstream's changed
+`firebase-functions/`, and the only outside backend pages still call is Akinator's.
+New and not hosted here: pages now call `/__rk/w/rekindle-stripe` (gift codes, membership
+checkout), which answers 404 like the other Stripe paths. With `PLUS_FOR_ALL=true` every
+account is a member, so upstream's promotion for non-members shouldn't show.
+
+2026-11-01 (upstream 6cf122e) merged cleanly. What needed care then, and should be checked
+again each time:
 - Patches in `transform.js` fail silently when upstream changes the page. Check each one
   still matches (and drop the ones upstream made unnecessary): transform every page with
   `String.prototype.replace` instrumented, before and after the merge, and compare which

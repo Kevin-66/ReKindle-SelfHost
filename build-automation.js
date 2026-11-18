@@ -24,12 +24,13 @@ fs.removeSync('./_deploy/legacy/libs');
 const ignoreList = [
     'node_modules', '.git', '.github', '_deploy',
     'build-automation.js', 'package.json', 'package-lock.json',
-    'wrangler.toml', '.gitignore', '.DS_Store',
+    'wrangler.toml', '.gitignore', '.DS_Store', '.wrangler',
     'workers', 'scripts', 'screenshots', 'admin', 'Sync', 'pocketbase',
     // Kindle launcher source; the built downloads/ are generated below.
     'kindle',
     // Firebase Backend Files (Keep in repo, ignore for hosting)
     'firebase.json', '.firebaserc', 'firestore.rules', 'firestore.indexes.json', 'rtdb-rules.json',
+    'firestore-social.rules', 'rtdb-social-rules.json', 'storage.rules',
     // CREDENTIALS — MUST NEVER BE PUBLISHED. These were live on rekindle.ink and
     // beta.rekindle.ink until 2026-10-20 because they were missing from this list:
     //  /service-account.json          (rekindle-dd1fa admin key)
@@ -42,15 +43,12 @@ const ignoreList = [
     'akinator-service'
 ];
 
-// Files/dirs that must never appear in a deploy directory. The build fails
-// loudly if any of them survive the copy step, so a future ignoreList edit
-// cannot silently republish credentials.
-const FORBIDDEN_IN_DEPLOY = [
-    'service-account.json', 'service-account-social.json', '.env',
-    'firebase-functions', 'firebase-social.json', 'firebase.json',
-    'rtdb-rules.json', 'firestore.rules', 'workers', 'scripts', 'admin',
-    'akinator-service'
-];
+// Credential scanning is shared with scripts/deploy-guard.js (which npm run
+// deploy:beta/prod and CI run before wrangler) so the build and the publish
+// step cannot drift apart. scanDeployDir walks the WHOLE tree, checks names,
+// inspects text-file contents for key formats, and flags symlinks — the old
+// top-level name list here missed nested .env files and renamed keys.
+const { scanDeployDir, forbiddenNameReason } = require('./scripts/lib/deploy-secrets');
 
 // DOM APIs used by the app that WebKit ~534 (Kobo / pre-Chromium Kindle)
 // does not provide. Core-js only polyfills language built-ins, so these must
@@ -355,10 +353,8 @@ async function assertLocalLibs() {
 async function assertNoSecretsInDeploy() {
     const problems = [];
     for (const dir of [MAIN_DIR, LITE_DIR, LEGACY_DIR]) {
-        for (const name of FORBIDDEN_IN_DEPLOY) {
-            const p = path.join(dir, name);
-            if (await fs.pathExists(p)) problems.push(p);
-            // Nested .env (e.g. firebase-functions/.env) is covered by the dir check
+        for (const p of scanDeployDir(dir)) {
+            problems.push(path.join(dir, p.path) + '  [' + p.reason + ']');
         }
     }
     if (problems.length) {
@@ -2101,8 +2097,25 @@ async function run() {
     // 2. Manual Copy Loop (Safer than copying '.')
     const allFiles = await fs.readdir(SOURCE_DIR);
 
+    // 2.1 Skip build output and desktop-sync debris.
+    //
+    // This repo lives inside Dropbox, which turns a synced build directory into
+    // "_deploy (Selective Sync Conflict N)" copies beside it. Those are not in
+    // ignoreList, so the copy loop used to copy a 320 MB stale deploy tree into
+    // _deploy/main, recurse through its openmoji/ files and fail with
+    //   ENOENT: no such file or directory, chmod '_deploy/main/_deploy (Selective Sync Conflict 2)/...'
+    // (2026-11-10). Treat any _deploy* entry and any sync-conflict folder as
+    // build output: never copy it, never deploy it.
+    const isBuildArtifactEntry = (name) =>
+        /^_deploy\b/.test(name) ||
+        /Selective Sync Conflict|conflicted copy|CASE CONFLICT/i.test(name) ||
+        /^\.dropbox/i.test(name);
+
     for (const item of allFiles) {
-        if (ignoreList.includes(item)) continue;
+        // forbiddenNameReason() is the same check deploy-guard.js runs before
+        // wrangler: credentials never even reach the deploy tree, so the final
+        // scan is a second net rather than the only one.
+        if (ignoreList.includes(item) || isBuildArtifactEntry(item) || forbiddenNameReason(item)) continue;
 
         const srcPath = path.join(SOURCE_DIR, item);
         const destMain = path.join(MAIN_DIR, item);
@@ -2131,8 +2144,18 @@ async function run() {
     // 2.5 Replace index.html with index_old.html for Lite and Legacy builds
     const indexOldSrc = path.join(SOURCE_DIR, 'index_old.html');
     if (await fs.pathExists(indexOldSrc)) {
-        await fs.copy(indexOldSrc, path.join(LITE_DIR, 'index.html'), { overwrite: true });
-        await fs.copy(indexOldSrc, path.join(LEGACY_DIR, 'index.html'), { overwrite: true });
+        // index_old.html is the previous dashboard and is noindex on the main
+        // host (it duplicates "/"). Lite and Legacy, however, SERVE it at "/",
+        // so copying it verbatim gave those two hosts a noindex homepage
+        // canonicalised to /index_old - i.e. their only landing page vanished
+        // from search. Re-render the head with the home page's metadata instead:
+        // /index_old stays noindex on rekindle.ink, while lite./legacy. "/" is
+        // indexable and canonicalises to https://rekindle.ink/ like every other
+        // page on those hosts.
+        const seoInject = require('./scripts/seo-inject');
+        const legacyIndex = seoInject.render(await fs.readFile(indexOldSrc, 'utf8'), seoInject.seoFor('index'));
+        await fs.writeFile(path.join(LITE_DIR, 'index.html'), legacyIndex);
+        await fs.writeFile(path.join(LEGACY_DIR, 'index.html'), legacyIndex);
         console.log("📄 Replaced index.html with index_old.html for Lite and Legacy builds.");
     } else {
         console.warn("⚠️  index_old.html not found — Lite/Legacy will use default index.html.");
@@ -2262,6 +2285,37 @@ async function run() {
         console.error("Failed to generate sitemap", err);
     }
 
+    // 9.1 Point each deploy target's robots.txt at its own sitemap.
+    //
+    // robots.txt is copied into every target verbatim, so lite.rekindle.ink and
+    // legacy.rekindle.ink used to advertise https://rekindle.ink/sitemap.xml — a
+    // cross-host Sitemap: declaration, which Google ignores. Both alternates
+    // ended up with no sitemap of their own while still being crawled (they must
+    // stay crawlable so their <link rel="canonical"> to rekindle.ink is seen).
+    try {
+        console.log("🤖 Writing per-host robots.txt...");
+        const targets = [
+            [MAIN_DIR, 'https://rekindle.ink'],
+            [LITE_DIR, 'https://lite.rekindle.ink'],
+            [LEGACY_DIR, 'https://legacy.rekindle.ink']
+        ];
+        for (const target of targets) {
+            const dir = target[0];
+            const domain = target[1];
+            const robotsPath = path.join(dir, 'robots.txt');
+            if (!await fs.pathExists(robotsPath)) continue;
+            const robots = await fs.readFile(robotsPath, 'utf8');
+            const line = 'Sitemap: ' + domain + '/sitemap.xml';
+            const next = /^Sitemap:.*$/m.test(robots)
+                ? robots.replace(/^Sitemap:.*$/m, line)
+                : robots.trimEnd() + '\n\n' + line + '\n';
+            await fs.writeFile(robotsPath, next);
+        }
+    } catch (err) {
+        console.error("Failed to write per-host robots.txt", err);
+        throw err;
+    }
+
     // 9.5 Build the Kindle Fullscreen download package. The /kindle page and
     // README link to downloads/ReKindle-Fullscreen.zip, so every deploy target
     // needs a fresh copy. Failing here is deliberate: a stale or missing
@@ -2286,7 +2340,7 @@ async function run() {
         throw err;
     }
 
-    // 10. Refuse to publish credentials (see FORBIDDEN_IN_DEPLOY above)
+    // 10. Refuse to publish credentials (shared scanner: scripts/lib/deploy-secrets.js)
     await assertNoSecretsInDeploy();
 
     // 11. Old builds must not silently fall back to CDN libraries.

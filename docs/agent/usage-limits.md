@@ -330,8 +330,9 @@ KV (story): 4,020 reads / 3,540 writes / 420 deletes per 30 days — negligible 
 **Deployed 2026-10-25 ~22:50 UTC** (Pages + both chat Workers). The checklist, kept
 for the next change of this kind:
 
-1. **Pages:** `npm run deploy:prod` (the build has passed; `_deploy/main` has no
-   `functions/_middleware.js`). This ships the middleware removal, the 60-topic
+1. **Pages:** `npm run deploy:prod` (the build has already passed and
+   `_deploy/main` has no `functions/_middleware.js`; the deploy guard runs first).
+   This ships the middleware removal, the 60-topic
    sidebar, the translation-listener bound, `js/social-token-cache.js`,
    `js/worker-client.js` and the outage handling in KindleChat / Neighbourhood /
    Topics. Beta: `npm run deploy:beta`.

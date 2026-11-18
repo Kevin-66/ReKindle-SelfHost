@@ -6,10 +6,16 @@
  * or a list of documents: everything below is derived from `request.auth.uid`
  * and values read server-side.
  *
+ * Policy (2026-11-10): delete the account's private/main-project data and the
+ * social profile nodes (username/avatar/private profile) so social apps render
+ * "Deleted User" with a blank avatar. Social history is NOT removed here: it
+ * stays in the social project and is aged by `cleanupSocial` exactly like an
+ * active account's history. The old cross-project sweep is retained below as
+ * deprecated reference code and must not be called again.
+ *
  * Why a Cloud Function and not client code:
- *   - clients cannot delete KindleChat messages, DM threads, social reports,
- *     moderator-issued timeouts or Storage files (rules deny those writes);
- *   - clients cannot delete a Firebase Auth record;
+ *   - clients cannot delete Storage files or a Firebase Auth record (rules
+ *     deny those writes);
  *   - a client-side sweep would be interrupted by closing the tab, leaving
  *     personal data behind.
  *
@@ -42,8 +48,9 @@ const {
     emailHandle,
     pickUsername,
     isValidUid,
+    buildLiveGameDeletePaths,
     buildPrimaryUserDeletePaths,
-    buildSocialUserDeletePaths,
+    buildSocialProfileDeletePaths,
     shouldDeleteReportForUser,
     emptySummary
 } = require('./account-deletion-lib');
@@ -55,7 +62,7 @@ const GAME_IDS = Object.keys(COLLECTIONS).map(function (name) { return COLLECTIO
 
 // Nodes read by the moderation console / social apps that are keyed by uid.
 // `banned_ips` and `mod_actions` are deliberately NOT here (see docs).
-const SOCIAL_AUTH_NOT_FOUND = 'auth/user-not-found';
+const AUTH_USER_NOT_FOUND = 'auth/user-not-found';
 
 function assertWithinBudget(deadline) {
     if (Date.now() < deadline) return;
@@ -270,6 +277,15 @@ async function deleteCommentsGrouped(socialDb, commentDocs, summary, deadline, c
     }
 }
 
+/*
+ * DEPRECATED 2026-11-10: the social sweep is no longer called.
+ *
+ * Account deletion now removes only the main (private) account data. Social
+ * history is retained and ages out through `cleanupSocial` exactly like an
+ * active account's history. These functions are kept temporarily for
+ * reference; do not call them from deleteAccount again. See
+ * docs/agent/account-deletion.md.
+ */
 async function cleanupSocialFirestore(ctx) {
     const { uid, socialDb, summary, deadline } = ctx;
 
@@ -470,6 +486,7 @@ async function deleteRealtimeMessages(rtdb, ids, summary, deadline) {
     }
 }
 
+/* Deprecated with cleanupSocialFirestore above — never called. */
 async function cleanupSocialRtdb(ctx) {
     const { uid, socialRtdb, summary, deadline } = ctx;
 
@@ -634,14 +651,31 @@ async function cleanupSocialRtdb(ctx) {
     }
 }
 
+/*
+ * Remove only the social profile records (username, avatar, private profile).
+ * Social history (messages, topics, comments, posts, DMs, reports) is retained
+ * and aged by cleanupSocial. No Firestore query and no collection-group index is
+ * involved, so this cannot consume the social Firestore quota.
+ */
+async function cleanupSocialProfile(ctx) {
+    const { uid, socialRtdb, summary, deadline } = ctx;
+    if (!socialRtdb) {
+        throw new HttpsError('failed-precondition', 'Social profile cleanup is unavailable. Please try again later.');
+    }
+    assertWithinBudget(deadline);
+    const paths = buildSocialProfileDeletePaths(uid);
+    if (Object.keys(paths).length > 0) {
+        await socialRtdb.ref().update(paths);
+        summary.rtdbNodes += Object.keys(paths).length;
+    }
+}
+
 async function cleanupPrimaryRtdb(ctx) {
-    const { uid, handle, rtdb, socialRtdb, summary, deadline } = ctx;
+    const { uid, handle, rtdb, summary, deadline } = ctx;
 
     const primaryPaths = buildPrimaryUserDeletePaths(uid, handle);
-    const socialPaths = buildSocialUserDeletePaths(uid);
-    const nodeCount = Object.keys(primaryPaths).length + Object.keys(socialPaths).length;
+    const nodeCount = Object.keys(primaryPaths).length;
     if (Object.keys(primaryPaths).length > 0) await rtdb.ref().update(primaryPaths);
-    if (Object.keys(socialPaths).length > 0) await socialRtdb.ref().update(socialPaths);
     summary.rtdbNodes += nodeCount;
 
     // Suggestions (RTDB): own ideas, upvotes and comments on other ideas.
@@ -700,46 +734,32 @@ async function cleanupPrimaryRtdb(ctx) {
         throw new Error('Freewrite cleanup failed: ' + e.message);
     }
 
-    // Live-game listings hosted by the user (ghost lobbies otherwise linger
-    // until the index validator removes them). Also remove the user's chat
-    // lines from every live match and their presence from open lobbies. Active
-    // match state is deliberately left alone: deleting a player mid-game would
-    // corrupt the match for everyone else, and turns/AFK timers already deal
-    // with a vanished player.
+    // Live games.
+    //
+    // Delete the listings the user hosts (ghost lobbies otherwise linger until
+    // the index validator removes them) AND the user's seat in every other open
+    // lobby. Both come from `matchmaking`, which is small: its keys are the
+    // match ids, so the seat path is `games/{type}/{matchId}/players/{uid}` and
+    // no `games` read is needed.
+    //
+    // `games/*/*/chat` is deliberately NOT swept. In November 2026 `games` held
+    // ~15,900 matches / 60 MB; finding one user's chat lines required reading
+    // all of it, which OOM-killed the function (container death -> a 503 with
+    // no CORS headers in the browser). In-game chat is history and is retained
+    // like KindleChat history; finished matches will age out via the games
+    // retention job in docs/agent/backlog.md instead. Do not reintroduce a
+    // whole-node read of `games` here.
     try {
         const mmSnap = await rtdb.ref('matchmaking').once('value');
-        const updates = {};
-        mmSnap.forEach(function (gameNode) {
-            gameNode.forEach(function (matchNode) {
-                const value = matchNode.val() || {};
-                if (value.hostUid === uid && isSafeRtdbKey(gameNode.key) && isSafeRtdbKey(matchNode.key)) {
-                    updates['matchmaking/' + gameNode.key + '/' + matchNode.key] = null;
-                }
-            });
-        });
-
-        const gamesSnap = await rtdb.ref('games').once('value');
-        gamesSnap.forEach(function (gameNode) {
-            gameNode.forEach(function (matchNode) {
-                if (!isSafeRtdbKey(gameNode.key) || !isSafeRtdbKey(matchNode.key)) return;
-                const base = 'games/' + gameNode.key + '/' + matchNode.key;
-                const match = matchNode.val() || {};
-                matchNode.child('chat').forEach(function (msg) {
-                    const value = msg.val() || {};
-                    if (value.uid === uid && isSafeRtdbKey(msg.key)) {
-                        updates[base + '/chat/' + msg.key] = null;
-                    }
-                });
-                if (match.status === 'lobby' && match.players && match.players[uid]) {
-                    updates[base + '/players/' + uid] = null;
-                }
-            });
-        });
-
-        if (Object.keys(updates).length > 0) await rtdb.ref().update(updates);
+        const updates = buildLiveGameDeletePaths(mmSnap.val(), uid);
+        const paths = Object.keys(updates).length;
+        if (paths > 0) {
+            await rtdb.ref().update(updates);
+            summary.rtdbNodes += paths;
+        }
     } catch (e) {
         if (e instanceof HttpsError) throw e;
-        throw new Error('Matchmaking/game cleanup failed: ' + e.message);
+        throw new Error('Matchmaking/live-game cleanup failed: ' + e.message);
     }
 
     assertWithinBudget(deadline);
@@ -813,8 +833,11 @@ async function deleteAccount(request, deps) {
     if (!request.auth || !request.auth.uid) {
         throw new HttpsError('unauthenticated', 'You must be signed in to delete your account.');
     }
+
     const socialApp = deps && deps.socialApp;
     if (!socialApp) {
+        // The social profile records must be removed so apps show Deleted
+        // User; fail before deleting Auth so a retry can finish.
         throw new HttpsError('failed-precondition', 'Account deletion is temporarily unavailable. Please try again later.');
     }
 
@@ -864,12 +887,12 @@ async function deleteAccount(request, deps) {
 
     const db = admin.firestore();
     const rtdb = admin.database();
-    const socialDb = socialApp.firestore();
     const socialRtdb = socialApp.database();
-    const socialAuth = socialApp.auth();
     const summary = emptySummary();
     const deadline = Date.now() + DELETION_TIME_BUDGET_MS;
-    const ctx = { uid: uid, handle: handle, email: email, db: db, rtdb: rtdb, socialDb: socialDb, socialRtdb: socialRtdb, summary: summary, deadline: deadline };
+    // Only the social profile records are removed. Social history is retained
+    // and aged by cleanupSocial exactly like an active account's history.
+    const ctx = { uid: uid, handle: handle, email: email, db: db, rtdb: rtdb, socialRtdb: socialRtdb, summary: summary, deadline: deadline };
 
     logger.info('deleteAccount: starting', { uid: uid });
 
@@ -889,21 +912,10 @@ async function deleteAccount(request, deps) {
             logger.warn('deleteAccount: billing cleanup failed', { uid: uid, message: e.message });
         }
 
-        await cleanupSocialFirestore(ctx);
-        await cleanupSocialRtdb(ctx);
         await cleanupPrimaryFirestore(ctx);
         await cleanupPrimaryRtdb(ctx);
+        await cleanupSocialProfile(ctx);
         await cleanupStorage(ctx);
-
-        // Social-project Auth record (created by getSocialToken). Treat a
-        // missing record as success; any other failure aborts before the
-        // primary Auth is removed so the operation can be retried.
-        try {
-            await socialAuth.deleteUser(uid);
-            summary.authUsers++;
-        } catch (e) {
-            if (e.code !== SOCIAL_AUTH_NOT_FOUND) throw e;
-        }
 
         assertWithinBudget(deadline);
 
@@ -913,7 +925,7 @@ async function deleteAccount(request, deps) {
             await admin.auth().deleteUser(uid);
             summary.authUsers++;
         } catch (e) {
-            if (e.code !== SOCIAL_AUTH_NOT_FOUND) throw e;
+            if (e.code !== AUTH_USER_NOT_FOUND) throw e;
         }
     } catch (e) {
         logger.error('deleteAccount: failed', { uid: uid, message: e.message });

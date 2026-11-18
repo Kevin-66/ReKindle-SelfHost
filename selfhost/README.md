@@ -233,7 +233,7 @@ docker compose up -d --build
 The only upstream files changed here are:
 
 - `time.js` – automatic time-zone detection
-- `js/i18n.js`, `settings.html` – Canada no longer defaults to French
+- `js/i18n.js` – Canada no longer defaults to French
 
 Dark mode follows upstream (Settings > Theme). `selfhost/AGENTS.md` ("Merging upstream")
 lists what to check after a merge.

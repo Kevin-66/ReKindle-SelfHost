@@ -16,6 +16,87 @@ has been verified on a Kindle or an e-ink panel — that is part of the work.
 P3 = maintainability. `risk` is the chance the change breaks something a test cannot catch.
 
 
+## 2026-11-10 · Games node retention (`cleanupGames`)
+
+**Why this exists.** Account deletion stopped sweeping in-game chat on 2026-11-10.
+Finding one user's chat lines required reading the whole `games` node, and that
+read OOM-killed the `deleteAccount` container (browser saw a CORS-less 503 — see
+[account-deletion.md](account-deletion.md#2026-11-10-incident-the-cors-error-that-was-really-an-oom)).
+Game chat is now retained history, like KindleChat, and **nothing ages it out**.
+
+**Measured 2026-11-10 (primary RTDB, `rekindle-dd1fa`)**
+
+| Node | Size | Children |
+| :--- | ---: | ---: |
+| `games` | 60.3 MB | 15,951 matches (11,645 UNO, 3,894 Pictionary, 86 chess) |
+| `games/uno` alone | ~40 MB | 11,645 |
+| `matchmaking` | ~0 | 5 (the only open lobbies) |
+
+Paged with `orderByKey().limitToFirst(200)` + `startAfter(lastKey)` the full scan
+was 15,951 matches in 31 s at an **83 MB peak heap**, so a paged job is safe in a
+512 MiB function. Reading it in one `once('value')` is not: that is the OOM.
+
+**Blocker: match nodes carry no timestamp.** Verified sub-keys for UNO, chess and
+Pictionary: `status` (`lobby|playing|finished`), `players`, `host`, plus game
+state; there is **no** `createdAt` / `startedAt` / `finishedAt` / `updatedAt`.
+Keys are short random ids (`j7kx3l758`), not 20-char push ids, so RTDB's
+key-encoded timestamp trick does not work either. Age cannot be derived.
+
+**Work required**
+
+1. Write `finishedAt = firebase.database.ServerValue.TIMESTAMP` where each live
+   game marks the match finished (`liveuno.html`, `livechess.html`,
+   `livecheckers.html`, `liveconnect4.html`, `livedotsandboxes.html`,
+   `livetictactoe.html`, `liveyahtzee.html`, `livepictionary.html`), ideally via
+   one shared helper. Backfill is impossible, so old matches stay until their
+   presence stamps age out (see the fallback) or are accepted as orphaned.
+2. Add a scheduled v2 function (mirror `cleanupSocial` in `firebase-functions/index.js`)
+   that, per game type, pages `games/{type}` by key and deletes matches where
+   `status === 'finished'` **and** `finishedAt` is older than the retention
+   window (proposal: 30 days — chat history parity with KindleChat). Never touch
+   `lobby` / `playing` matches.
+3. While there, delete `matchmaking/{type}/{matchId}` entries whose
+   `games/{type}/{matchId}` node no longer exists (the dashboard validator in
+   `index.html` soft-repairs these client-side today).
+4. Keep it out of `deleteAccount`: account deletion must never read `games`
+   whole again (`scripts/test-account-deletion.js` asserts this).
+
+**Fallback if (1) is deferred:** treat a finished match as stale when none of its
+human `players/{uid}` has a `presence/{uid}` record. Presence is cleared on
+disconnect, so this only deletes matches whose players are all offline — safe,
+but it cannot honour a retention window and would delete a just-finished match
+as soon as everyone leaves.
+
+**Cost check:** a daily paged scan of `games` reads ~60 MB/day (RTDB download
+allowance is 10 GB/month on the social project; the primary project is Blaze, so
+this is billed but trivial). Once old matches are gone the daily read shrinks to
+the active window.
+
+## 2026-11-10 · Suggestions "Problem" triage
+
+Fixes for the free-text problem reports that were open on the Suggestions board
+(23 open at triage). Each entry records the symptom so a regression is obvious.
+
+| Report | Symptom | Fix / file |
+| :--- | :--- | :--- |
+| `-P5hh…`, `-P5hf…`, `-P5he…` (2026-11-05) | "it says choose a symbol" and no topic could be created | The icon search built `https://api.iconify.design/mdi:chat.svg`, but Iconify's SVG endpoint is `/{prefix}/{name}.svg`; every result 404'd, so no icon was selectable and submit always failed its "select an icon" check. `topics.html` now builds the right URL, renders built-in icons immediately (selected by default), keeps local search matches when the API is blocked, and reports a failed icon fetch instead of silently doing nothing. |
+| `-P5P2…` (2026-11-02) | "only blank unselectable icons show up" | Same wrong Iconify URL; fixed with the built-in/default fallback above. |
+| `-P5jN…` (2026-11-06) | Some Topics avatars were blank | `drawAvatar()` in `topics.html` now converts sparse Firebase arrays, ignores malformed grids, and falls back to the procedural uid pattern when a custom avatar is all zero. The same guard is in `kindlechat.html` and `neighbourhood.html`, with the uid passed as the fallback seed. |
+| `-P5yj…` (2026-11-09), `-P5Tk…` (2026-11-03), `-P5MS…` (2026-11-01) | Tagging someone with digits in their name, or normal punctuation, was rejected as a link | `js/link-guard.js` + the moderation worker now ignore `@mention` labels when looking for hostnames, and a dot followed by a space now ends the hostname run, so ordinary sentences are not treated as domains. `scripts/test-link-guard.js` covers "it. In", "thanks. no problem", "@alice123. me too" and "@alice123 no way"; `?v=5` on the three social pages (worker must ship too). |
+| `-P5_4…` (2026-11-04) | Life Calendar says a correct birthday format is invalid | `parseDate()` in `life.html` accepts `/`, `-` and `.` separators, leading `YYYY`, ISO timestamps and padded spaces; it validates real calendar dates (no 31/02 rollover) and rejects future dates. |
+| `-P5Gt…` (2026-10-31) | Perfect Circle drawing is "realllllly laggy" | `circle.html` caches `getBoundingClientRect()` per drawing, uses squared distance, and batches touchmoves into one `requestAnimationFrame` stroke instead of a forced layout + full-path stroke per event. |
+| `-P4xE…` (2026-10-27) | Long DMs do not scroll down to the message box | `kindlechat.html` gives `#chat-history` `min-height: 0`, defers the bottom scroll until layout settles, and brings the composer into view on focus/resize. |
+| `-P60c…` (2026-11-09) | Account deletion will not complete | Root cause was the cross-project social sweep: missing `comments.authorId` collection-group indexes made it query every topic, and the exhausted social Firestore quota then failed the run. **Policy changed 2026-11-10:** `deleteAccount` now deletes main-project account data plus the social profile records (`users_public`/`user_cards`/`users_private`), so social apps show a blank avatar and "Deleted User"; social history is retained and aged by `cleanupSocial` exactly like an active account. The obsolete social indexes remain for admin tooling. See [account-deletion.md](account-deletion.md) and [social-cleanup.md](social-cleanup.md#deleted-accounts). |
+| `-P5D89…` (2026-10-30) | "chat is currently unavailable" for days | Investigated, no code fault found: the moderation Worker `/health` is `ok:true` with `openaiKeySet:true`, and the worker answers CORS preflights. The message is the client's 429/5xx outage cooldown (see [usage-limits.md](usage-limits.md)); if it recurs, check the Cloudflare daily quota first. |
+| `-P5GtMs…` (2026-10-31) | Akinator cannot guess famous people | Relay `/` answers correctly; no client parsing bug found in the 22 relay tests. This is upstream Akinator behaviour, not a ReKindle regression. |
+| `-P59t4…` (2026-10-30) | Moving games (Mario/Surfer/Dino) feel laggy on a Kindle 10th gen | Not addressed in this pass: it needs a device profile (these are canvas game loops, not the social link/avatar paths above). Keep as a performance investigation. |
+
+Verification for this pass: `npm test` (includes the link-guard parity test) and
+`npm run build`. The Pages and moderation-Worker deploys are separate; the
+collection-group index creation is a Firestore metadata change and can take
+several minutes to reach `READY`.
+
+
 ## Status 2026-10-21 (backlog pass)
 
 **Shipped:** BL-02, BL-03, BL-04, BL-05, BL-06, BL-07, BL-08, BL-11, BL-12, BL-13, BL-14, BL-15,

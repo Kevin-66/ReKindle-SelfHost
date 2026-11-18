@@ -19,8 +19,8 @@ Unconditional `draw()` every rAF costs e-ink compositing + (with any AA pixel) f
 The comments listener was `innerHTML = ''` + re-render ALL (≤100) comments per snapshot. Now uses `snapshot.docChanges()`: added → render only the new node (position via `snapshot.docs[change.newIndex - 1]` — query is newest-first, DOM is oldest-first), removed → remove that node, modified → re-render in place. Elements carry `data-comment-id` for lookup. topics.html comments were already incremental; their eager initial load now appends through a `DocumentFragment` (`appendMessage(msg, prepend, container)`).
 
 ### Language detection stays off the load path (2026-10-27)
-`js/lang-detect.js` is a ~366 KB raw / ~119 KB gzip ELD model. Do not add it as a
-`<script>` on social pages, and do not preload it on composer focus: that 119 KB
+`js/lang-detect.js` is a ~713 KB raw / ~221 KB gzip ELD model. Do not add it as a
+`<script>` on social pages, and do not preload it on composer focus: that 221 KB
 download competed with the message POST on a slow Kindle and made sending feel
 slow. `js/post-language.js` is loaded only when the auto queue meets legacy
 content with no stored `lang`, or 4 s after a successful post (off the send
@@ -234,3 +234,24 @@ scripts/shot-webkit.sh "http://127.0.0.1:8899/kindlechat.html?lang=en&theme=ligh
 ```
 The WebKit harness takes an optional JS argument; throw inside it to get a `js error:` line on stdout,
 which is the cheapest way to assert "`firebase.apps.length > 0`" and friends after a boot reorder.
+
+## Mobile composer viewport (2026-11-10)
+
+Board report `-OynU1_utnHxCJKwjJGR`: on a phone, the KindleChat composer sat half under
+the keyboard and the Topics typing area was "non existent". The System 7 pages size
+themselves with `100vh`, which does **not** shrink when the on-screen keyboard opens;
+`visualViewport.height` does.
+
+`topics.html` and `kindlechat.html` now carry the same small handler (near `</body>`):
+
+* When `visualViewport.height < innerHeight - 100` (keyboard open), set `body` height to
+  the visual viewport, and force the main `.window` to `height`/`max-height` /
+  `min-height: 0` with the `important` flag (the page's `min-height: 90vh` and
+  `theme.js`'s `max-height: 95vh !important` would otherwise keep it too tall).
+* Scroll the focused `TEXTAREA`/`INPUT` into view so the caret is visible.
+* When the keyboard closes, remove the inline styles, restoring the normal layout.
+* Skip a `.window.fullscreen` element, and skip entirely when `visualViewport` is
+  unavailable (old browsers keep the previous behaviour).
+
+Use the same pattern for any future full-height page with a bottom composer; do not set
+`body { overflow: hidden }` without it.

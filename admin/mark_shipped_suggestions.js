@@ -126,6 +126,125 @@ const SHIPPED = [
         id: '-P4qSoQgU0ysrQuJRqZO',
         title: 'make the mazes harder',
         why: 'Maze gained Easy / Normal / Hard difficulty levels on 2026-10-26 (maze.html, deployed at /maze).'
+    },
+    // Sweep 5 - 2026-11-10, the 2026-11 open "Problem" reports. Pages + the
+    // moderation Worker were deployed; see docs/agent/backlog.md.
+    {
+        id: '-P5hhOK8PhVc0F9HXtwW',
+        title: 'topics creation issue',
+        why: 'Topics always rejected creation because every icon search result 404ed (Iconify URL used a colon instead of a slash), and no icon was selected by default. topics.html now builds the right URL, starts with a built-in icon selected, and keeps built-in search matches when Iconify is unavailable.'
+    },
+    {
+        id: '-P5hfYmCLXYoagwnIOo0',
+        title: 'topics cant be made',
+        why: 'Same Topics icon-picker bug: "choose a symbol" was the icon validation after no result could be selected. Fixed and deployed 2026-11-10.'
+    },
+    {
+        id: '-P5hezHNDonl-zrnnsjN',
+        title: 'i ant post a topic',
+        why: 'Same Topics icon-picker bug ("choose a symbol"); fixed and deployed 2026-11-10.'
+    },
+    {
+        id: '-P5P2IkpwzJmNX11ePJJ',
+        title: 'when trying to make a topic the icons wont show up',
+        why: 'Iconify names are "prefix:name" but the SVG endpoint is /prefix/name.svg; the wrong URL made every result a blank tile. Fixed in topics.html.'
+    },
+    {
+        id: '-P5jNMiX8qMCvbrrtsra',
+        title: 'i cant see pfps',
+        why: 'Empty (all-zero) and sparse custom avatars rendered as blank canvases. topics.html, kindlechat.html and neighbourhood.html now fall back to the uid pattern.'
+    },
+    {
+        id: '-P5yj2mFxZR0ir_j5q3L',
+        title: 'REMOVE LINK FLAGS',
+        why: 'Link guard false positives: a sentence period after a word that is also a TLD ("it. In", "thanks. no problem") and @mentions with digits ("@alice123 no way") were rejected. Fixed in js/link-guard.js + the moderation Worker, with parity tests.'
+    },
+    {
+        id: '-P5Tk44q22lqKCIs6VIr',
+        title: 'Filter',
+        why: 'Same link-guard false positives (punctuation, numbers and @mentions); fixed and deployed 2026-11-10.'
+    },
+    {
+        id: '-P5MSv9LN9YacFAfvamu',
+        title: 'Too much flags',
+        why: 'Same link-guard false positives; fixed and deployed 2026-11-10.'
+    },
+    {
+        id: '-P5_4hRFLbuR5-6KmFpQ',
+        title: 'when iopen the life calendar the format is correct',
+        why: 'Life Calendar now accepts DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, YYYY-MM-DD, YYYY/MM/DD and ISO timestamps, validates real calendar dates and rejects future dates.'
+    },
+    {
+        id: '-P5Gtzo3lzi_OYsdokhB',
+        title: 'perfect circle cannot draw a circle',
+        why: 'Perfect Circle now caches the canvas rect and batches touchmoves into one animation-frame stroke instead of a forced layout and full-path stroke per event.'
+    },
+    {
+        id: '-P4xE9il3QkL_RlT5zsx',
+        title: 'problem with dms',
+        why: 'Long DM threads now keep #chat-history scrollable (min-height:0), scroll to the composer after layout settles, and bring the composer into view when focused.'
+    },
+    {
+        id: '-Oyn6jZTNTjXwsOl1yoi',
+        title: 'Language Spanish and Spanish problem',
+        why: 'Language now shows one "Spanish (Spain)" card (es flag) and one "Spanish (Mexico)" card (mx flag), instead of two identical Spanish cards. Added Tatoeba codes to the remaining entries so sentence mode does not receive undefined.'
+    },
+    {
+        id: '-P-2C2pOJ1OXbapa1x9w',
+        title: 'Surfer game is hard to view',
+        why: 'Surfer now draws a persistent 1-bit top-centre action hint for the nearest obstacle in the player lane (up = jump, down = roll, left/right = train lane change), so the required move is readable before the obstacle detail is. Deployed 2026-11-10.'
+    },
+    {
+        id: '-P1RnoKa8Ya2O-GhNJj-',
+        title: 'Pixel art',
+        why: 'The 2026-10-27 manifest union/empty-write guard in pixel.html restores cloud manifest entries after localStorage is wiped and refuses to overwrite a non-empty cloud list. mergeManifests() regression-tested 2026-11-10.'
+    },
+    {
+        id: '-P60c5re1InQwr4qoCyk',
+        title: 'Account Deletion Wont Work',
+        why: 'Policy change 2026-11-10: deleteAccount no longer sweeps the social project, so social Firestore quota or missing indexes cannot block deletion. It removes the main-project account/private data, Storage files, Auth record and the social profile nodes (username/avatar), so social apps show a blank avatar and "Deleted User"; social history is retained and aged by cleanupSocial. Deployed.'
+    },
+    // Sweep 6 - 2026-11-12. Open rows whose request is already satisfied by the
+    // current build; status only, no comment on the board.
+    {
+        id: '-OxXU5HtYSZ4QTXkGzZo',
+        title: 'BACK BUTTON on kindlechat pixelart',
+        why: 'Pixel art opened from KindleChat is a modal over the chat (showPixelArtModal): the X calls hideModal(), so closing art no longer leaves the conversation.'
+    },
+    {
+        id: '-OyM3dslFGjPpHO3AW28',
+        title: 'Have all multiplayer games have an option to play solo',
+        why: 'Every 2-player game has a solo build with a bot opponent (chess, checkers, connect4, dots and boxes, tic-tac-toe, battleship) and live Uno takes bots; the earlier identical request "Add playing with a bot on every multi-player game" is already done.'
+    },
+    {
+        id: '-OyOzstLTSc73_YF7CUF',
+        title: 'edge://surf',
+        why: 'Surfer (2026-07-23) is the same three-lane endless runner with obstacles to dodge; the earlier "Add Something like subway surfers" row is already done.'
+    },
+    {
+        id: '-Oywd0vfmqZzGHLGXhta',
+        title: 'announcements app',
+        why: 'Changelog (changelog.html, 2026-10-22) lists every ReKindle change and is linked from the home footer and the Suggestions triage strip; the earlier "Update log" row is already done.'
+    },
+    {
+        id: '-OzcThW32SinAbgxsAAt',
+        title: 'scripture',
+        why: 'Scriptures (bible.html) already carries the Bible, Quran, Dhammapada and Tao Te Ching with adjustable text and multiple translations.'
+    },
+    {
+        id: '-P--8TX9dkh1HsMWuh90',
+        title: 'make so you can download  rekindle.ink on kindle',
+        why: 'ReKindle Fullscreen (kindle/, 2026-10-22) is a downloadable KPM launcher package for jailbroken Kindles on firmware 5.16.4+; Help describes the install and recovery steps.'
+    },
+    {
+        id: '-P5Y2DdVVrHMyWQ_Ngmx',
+        title: 'Book Tracker',
+        why: 'Books (books.html) searches a book by title and stores a star rating, reading log and want-to-read list, synced to the account.'
+    },
+    {
+        id: '-P5_3CzWW-03izSSGf4q',
+        title: 'add a dark mode and colorsoft for the device.',
+        why: 'Dark mode shipped and was re-enabled 2026-10-26 (theme.js, Settings - Theme, light/dark/auto); the earlier "Dark Mode" row is already done.'
     }
 ];
 

@@ -224,9 +224,60 @@ Flow:
 1. Game page includes `<script src="js/score-submit.js" data-game="surfer"></script>` (after the Firebase compat scripts). On auth it calls `startGameRun`, which writes `game_runs/{uid}_{game}` with a **server** `startedAt`.
 2. When the game ends, `window.RekindleScores.submit('leaderboard_surfer', { score: n })` calls `submitScore`.
 3. The server accepts a new best only if
-   `max(prev, base) + rate × secondsSinceRunStart <= n <= absMax` — `base` replaces `prev` only for a brand-new entry, it does **not** stack on every run (otherwise reloading would farm it) — then writes `username` (looked up from RTDB `users_public`), `timestamp` (server) and `verified: true`.
+   `max(prev, base) + rate × secondsSinceLastAcceptedSubmission <= n <= absMax` — `base` replaces `prev` only for a brand-new entry, it does **not** stack on every run (otherwise reloading would farm it) — then writes `username` (looked up from RTDB `users_public`), `timestamp` (server) and `verified: true`. The time anchor is `max(run.startedAt, run.lastSubmitAt)`; see the burst section below.
 
 So a fabricated value is capped by *how long the game was actually open*, and a hard per-game maximum. Rejected attempts are logged to `score_audit` (admin-only) for review.
+
+### Burst / repeated submits (2026-11)
+
+A user sent in this console loop as an exploit:
+
+```javascript
+(async () => {
+    for (let i = 0; i <= 67; i += 2) {
+        await window.RekindleScores.submit('leaderboard_surfer', { score: i * 10000 });
+    }
+})().then(() => console.log('done check the result'));
+```
+
+Why it worked against the first design: the allowance added
+`rate × (now - run.startedAt)` to `previousBest` **on every call**, but
+`previousBest` already contained the previous claim. So each accepted submit
+re-earned the same idle seconds. After a tab had been open long enough, the
+loop could walk 0 → 20,000 → … → the absolute max, one call at a time, and
+every step looked "believable". It also cost one function invocation and one
+Firestore transaction per iteration.
+
+The fix has two layers, and neither adds a read, a write or an invocation:
+
+| Layer | File | Behaviour |
+| :--- | :--- | :--- |
+| Client coalescing | `js/score-submit.js` | At most one submission per collection per 4 s window; calls inside the window are merged into the newest payload and the middle ones never reach the network. `submit()` resolves as soon as the payload is queued, not when the send finishes, so an `await` loop cannot serialise the burst back into one call per window. 34 calls → 2 (`startGameRun` + one `submitScore`). |
+| Server anchoring | `firebase-functions/scores.js` | The credit clock starts at `max(startedAt, lastSubmitAt)`, which the transaction already reads. A second claim one second later may only add `rate × 1`, so the burst above banks at most the first value. Still zero extra operations. |
+
+`lastSubmitAt` was already being written on every accepted submission but was
+never read; the fix uses that existing field. The same change makes a reload
+inside a run harmless: `startGameRun` keeps `startedAt` and `lastSubmitAt`
+already caps the claim.
+
+`scripts/test-scores.js` (in `npm test`) stubs Firestore/admin in memory and
+replays the loop on a fresh run and on a 30-minute-idle run, then asserts an
+honest 2-minute run still lands and that the client helper makes at most two
+network calls for 34 submissions.
+
+**Residual, and why there is no perfect zero-cost fix:** a run is still just
+"the page was open". A user can idle and then submit one value the time
+allowance permits (the documented residual risk below). Proving play would
+need in-game heartbeats — extra writes/invocations — so the design accepts the
+bounded, audited version instead. Likewise, a console can call the
+`submitScore` callable directly and burn invocations; the client coalescing
+only removes the copy-paste version. The callable is on the Blaze project
+(2M free invocations/month), and rejected values are still cheap: no writes,
+one audit row per user per minute.
+
+If you change `js/score-submit.js`, bump `?v=` in every HTML page that loads it
+(all 20 leaderboard pages) — the edge cache keeps the old helper for up to
+7 days otherwise.
 
 ### Adding / changing a leaderboard
 
@@ -466,3 +517,53 @@ fixed 500×500 canvas, so the grids are 10×10 / 20×20 / 25×25 and every wall 
   untouched, so a bigger grid just means a longer single solution.
 * The leaderboard contract is unchanged (`js/score-submit.js data-game="maze"`, `leaderboard_maze`);
   the level is not part of the score payload.
+
+## Pictionary stroke authorization (2026-11-10)
+
+Board report `-P2CcrX3YbQ9hgv4le0F`: "somebody was drawing over my drawing". Only the
+drawer's client enabled the canvas, but `games` is `.write: auth != null`, so any
+authenticated client could push a stroke (or edit game state) during someone else's turn.
+
+* Game node is **`games/pictionary/{matchId}`** (not `games/livepictionary` — the page is
+  `livepictionary.html`, the data key is `pictionary`).
+* `startMatch()` now writes `drawerUid: order[0]`; `advanceTurn()` writes
+  `drawerUid: order[nextIdx]`; `backToLobby()` clears it. `currentDrawerUid()` prefers that
+  field and falls back to `drawOrder[drawerIdx]` for matches created before the change.
+* `rtdb-rules.json` adds a `.validate` under `games/pictionary/$matchId/strokes/$strokeId`:
+  a stroke's `u` must equal `auth.uid` (when present) and, when `drawerUid` exists, the
+  writer must be the drawer. A `.validate` at the child rejects the write even though the
+  parent `.write` grants it. Matches without `drawerUid` stay permissive for old clients.
+* `strokeBelongsToDrawer()` filters other players' strokes on render as defence in depth;
+  strokes without `u` (legacy) are still drawn. `undoStroke()` already used `u`.
+* Still open by design: the parent `.write` allows any auth user to clear `strokes` or edit
+  other game state. Tightening that needs per-game rules (the blanket `games` grant would
+  have to be split), which is a separate change.
+
+## Live-game sign-in grace (2026-11-10)
+
+Board report `-P5nwnnXkmxTt3BQ85ly`: "it keeps saying that I need to sign in, when I
+already am." Every live game used to run this on the first null `onAuthStateChanged`
+callback:
+
+```js
+if (user) { ... } else {
+    showAlert("Sign In Required", ...);
+    setTimeout(goHome, 3000);
+}
+```
+
+Firebase restores the session asynchronously, and a service-worker reload / token refresh
+can deliver that null callback before the session is back. The player was then shown
+"Sign In Required" and kicked home three seconds later.
+
+`livepictionary.html` already had the right pattern; it is now on all eight live-game
+pages (`livechess`, `livedotsandboxes`, `livetictactoe`, `liveyahtzee`, `liveuno`,
+`liveconnect4`, `livecheckers`, `livepictionary`):
+
+* `authInitTimer` delays the alert for **1200 ms**, so only a real signed-out visit sees it.
+* `authHomeTimer` is cleared and `closeAlert()` is called as soon as a user arrives, so a
+  late sign-in cancels the alert and the redirect instead of racing them.
+* `checkUrlForMatch()` runs from the same callback, so a user arriving from a match link is
+  still joined normally.
+
+When adding a live game, copy this block rather than the old instant-alert version.

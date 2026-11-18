@@ -13,6 +13,7 @@
  *   body     - trusted HTML string
  *   tags     - extra search words (not displayed)
  *   badges   - optional labels such as REKINDLE+, BETA, NEW, 1P, 2P, LIVE
+ *   plus     - optional; true marks a ReKindle+ app (Help shows a small PLUS chip)
  *   appHref  - optional page to launch (without .html)
  *   appName  - label for the launch button
  *   related  - optional array of article ids
@@ -151,7 +152,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
             <p><b>Forgot the current password?</b> If you are still signed in on this device, choose <b>Forgot your current password?</b> in the same box, type your username to confirm, and set a new password (at least 8 characters). This works from the live session - there is no "forgot password" email because accounts do not require an email address. Only do this on a device you control: anyone who can use a device you are signed in on could reset the password too.</p>
             <p>If you are signed out and locked out, contact <a href="mailto:support@rekindle.ink">support@rekindle.ink</a> with your username. Staff can restore access but will never ask for your password.</p>
             <h2>Deleting your account</h2>
-            <p>Sign in, open <b>Settings</b> and use <b>Delete Account</b> under Account. Re-enter your password and type your username to confirm. Deletion is permanent and removes your profile, files, posts, chat messages, direct messages, scores and suggestions from both Firebase projects. See the <a href="#faq">FAQ</a> for what to do about an active subscription.</p>
+            <p>Sign in, open <b>Settings</b> and use <b>Delete Account</b> under Account. Re-enter your password and type your username to confirm. Deletion is permanent and removes your account, profile, files, scores and suggestions from the main project. Your social username and profile picture are removed, so other people see "Deleted User" with a blank avatar. Your public social history (posts, comments, chat messages and DMs) stays in the social project and ages out under the normal retention policy. See the <a href="#faq">FAQ</a> for what to do about an active subscription.</p>
             <h2>Age verification for social apps</h2>
             <p>KindleChat, Neighbourhood and Topics require an age check before they load. You enter your date of birth and country; ReKindle checks the minimum social-media age for that country. The check is a self-declaration, not an ID upload, and the social apps stay locked until it is complete - browsing, posting and messaging all need it.</p>
             <div class="note"><b>Privacy:</b> Your password is handled by Firebase Authentication. Your date of birth and country are used for the age check and kept in your account's age-verification record for audit and support. See the <a href="privacy.html">Privacy Policy</a>.</div>
@@ -379,7 +380,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
             <h2>Recently added</h2>
             <ul>
                 <li><b>Mail: Outlook and Hotmail</b> - Microsoft sign-in codes replace app passwords, so a Microsoft mailbox works without typing a password on the Kindle.</li>
-                <li><b>Delete Account</b> - permanent self-service deletion in Settings, including cloud files, posts, chat messages and scores.</li>
+                <li><b>Delete Account</b> - permanent self-service deletion in Settings, including cloud files, scores and the main profile.</li>
                 <li><b>Forgot current password</b> - reset the password from a signed-in device without an email address.</li>
                 <li><b>Dark mode</b> - Light, Dark and Auto (Night) themes are available again, marked BETA.</li>
                 <li><b>Changelog</b> - a searchable list of every commit, linked from the About panel.</li>
@@ -433,7 +434,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
             <p>Email <a href="mailto:support@rekindle.ink">support@rekindle.ink</a> from the address used at checkout. Include your ReKindle username, the purchase date and the amount. Do not post card details or receipts on the Suggestions board or in chat.</p>
             <p>If Pro disappeared after a renewal, open the ReKindle+ page and confirm the subscription is active under <b>Manage Subscription</b> first; the membership webhook can take a minute to land. A refund is handled case by case - a cancelled subscription stops future renewals but does not automatically refund the current period.</p>
             <h2>How do I delete my account or data?</h2>
-            <p>Sign in, open <b>Settings</b> and tap <b>Delete Account</b> under Account. Re-enter your password and type your username to confirm. Deletion is permanent and removes your account plus its content - notes, files, posts, chat messages, DMs, scores and suggestions - from both Firebase projects.</p>
+            <p>Sign in, open <b>Settings</b> and tap <b>Delete Account</b> under Account. Re-enter your password and type your username to confirm. Deletion is permanent and removes your account plus its main-project content - notes, files, scores and suggestions. Your social username and profile picture are removed (other people see "Deleted User" with a blank avatar). Public social history is retained and ages out under the normal retention policy.</p>
             <p>If you subscribe to ReKindle+, check <b>Manage Subscription</b> on the ReKindle+ page afterwards and cancel there if the plan is still active. If you are locked out, email <a href="mailto:support@rekindle.ink">support@rekindle.ink</a> with your username. Guest data can be removed by clearing the browser's site data.</p>
             <h2>Why is a game or app missing?</h2>
             <p>Check Settings for <b>Disable Games</b>, check whether the app is hidden in Edit mode, and check the A-Z index for a renamed app. Some unlisted pages are described in <a href="#hidden-legacy">Unlisted &amp; legacy pages</a>.</p>
@@ -578,6 +579,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'A ReKindle+ IMAP/SMTP email client with folders, reading, archiving and composing.',
         tags: 'mail email imap smtp gmail outlook hotmail yahoo icloud inbox compose send archive spam trash app password oauth accounts multiple threads conversations pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'mail',
         appName: 'Mail',
         related: ['pro', 'contacts', 'account'],
@@ -697,15 +699,15 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         id: 'scores',
         cat: 'essentials',
         title: 'Scores',
-        summary: 'Live and recent scores for major leagues, with Favourites for your teams in one feed.',
-        tags: 'scores sports nfl nba mlb nhl nrl soccer epl mls ncaa espn favourites favorites',
+        summary: 'Live and recent scores for 100+ leagues across 12 sports, with Favourites for your teams in one feed.',
+        tags: 'scores sports nfl nba mlb nhl nrl football basketball baseball hockey soccer softball rugby afl lacrosse volleyball water polo field hockey epl mls ncaa espn favourites favorites',
         appHref: 'scores',
         appName: 'Scores',
         related: ['news', 'watchlist'],
         body: `
             <p>Scores shows scoreboards for major sports, with a <b>Favourites</b> tab that combines your teams into one list.</p>
             <h2>Leagues</h2>
-            <p>NFL, NBA, MLB, NHL, NRL, English Premier League, MLS, NCAA Football and NCAA Basketball. Data comes from ESPN's public scoreboard API; NRL is handled by a dedicated ReKindle endpoint because ESPN's API does not expose it directly.</p>
+            <p>Football, basketball, baseball, softball, ice hockey, soccer, rugby, Australian rules, lacrosse, volleyball, field hockey and water polo, with more than 100 leagues and competitions. Data comes from ESPN's public scoreboard API, fetched directly by your browser; NRL is served by a dedicated ReKindle endpoint.</p>
             <h2>Following teams</h2>
             <ol>
                 <li>Open a league to see its games.</li>
@@ -714,7 +716,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
                 <li>Tap the star again to remove it.</li>
             </ol>
             <h2>Game states</h2>
-            <p>Games show scheduled start times, live scores and progress, or final results. Times are shown as ESPN supplies them (usually US Eastern); ReKindle does not convert them to your timezone.</p>
+            <p>Games show scheduled start times, live scores and progress, or final results. Times are shown as ESPN supplies them (usually US Eastern); ReKindle does not convert them to your timezone. Only games within about two months of today are shown, so an out-of-season league shows an empty board instead of a years-old final.</p>
             <div class="note"><b>Empty board?</b> Out of season, a league may have no games. If every league is empty, the upstream API is probably rate-limiting; wait and refresh. NRL parsing depends on ESPN's page structure and can lag after a site change.</div>
         `
     },
@@ -1036,6 +1038,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Write tasks by hand and let handwriting recognition turn them into digital todos.',
         tags: 'quick todo handwriting ocr scribble stylus google tasks handwriting recognition speed pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'quicktodo',
         appName: 'Quick ToDo',
         related: ['tasks', 'notes', 'airtype'],
@@ -1084,6 +1087,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'A ReKindle+ document editor that opens and saves Word files through Files.',
         tags: 'docs documents editor word docx import export files pro ckeditor',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'docs',
         appName: 'Docs',
         related: ['files', 'notes'],
@@ -1109,6 +1113,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'ReKindle+ cloud storage for documents, images, PDFs and ebooks, shared with Docs and Photo Frame.',
         tags: 'files storage upload image pdf ebook docx word cloud 100mb pro download delete docs',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'files',
         appName: 'Files',
         related: ['docs', 'storage'],
@@ -1266,6 +1271,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Use your phone as a keyboard for the e-reader, with a live note panel.',
         tags: 'airtype typewriter phone keyboard pair qr code notes typing pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'airtype',
         appName: 'AirType',
         related: ['notes', 'quicktodo'],
@@ -1407,6 +1413,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Browse a Dropbox account and preview or download files on the e-reader.',
         tags: 'dropbox files cloud storage connect oauth favorites preview download pro beta',
         badges: ['REKINDLE+', 'BETA'],
+        plus: true,
         appHref: 'dropbox',
         appName: 'Dropbox',
         related: ['files', 'docs'],
@@ -1519,7 +1526,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
                 <li>Use the swap arrows to reverse the pair.</li>
             </ol>
             <p>Short phrases work best. Idioms, names and technical terms can come out oddly; treat the result as a draft, especially for anything important.</p>
-            <div class="note"><b>KindleChat translations are separate:</b> chat messages are translated automatically by ReKindle's own translation worker into every supported language. See <a href="#kindlechat">KindleChat</a>.</div>
+            <div class="note"><b>KindleChat translations are separate:</b> messages written in another language are translated in your browser into your language when you view them, and <b>Show Original</b> switches back. See <a href="#kindlechat">KindleChat</a>.</div>
         `
     },
     {
@@ -1664,6 +1671,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'A text-first AI chat, with hosted Gemini or your own API key.',
         tags: 'ai assistant oracle chat gemini openai groq xai mistral perplexity ollama api key custom model pro quota',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'chat',
         appName: 'AI Assistant',
         related: ['pro', 'wikipedia', 'notes'],
@@ -1698,6 +1706,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Read your Bluesky feed, notifications and discover timeline, and post from the e-reader.',
         tags: 'bluesky bsky social feed post app password notifications discover search pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'bluesky',
         appName: 'Bluesky',
         related: ['mastodon', 'pinterest', 'substack'],
@@ -1729,6 +1738,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Connect a Mastodon instance with an access token to read and post.',
         tags: 'mastodon fediverse social instance access token posts following favourites pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'mastodon',
         appName: 'Mastodon',
         related: ['bluesky', 'pinterest'],
@@ -1760,6 +1770,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Browse pins, search ideas and view or save to your boards.',
         tags: 'pinterest pins boards ideas search save connect pro beta',
         badges: ['REKINDLE+', 'BETA'],
+        plus: true,
         appHref: 'pinterest',
         appName: 'Pinterest',
         related: ['bluesky', 'mastodon', 'photoframe'],
@@ -1789,6 +1800,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Read your Substack inbox, subscriptions and paid posts with a session cookie.',
         tags: 'substack newsletters inbox subscriptions paid posts cookie session pro sync',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'substack',
         appName: 'Substack',
         related: ['rssreader', 'readwise', 'news'],
@@ -1863,6 +1875,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Turn the e-reader into a photo slideshow with adjustable timing and layout.',
         tags: 'photo frame slideshow jpeg pictures shuffle fit crop duration pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'photoframe',
         appName: 'Photo Frame',
         related: ['pixel', 'flipbook'],
@@ -1978,6 +1991,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
         summary: 'Draw frame-by-frame pixel animations, preview them and post them to KindleChat.',
         tags: 'flipbook animation pixel art frames fps onion skin gif post kindlechat pro',
         badges: ['REKINDLE+'],
+        plus: true,
         appHref: 'flipbook',
         appName: 'Flipbook',
         related: ['pixel', 'kindlechat'],
@@ -2083,7 +2097,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
                 <li>Scroll to the top of the chat to load older messages.</li>
             </ol>
             <h2>Translations</h2>
-            <p>Messages are translated into every supported language by ReKindle's translation worker. Open <b>Settings</b> and choose <b>Translation Language</b>, or leave it on Auto to follow your system language. When <b>Show Translations</b> is on, each message is replaced by its translation and a <b>Show Original</b> control switches back. If a translation is missing, it may still arrive - retries continue for a few minutes after sending.</p>
+            <p>Messages written in another language are translated in your browser into your language as you view them (translation needs a connection). When <b>Show Translations</b> is on, each message is replaced by its translation and a <b>Show Original</b> control switches back. The <b>Translate</b> link is the manual fallback while a translation loads or if it fails.</p>
             <h2>Emoji and ASCII art</h2>
             <p>The smiley button opens a picker with Unicode emoji (shown as OpenMoji images, so they display correctly on Kindle) and a tab of ASCII art emoticons. The composer inserts the right form; type plain text normally.</p>
             <h2>Art gallery</h2>
@@ -3696,7 +3710,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
                 <li><b>Google Tasks / Calendar / Contacts</b> connect via Google OAuth. <b>iCalendar (.ics)</b> and <b>CardDAV / vCard</b> accept read-only feed URLs.</li>
             </ul>
             <h2>Account</h2>
-            <p>Change your password here, including the <b>Forgot your current password?</b> reset while you are signed in. <b>Delete Account</b> permanently removes the account and its data after you re-enter your password and type your username. ReKindle+ status and subscription management are also available from this area and the ReKindle+ page.</p>
+            <p>Change your password here, including the <b>Forgot your current password?</b> reset while you are signed in. <b>Delete Account</b> permanently removes the account and its main-project data after you re-enter your password and type your username; public social history is retained under the normal retention policy. ReKindle+ status and subscription management are also available from this area and the ReKindle+ page.</p>
         `
     },
     {
@@ -3775,7 +3789,7 @@ HELP_ARTICLES = HELP_ARTICLES.concat([
             </ul>
             <p>Each service has its own privacy policy. Do not paste secrets or sensitive personal data into third-party apps.</p>
             <h2>Deleting data</h2>
-            <p>Clear browser site data to remove guest data and local caches. To delete your account and cloud records, sign in and use <b>Settings -> Delete Account</b>; it removes your profile, files, posts, chat messages and scores from both Firebase projects. If you are locked out, email <a href="mailto:support@rekindle.ink">support@rekindle.ink</a> with your username. See <a href="#storage">Where your data lives</a> for what each clear operation affects.</p>
+            <p>Clear browser site data to remove guest data and local caches. To delete your account and cloud records, sign in and use <b>Settings -> Delete Account</b>; it removes your profile, files and scores from the main project; public social history (posts, comments, chat messages and DMs) is retained and ages out under the normal retention policy. If you are locked out, email <a href="mailto:support@rekindle.ink">support@rekindle.ink</a> with your username. See <a href="#storage">Where your data lives</a> for what each clear operation affects.</p>
         `
     },
     {

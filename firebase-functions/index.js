@@ -13,6 +13,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const net = require("net");
+const crypto = require("crypto");
 const dns = require("dns").promises;
 const { ImapFlow } = require("imapflow");
 const simpleParser = require("mailparser").simpleParser;
@@ -1539,7 +1540,7 @@ exports.mailMicrosoftPoll = onCall(callOptions, async (request) => {
         }
     });
     if (!accountId) {
-        accountId = 'ms' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        accountId = 'ms' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
     }
 
     await admin.database().ref(`${MS_ACCOUNT_PATH}/${auth.uid}/${accountId}`).set({
@@ -2084,6 +2085,190 @@ exports.adminSetPro = onCall(callOptions, async (request) => {
 });
 
 /**
+ * Return the gift code created for a completed Stripe Checkout Session. The
+ * webhook writes gift_purchases/{sessionId} (Admin only); this callable checks
+ * the buyer's uid before returning it. Pending means Stripe has not delivered
+ * checkout.session.completed yet.
+ */
+exports.getLatestGiftPurchase = onCall(callOptions, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+    const db = admin.firestore();
+    const snap = await db.collection('users').doc(request.auth.uid).collection('gift_last').doc('latest').get();
+    if (!snap.exists) return { pending: true };
+    const data = snap.data();
+    return { code: data.code || null, plan: data.plan || null };
+});
+
+/**
+ * Gift codes a buyer has purchased, newest first, with redemption status.
+ * Buyers identify codes by uid; the redemption side is Admin-only.
+ */
+exports.getMyGiftCodes = onCall(callOptions, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+    const db = admin.firestore();
+
+    // No orderBy: that would need a composite index (uid + createdAt). A buyer
+    // has a handful of purchases, so fetch a bounded set and sort in memory.
+    const purchasesSnap = await db.collection('gift_purchases')
+        .where('uid', '==', request.auth.uid)
+        .limit(100)
+        .get();
+    if (purchasesSnap.empty) return { codes: [] };
+
+    const purchases = [];
+    purchasesSnap.forEach(function (doc) {
+        const d = doc.data() || {};
+        if (!d.code) return;
+        purchases.push({
+            code: d.code,
+            plan: d.plan || 'year',
+            createdAt: d.createdAt && d.createdAt.toMillis ? d.createdAt.toMillis() : 0
+        });
+    });
+    purchases.sort(function (a, b) { return b.createdAt - a.createdAt; });
+
+    const refs = purchases.map(function (p) {
+        return db.collection('gift_codes').doc(p.code);
+    });
+    const codeSnaps = refs.length ? await db.getAll(...refs) : [];
+    const byCode = {};
+    codeSnaps.forEach(function (snap) {
+        if (snap.exists) byCode[snap.id] = snap.data();
+    });
+
+    return {
+        codes: purchases.map(function (p) {
+            const c = byCode[p.code] || {};
+            return {
+                code: p.code,
+                plan: p.plan,
+                createdAt: p.createdAt || null,
+                redeemed: !!c.redeemed,
+                redeemedAt: c.redeemedAt && c.redeemedAt.toMillis ? c.redeemedAt.toMillis() : null,
+                redeemedByMe: !!c.redeemedBy && c.redeemedBy === request.auth.uid
+            };
+        })
+    };
+});
+
+exports.redeemGiftCode = onCall(callOptions, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to redeem a gift code.');
+    const raw = typeof request.data.code === 'string' ? request.data.code : '';
+    const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 6 || code.length > 16) {
+        throw new HttpsError('invalid-argument', 'That gift code is not valid.');
+    }
+
+    const db = admin.firestore();
+    const nowMs = Date.now();
+
+    // Brute-force guard: ten attempts per account per hour. A failed code still
+    // counts, so guessing is not free.
+    const limitRef = db.collection('gift_redeem_limits').doc(request.auth.uid);
+    const limitSnap = await limitRef.get();
+    let attempts = 0;
+    let windowStart = nowMs;
+    if (limitSnap.exists) {
+        const d = limitSnap.data();
+        const start = d.windowStart && d.windowStart.toMillis ? d.windowStart.toMillis() : 0;
+        if (start && nowMs - start < 60 * 60 * 1000) {
+            windowStart = start;
+            attempts = Number(d.attempts) || 0;
+        }
+    }
+    if (attempts >= 10) {
+        throw new HttpsError('resource-exhausted', 'Too many gift-code attempts. Try again in an hour.');
+    }
+    await limitRef.set({
+        windowStart: admin.firestore.Timestamp.fromMillis(windowStart),
+        attempts: attempts + 1
+    }, { merge: true });
+
+    const result = await db.runTransaction(async (tx) => {
+        const codeRef = db.collection('gift_codes').doc(code);
+        const codeSnap = await tx.get(codeRef);
+        if (!codeSnap.exists) {
+            throw new HttpsError('not-found', 'That gift code is not valid.');
+        }
+        const gift = codeSnap.data();
+        if (gift.redeemed) {
+            throw new HttpsError('failed-precondition', 'That gift code has already been used.');
+        }
+
+        const userRef = db.collection('users').doc(request.auth.uid);
+        const userSnap = await tx.get(userRef);
+        let currentExpiry = 0;
+        if (userSnap.exists && userSnap.data().proExpiresAt) {
+            const rawExpiry = userSnap.data().proExpiresAt;
+            currentExpiry = rawExpiry.toMillis ? rawExpiry.toMillis() : new Date(rawExpiry).getTime();
+        }
+
+        // A gift is for someone who is not already a member. Stacking a year on
+        // a recurring plan (or on a lifetime grant, which never expires) creates
+        // a double-paying account, so refuse and leave the code unused.
+        if (currentExpiry > nowMs) {
+            throw new HttpsError(
+                'failed-precondition',
+                'ReKindle+ is already active on this account. Give this code to someone else; it can be redeemed here after your current membership ends.'
+            );
+        }
+
+        let expiresAt;
+        let subscriptionType;
+        if (gift.plan === 'lifetime') {
+            expiresAt = new Date(Date.UTC(2100, 0, 1));
+            subscriptionType = 'lifetime';
+        } else {
+            expiresAt = new Date(Math.max(nowMs, currentExpiry) + 365 * 24 * 60 * 60 * 1000);
+            subscriptionType = 'gift_year';
+        }
+
+        tx.set(userRef, {
+            isPro: true,
+            proExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+            subscriptionType: subscriptionType
+        }, { merge: true });
+
+        tx.update(codeRef, {
+            redeemed: true,
+            redeemedBy: request.auth.uid,
+            redeemedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { expiresAt, subscriptionType, plan: gift.plan };
+    });
+
+    // Merge claims: setCustomUserClaims replaces the whole object, so copying
+    // the existing claims keeps ageVerified/moderator intact.
+    try {
+        const userRecord = await admin.auth().getUser(request.auth.uid);
+        const mergedClaims = Object.assign({}, userRecord.customClaims || {}, { pro: true });
+        await admin.auth().setCustomUserClaims(request.auth.uid, mergedClaims);
+        if (userRecord.email) {
+            const entry = {};
+            entry[userRecord.email] = {
+                expiresAt: admin.firestore.Timestamp.fromDate(result.expiresAt),
+                isLifetime: result.subscriptionType === 'lifetime'
+            };
+            await db.collection('config').doc('supporters').set(entry, { merge: true });
+        }
+    } catch (e) {
+        // The entitlement is already written; a claim failure repairs on the
+        // next token refresh or getSocialToken, so do not fail the redemption.
+        logger.warn('redeemGiftCode claim/supporters sync failed', e);
+    }
+
+    return {
+        ok: true,
+        plan: result.plan,
+        expiresAt: result.expiresAt.toISOString(),
+        message: result.plan === 'lifetime'
+            ? 'Gift code redeemed: ReKindle+ lifetime.'
+            : 'Gift code redeemed: one year of ReKindle+.'
+    };
+});
+
+/**
  * Game leaderboards — server-authoritative score submission.
  *
  * The browser can no longer write `leaderboard_*` documents (firestore.rules
@@ -2100,9 +2285,13 @@ exports.submitScore = onCall(callOptions, scoreHandlers.submitScore);
 
 /**
  * Permanent account deletion. See firebase-functions/account-deletion.js and
- * docs/agent/account-deletion.md. The longer timeout covers a full social +
- * personal data sweep; the Auth record is deleted last so a timeout is
- * retryable.
+ * docs/agent/account-deletion.md. The longer timeout covers a full personal
+ * data sweep; the Auth record is deleted last so a timeout is retryable.
+ *
+ * Memory stays at 512 MiB because the 2026-11-10 OOM was a whole-node read of
+ * `games` (~15,900 matches / 60 MB), not a budget problem: that read is gone
+ * and the sweep now peaks around 100 MB. Raising memory would only have hidden
+ * it.
  */
 const accountDeletion = require("./account-deletion");
 exports.deleteAccount = onCall(

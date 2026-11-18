@@ -57,9 +57,19 @@ const PRIMARY_USER_RTDB_ROOTS = [
     'security_events'
 ];
 
-// Social-project RTDB nodes keyed by uid. DM threads/messages/blocks are not in
-// this list because they have to be discovered and removed as a graph (see
-// account-deletion.js).
+// Social-project profile nodes. Account deletion removes these so social apps
+// fall back to "Deleted User" + a blank avatar; the account's posts/messages
+// and all other social history are retained.
+const SOCIAL_PROFILE_RTDB_ROOTS = [
+    'users_public',
+    'user_cards',
+    'users_private'
+];
+
+// Legacy social-project RTDB nodes keyed by uid. deleteAccount no longer calls
+// buildSocialUserDeletePaths(): social history is retained and cleanupSocial
+// deletes it by age. Keep these paths only for the historical test coverage and
+// in case the policy is revisited.
 const SOCIAL_USER_RTDB_ROOTS = [
     'users_public',
     'user_cards',
@@ -139,6 +149,40 @@ function isSafePathPart(value) {
     return !/[.#$\[\]/\s]/.test(value);
 }
 
+/**
+ * Live-game paths, derived from the small `matchmaking` node.
+ *
+ * `matchmaking/{gameType}/{matchId}` is the public listing for an open lobby and
+ * the game itself lives at `games/{gameType}/{matchId}`, so the user's lobby
+ * seat can be found without reading `games` (which held ~15,900 matches / 60 MB
+ * in November 2026 — reading it whole OOM-killed the function).
+ *
+ * Both halves matter: the listing must go when the user was the host, and the
+ * seat must go even in a lobby someone else hosts, otherwise the lobby keeps a
+ * phantom player. The chat nodes under each match are never included: in-game
+ * chat is retained history (see docs/agent/account-deletion.md).
+ */
+function buildLiveGameDeletePaths(matchmaking, uid) {
+    const updates = {};
+    if (!isValidUid(uid)) return updates;
+    if (!matchmaking || typeof matchmaking !== 'object') return updates;
+
+    Object.keys(matchmaking).forEach(function (gameType) {
+        if (!isSafePathPart(gameType)) return;
+        const matches = matchmaking[gameType];
+        if (!matches || typeof matches !== 'object') return;
+        Object.keys(matches).forEach(function (matchId) {
+            if (!isSafePathPart(matchId)) return;
+            const listing = matches[matchId] || {};
+            if (listing.hostUid === uid) {
+                updates['matchmaking/' + gameType + '/' + matchId] = null;
+            }
+            updates['games/' + gameType + '/' + matchId + '/players/' + uid] = null;
+        });
+    });
+    return updates;
+}
+
 function buildPrimaryUserDeletePaths(uid, handle) {
     const updates = {};
     if (!isValidUid(uid)) return updates;
@@ -148,6 +192,15 @@ function buildPrimaryUserDeletePaths(uid, handle) {
     }
     if (isSafePathPart(handle)) {
         updates['kindlechat/user_limits/' + handle] = null;
+    }
+    return updates;
+}
+
+function buildSocialProfileDeletePaths(uid) {
+    const updates = {};
+    if (!isValidUid(uid)) return updates;
+    for (let i = 0; i < SOCIAL_PROFILE_RTDB_ROOTS.length; i++) {
+        updates[SOCIAL_PROFILE_RTDB_ROOTS[i] + '/' + uid] = null;
     }
     return updates;
 }
@@ -209,6 +262,7 @@ module.exports = {
     FIRESTORE_BATCH_SIZE,
     CHAT_BATCH_SIZE,
     PRIMARY_USER_RTDB_ROOTS,
+    SOCIAL_PROFILE_RTDB_ROOTS,
     SOCIAL_USER_RTDB_ROOTS,
     normalizeAccountName,
     confirmationMatches,
@@ -217,7 +271,9 @@ module.exports = {
     pickUsername,
     isValidUid,
     isSafePathPart,
+    buildLiveGameDeletePaths,
     buildPrimaryUserDeletePaths,
+    buildSocialProfileDeletePaths,
     buildSocialUserDeletePaths,
     shouldDeleteReportForUser,
     emptySummary,

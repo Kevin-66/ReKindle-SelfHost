@@ -44,6 +44,7 @@ Only this file is injected automatically. The docs below are **not** in the agen
 | [payments.md](docs/agent/payments.md) | Stripe worker, Pro grants/revokes, reconciliation |
 | [kindle-fullscreen.md](docs/agent/kindle-fullscreen.md) | `kindle/` launcher, cover, KPM |
 | [link-blocking.md](docs/agent/link-blocking.md) | URL/link ban: `js/link-guard.js`, `containsUrl()`, evasion forms, parity test |
+| [seo.md](docs/agent/seo.md) | `<head>` markup, canonicals, `sitemap.xml`/`robots.txt`, Search Console, 404s |
 
 ## 🚫 Restrictions (Target: Chromium 75)
 
@@ -90,16 +91,7 @@ Only this file is injected automatically. The docs below are **not** in the agen
 **Constraint:** `window.alert()`, `confirm()`, and `prompt()` are unsupported.
 **Solution:** Use **Custom Modals** (HTML/CSS overlays).
 
-**Example (Correct):**
-```html
-<!-- Use a custom div overlay -->
-<div id="custom-alert" class="modal-overlay">
-  <div class="modal-box">
-    <p>Operation failed.</p>
-    <button onclick="closeModal()">OK</button>
-  </div>
-</div>
-```
+Build the custom modal with the standard `.modal-overlay` / `.modal-box` structure (see [Best Practices](#-best-practices) and `weather.html`), not a one-off overlay.
 
 ## 🎨 Standard UI Patterns (System 7)
 
@@ -337,8 +329,7 @@ functions/api/foo/[[path]].js   → handles /api/foo and /api/foo/*
 *   **Rule:** Avoid heavy computation, crypto, or massive data parsing on the main thread.
 
 ### 2. Localization
-*   **Method:** Use `data-i18n` attributes for all text content.
-*   **Library:** `js/i18n.js` handles replacement automatically.
+Use `data-i18n` attributes for all text content; `js/i18n.js` replaces them automatically (see the Localization section above).
 
 ### 3. Viewport & Rendering
 *   **Meta Tag:** `user-scalable=no`.
@@ -359,13 +350,7 @@ functions/api/foo/[[path]].js   → handles /api/foo and /api/foo/*
     *   Avoid relying on `Intl.DateTimeFormat` for timezone shifting.
     *   Use a **Manual Offset** strategy: Store a numeric offset (e.g., `+11`) and mathematically shift the timestamp before displaying.
     *   Use the `time.js` helper `rekindleGetZonedDate()` which handles this shim.
-*   **Timezone Setting Modal (`time.js`):**
-    *   `time.js` injects a lazy System 7 modal (`checkTimezoneOffset()`) when the user has not saved a timezone offset.
-    *   It triggers **only** when local-time helpers are actually called (`rekindleGetZonedDate()`, `rekindleFormatTime()`, `getDateInZone()` without an explicit zone) — it does **not** run automatically on every page load.
-    *   The modal searches the Open-Meteo geocoding API, fetches the UTC offset, saves it to `localStorage` (`rekindle_location_manual` + `rekindle_timezone_offset`), and **reloads the page** on success.
-    *   It has **no dismiss button** — the user must set their timezone or leave the popup open.
-    *   Its "Sign in instead" button goes to `index?login=true` (the canonical index login popup); the prompt is suppressed on that URL so it cannot cover the modal, and signing in restores the account's saved timezone. See section 12.
-    *   Because this modal is injected into arbitrary host pages, it is subject to the class-name leakage warning in section 6 above.
+*   **Timezone / language prompt (`time.js`):** one lazy System 7 modal (`checkTimezoneOffset()`), injected only when local-time helpers run (`rekindleGetZonedDate()`, `rekindleFormatTime()`, `getDateInZone()` without a zone). No timezone → **Sign In first** (ReKindle mark + cloud-sync/data/ReKindle+/community benefits; `index?login=true`; skipped when `rekindle_uid`/Firebase shows a user), **Continue as guest** (`rekindle_tz_guest`) opens the city search + language picker (region default, **Back** returns to sign-in). Timezone saved but `rekindle_language` absent/`auto` → language picker once per device (`rekindle_language_prompt_v1`). Writes `rekindle_location_manual` + `rekindle_timezone_offset` + `rekindle_language`, mirrors the language to `privateSettings/preferences.language`, reloads. No autofocus (Kindle keyboard) and no class leakage (scoped `#tz-warning-overlay`). Details: [i18n.md](docs/agent/i18n.md#timezone--language-prompt-2026-11-11).
 
 ### 6. Canvas / Touch Coordinate Bug with CSS `zoom`
 
@@ -521,9 +506,9 @@ Cleanup/heal writes are idempotent and guarded by per-session attempted-sets (`m
 
 **`login.html` is a diagnostics page, not a login page.** It exists for troubleshooting: auth state, network state, `Run Diagnostics`, the raw log, Logout. It still renders working Login/Register buttons (and its own `restoreTimezone()` for direct visits with a `return`), which makes it look canonical, but users should not be sent there to sign in — and it must not be the destination of a generic auth redirect. Nothing in the app links to it any more.
 
-**Timezone popup routing (changed 2026-10-20):** the timezone prompt's "Sign in instead" button (`#tz-signin-btn` in `time.js`) used to send users to `login?return=…`. It now sets `window.location.href = 'index?login=true'`. Three pieces keep that flow working — do not break them independently:
+**Timezone popup routing (changed 2026-10-20, two-step since 2026-11-11):** the prompt's first step is Sign In (`#tz-login-btn` in `time.js`; `Continue as guest` reaches the timezone step). It sets `window.location.href = 'index?login=true'` (it used to send users to `login?return=…`). Three pieces keep that flow working — do not break them independently:
 
-1. `checkTimezoneOffset()` in `time.js` returns early when the URL has `login=true` (in addition to the existing `/login…` guard). The prompt overlay is `z-index: 99999` and the index login modal is `z-index: 10000`, so without this the prompt would cover the login modal.
+1. `checkTimezoneOffset()` in `time.js` returns early when the URL has `login=true` (in addition to the existing `/login…` guard). The prompt overlay is `z-index: 9000` and the index login modal is `z-index: 10000`, so without this the prompt would cover the login modal.
 2. `doLogin()` in `index.html` calls `window.rekindleRestoreTimezoneFromProfile(auth.currentUser)` after the IP-ban check passes. That helper lives in `time.js` (exported at the bottom): it reads `users/{uid}/settings/general`, copies `manualLocation` / `timezoneOffset` into `rekindle_location_manual` / `rekindle_timezone_offset`, and removes an open prompt. It is what makes the popup's "Your saved timezone will be restored" hint true, and it also works for users whose localStorage was wiped by the Kindle cache cleanup.
 3. `login.html` keeps its own `restoreTimezone()` (same Firestore read) for the `return` flow on direct troubleshooting visits. Keep the two implementations in sync if the `settings/general` schema changes.
 
@@ -534,7 +519,7 @@ The button no longer carries a `return` param, so a user who signs in from a pag
 Enforced client-side and in `workers/rekindle-moderate/worker.js` for every social app (KindleChat, Neighbourhood, Topics). Reporting UI and the `/reports` data model are in [moderation-reports.md](docs/agent/moderation-reports.md).
 
 ### 0. KindleChat Direct Messages (2026-10-20)
-DMs live **only** in the social RTDB (`rekindle-socials`): `kindlechat/dm_threads`, `dm_messages`, `dm_user_threads`, `dm_prefs`, `dm_blocks`. Only ReKindle+ members may start a conversation; every first contact requires recipient acceptance; all content is written by the moderation worker (clients may write only `lastReadAt` and `allowRequests`). Messages are text-only, capped at 1,000 chars, moderated, and block/report are always available; a block is reversible only by the person who set it (`dm_unblock`). Never re-enable the legacy Firestore `rooms` collection and never grant moderators a blanket read on `dm_messages` — reports carry a scoped context instead. Kill switch: `kindlechat/config/dm_enabled` / `dm_beta_enabled`. Full design: [kindlechat.md](docs/agent/kindlechat.md#kindlechat-direct-messages-2026-10-20).
+DMs live **only** in the social RTDB (`kindlechat/dm_*`): ReKindle+ only, recipient acceptance on every first contact, all content written by the moderation worker (clients may write only `lastReadAt`/`allowRequests`), 1,000-char text only, block/report always available. Never re-enable the legacy Firestore `rooms` collection and never grant moderators a blanket read on `dm_messages` (reports carry a scoped context). Kill switch: `kindlechat/config/dm_enabled` / `dm_beta_enabled`. Full design: [kindlechat.md](docs/agent/kindlechat.md#kindlechat-direct-messages-2026-10-20).
 
 ### 1. URL / Link Blocking in Social Apps
 All social apps (KindleChat, Neighbourhood, Topics) block users from posting URLs and links. This is enforced **both client-side and server-side** (moderation worker).
@@ -640,22 +625,22 @@ Any page that reads/writes data owned by the **social** project (e.g. `users_pub
 
 ### 5. Repeated-Message Flood Guard (KindleChat, 2026-10-20)
 
-`evaluateChatRepetition()` in `workers/rekindle-moderate/worker.js` plus the client mirror `js/spam-guard.js` reject a user's 3rd near-identical message inside 10 minutes (and an exact duplicate inside 5) **without adding any Firebase operations**: the state rides in the existing `kindlechat/server_rate_limits/{uid}/kindlechat` bucket as a `rep` string. Never add a separate read/write for spam state, and keep the client mirror in sync with the worker. `node scripts/test-chat-spam.js` replays the real 2026-10-19 flood. Full design: [kindlechat.md](docs/agent/kindlechat.md).
+`evaluateChatRepetition()` (worker) + `js/spam-guard.js` (client mirror) reject a 3rd near-identical message inside 10 minutes (exact duplicate inside 5) **without adding any Firebase operations** — the state rides in the existing `server_rate_limits/{uid}/kindlechat` bucket as a `rep` string. Never add a separate read/write for spam state, and keep the mirror in sync. `node scripts/test-chat-spam.js` replays the real 2026-10-19 flood. Full design: [kindlechat.md](docs/agent/kindlechat.md).
 
 ### 6. Reporting Requires a Comment
 
-Every social report must carry a comment containing at least one real word (2+ letters, any script). Enforced server-side in the `report` handler (`reportCommentError()` in `workers/rekindle-moderate/worker.js`, checked before the rate limiter) and mirrored in `js/reports.js` so the modal shows the message inline. `scripts/test-reports.js` asserts both gates agree, so change them together.
+Every social report needs a comment with at least one real word (2+ letters, any script): enforced in the `report` handler (`reportCommentError()`, before the rate limiter) and mirrored in `js/reports.js`; `scripts/test-reports.js` asserts both gates agree, so change them together.
 
 ### 7. The Moderation Console Is Owner-Only and Automod-First
 
-Social moderation is automated end to end: the Worker moderates every write and `/reports` auto-deletes when moderation confirms the report (chat, DMs, comments — since 2026-10-26 one reporter cannot delete alone) or on 2 independent reports (everything else). `moderation.html` is therefore an **owner-only** console — no moderator grants, mod-mode, timeouts or manual action log. Its tabs are Automod Log, Reports, Banned IPs, Users and Content Review. Automod rejections live in the **social** RTDB (`/automod_log`, written by `logAutomodRejection()`, pruned after 30 days); the `automod_log`/`automod_strikes`/`automod_last_action` rules in `rtdb-rules.json` were dead and have been removed. See [moderation-reports.md](docs/agent/moderation-reports.md).
+Moderation is automated end to end: the Worker moderates every write and `/reports` auto-deletes on a confirmed report (one reporter cannot delete alone since 2026-10-26) or on 2 independent reports. `moderation.html` is therefore **owner-only** — no moderator grants, mod-mode, timeouts or manual action log; tabs are Automod Log, Reports, Banned IPs, Users and Content Review. Automod rejections live in the **social** RTDB `/automod_log` (pruned at 30 days); the dead `automod_*` rules in `rtdb-rules.json` are gone. See [moderation-reports.md](docs/agent/moderation-reports.md).
 
 ## 🔐 Server Boundary Rules (2026-10-20 audit)
 
 *   **`functions/api/proxy.js` is not a general CORS proxy.** It now allows GET/HEAD only, rejects private/loopback/link-local/metadata hosts and embedded URL credentials, re-validates every redirect, forwards only `accept`/`accept-language`/`authorization`/`if-none-match`/`range`, enforces a 10 s timeout and 10 MB response cap, and sends no wildcard CORS header. Any new public API host should get a dedicated allowlisted function (see `gutenberg.js`/`reddit.js`) instead of widening the generic proxy. Do not add POST support without a concrete caller.
 *   **Mail callables require auth + an active ReKindle+ subscription.** All six go through `resolveMailConnection(uid, config, kind)` (`assertMailAccess`, plus `assertMailEndpoint` for password accounts). Outlook.com/Hotmail uses OAuth2 XOAUTH2 via a device-code flow (`mailMicrosoftStart`/`Poll`/`Status`/`Disconnect`): refresh tokens live in RTDB `mail_oauth/{uid}/{accountId}` (default-deny, Admin SDK only — never add rules, never return it; several mailboxes per user are supported) and OAuth endpoints are pinned to Microsoft's hosts. Rate limits use `mail_rate_limits/{uid}/{kind}`; errors stay generic. See [integrations.md](docs/agent/integrations.md#-mail-outlookcom--hotmail-via-oauth2-device-code-2026-10-26).
 *   **Custom auth claims must be merged, never replaced.** Identity Toolkit's `customAttributes` replaces the whole claims object. Use `mergeClaims()` (`workers/rekindle-stripe/claims.js`) or spread the existing claims before calling `setCustomUserClaims`; otherwise `ageVerified`/`moderator` are silently deleted when Pro is granted or revoked. `getSocialToken` lazily repairs a wiped `ageVerified` claim from `users/{uid}/ageVerification/latest`.
-*   **Quality gate:** `npm test` runs the i18n, compatibility, proxy-guard, claim-merge, chat-spam, direct-message, Oregon Trail, and Pinterest cross-device connection checks. Both CI and the deploy workflow run it before building.
+*   **Quality gate:** `npm test` covers i18n, compat, proxy-guard, claims, chat-spam, DMs, Oregon Trail, leaderboards, Pinterest; CI + deploy run it first. Tests must be hermetic: CI installs root deps only, so `scripts/test-*.js` must not `require('firebase-functions/*')`; stub via `Module._load` (#385).
 
 ## 📦 Dependency & CodeQL Security (2026-10-20)
 
@@ -689,14 +674,18 @@ Example pattern: `functions/api/reddit.js`.
 
 **Some hosts block Cloudflare egress outright — a proxy cannot fix it.** `standardebooks.org` answers every request from AS132892 (the Workers/Pages network, e.g. `2a06:98c0:3600::103`) with an Apache 403, whatever the User-Agent or headers, so `/api/proxy` and `/api/*` are dead ends for it. Relay through a Firebase function (Google Cloud egress) instead — see `firebase-functions/standardebooks.js` and [integrations.md](docs/agent/integrations.md#standard-ebooks-403s-every-cloudflare-egress-ip-2026-10-20). Same workaround family as the Akinator relay (`akinator-service/`).
 
+## 🔎 SEO / Search Console (2026-11-10)
+
+Pages returns **`index.html` with HTTP 200 for any unknown URL unless a top-level `404.html` exists** — one missing file produced 209 "duplicate" and 11 "soft 404" rows. `404.html` must stay script-free and noindex. Every page's canonical, description, OG, JSON-LD and `<h1>` comes from `scripts/seo-pages.js` via `scripts/seo-inject.js`; `scripts/test-seo.js` (in `npm test`) fails on drift. **New page → add a table entry → re-run the injector**; never hand-edit a `<!-- seo:begin -->` block. [seo.md](docs/agent/seo.md).
+
 ## ⚠️ Deploying to Cloudflare Pages (do not deploy the repo root)
 
-`npx wrangler pages deploy .` uploads **everything in the directory, including `.gitignore`d files**. `service-account.json`, `service-account-social.json` and `firebase-functions/.env` (which also holds `OPENAI_API_KEY`) were publicly downloadable from both `rekindle.ink` and `beta.rekindle.ink` until 2026-10-20 because the deploy scripts pointed at `.` and `build-automation.js`'s `ignoreList` did not exclude them.
+`npx wrangler pages deploy .` uploads **everything, including `.gitignore`d files**. `service-account.json`, `service-account-social.json` and `firebase-functions/.env` (`OPENAI_API_KEY`) were public on `rekindle.ink` and `beta.rekindle.ink` until 2026-10-20 because the scripts deployed `.` and `ignoreList` omitted them.
 
 **Rules:**
-*   Deploy the build output, never the source tree: `npm run build && npx wrangler pages deploy _deploy/main --project-name=rekindle --branch=main` (prod) or `--branch=beta` (beta). `npm run deploy:prod` / `npm run deploy:beta` now do this.
+*   Deploy the build output, never the source tree: `npm run build && npx wrangler pages deploy _deploy/main --project-name=rekindle --branch=main` (prod) or `--branch=beta` (beta). `npm run deploy:prod` / `deploy:beta` run the guard.
 *   `_deploy/main` must contain `functions/` — Cloudflare Pages needs it at the deploy root, and `build-automation.js` copies it in.
-*   `build-automation.js` has `FORBIDDEN_IN_DEPLOY` + `assertNoSecretsInDeploy()`: the build aborts if any credential file survives the copy. Keep that list in sync with `ignoreList` when adding new secret files.
+*   Two gates share one scanner, `scripts/lib/deploy-secrets.js`: recursive filename check, **file contents** (PEM blocks, service-account JSON, `sk_live_`/`ghp_`/…), and symlinks. `assertNoSecretsInDeploy()` aborts the build if any reach `_deploy/*`; `scripts/deploy-guard.js` re-scans before wrangler and refuses targets outside `_deploy/`. Add new secret types there, never to a local list. `scripts/test-deploy-guard.js` (in `npm test`) pins the npm-script order.
 *   Pages caches non-HTML assets on the edge (`s-maxage=604800`). A file removed from a deployment can still be served from the custom-domain cache for up to 7 days — purge the cache (or rotate the credential) after any accidental publish.
 
 ### 🧊 Cache busting a changed shared asset (required)
@@ -721,7 +710,7 @@ Do **not** rely on the service worker's stale-while-revalidate branch to roll a 
 
 Shared-asset URL bumps still require `_deploy/` to be rebuilt (`npm run build`) before deploying — the deploy copies `_deploy/main`, so a stale build publishes old files even when the source is current.
 
-**2026-10-20 incident:** `theme.js` changed in `c5631c5` but every page still loaded `theme.js?v=18` (the v18 bump predated the change). Edge/SW caches kept serving the old theme.js to up to 7 days of traffic. Fixed by bumping all 137 pages to `?v=19`, `js/gamerules.js` to `?v=2` (its Oregon Trail rules text changed in `8ab5b20`), `icons.js` v2 → v3 on the three pages still on v2, and `sw.js` `CACHE_NAME` to `rekindle-cache-v25` (2026-10 re-audit also versioned the previously unversioned shared scripts).
+**2026-10-20 incident:** `theme.js` changed in `c5631c5` but pages still loaded `?v=18`, so edge/SW caches served the old file for up to 7 days. Fixed by bumping 137 pages to `?v=19`, `js/gamerules.js` to `?v=2`, `icons.js` to v3, and `sw.js` `CACHE_NAME` to `rekindle-cache-v25`.
 
 ## Local Testing Gotcha: Service Worker Forces Extensionless URLs
 
